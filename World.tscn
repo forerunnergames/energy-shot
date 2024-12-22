@@ -1,0 +1,75 @@
+[gd_scene load_steps=10 format=3 uid="uid://bmu2hky25lw3q"]
+
+[ext_resource type="Script" path="res://World.cs" id="1_jsv3h"]
+[ext_resource type="PackedScene" uid="uid://b1w1b7u4gtpbh" path="res://Player.tscn" id="2_3alfd"]
+[ext_resource type="Texture2D" uid="uid://daovrr00830xa" path="res://assets/floor/patterned_paving_diff_4k.png" id="2_g2q2r"]
+[ext_resource type="Texture2D" uid="uid://nx56m31ose5b" path="res://assets/floor/patterned_paving_nor_gl_4k.png" id="3_rcb6p"]
+[ext_resource type="Texture2D" uid="uid://qwmow5sp4lis" path="res://assets/floor/patterned_paving_arm_4k.png" id="4_5vad1"]
+
+[sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_vdo1k"]
+sky_horizon_color = Color(0.64625, 0.65575, 0.67075, 1)
+ground_horizon_color = Color(0.64625, 0.65575, 0.67075, 1)
+
+[sub_resource type="Sky" id="Sky_6l5pf"]
+sky_material = SubResource("ProceduralSkyMaterial_vdo1k")
+
+[sub_resource type="Environment" id="Environment_c3pjc"]
+background_mode = 2
+sky = SubResource("Sky_6l5pf")
+tonemap_mode = 2
+glow_enabled = true
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_bx300"]
+albedo_texture = ExtResource("2_g2q2r")
+metallic_texture = ExtResource("4_5vad1")
+metallic_texture_channel = 2
+roughness_texture = ExtResource("4_5vad1")
+roughness_texture_channel = 1
+normal_enabled = true
+normal_texture = ExtResource("3_rcb6p")
+ao_enabled = true
+ao_texture = ExtResource("4_5vad1")
+uv1_scale = Vector3(16, 16, 16)
+texture_filter = 5
+
+[node name="World" type="Node3D"]
+script = ExtResource("1_jsv3h")
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+transform = Transform3D(-0.866025, -0.433013, 0.25, 0, 0.5, 0.866025, -0.5, 0.75, -0.433013, 0, 0, 0)
+shadow_enabled = true
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_c3pjc")
+
+[node name="Building1" type="CSGBox3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -41, 1, 0)
+use_collision = true
+size = Vector3(5, 2, 5)
+
+[node name="Building2" type="CSGBox3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1, 1, -23)
+use_collision = true
+size = Vector3(5, 2, 5)
+
+[node name="Building3" type="CSGBox3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5, 1, 39)
+use_collision = true
+size = Vector3(5, 2, 5)
+
+[node name="Building4" type="CSGBox3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 28, 1, 13)
+use_collision = true
+size = Vector3(5, 2, 5)
+
+[node name="Building5" type="CSGBox3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -12, 1, 0)
+use_collision = true
+size = Vector3(5, 2, 5)
+
+[node name="Ground" type="CSGBox3D" parent="."]
+use_collision = true
+size = Vector3(100, 0.002, 100)
+material = SubResource("StandardMaterial3D_bx300")
+
+[node name="Player" parent="." instance=ExtResource("2_3alfd")]

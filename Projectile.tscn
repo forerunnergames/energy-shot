@@ -1,0 +1,49 @@
+[gd_scene load_steps=3 format=3 uid="uid://iksr0l7fu2bn"]
+
+[sub_resource type="CSharpScript" id="CSharpScript_fj3bu"]
+script/source = "namespace energyshot;
+
+using Godot;
+
+public partial class Projectile : Area3D
+{
+  // [Export] public float Speed = 20f;
+  // private Vector3 _direction = Vector3.Forward;
+  //
+  // public override void _Ready()
+  // {
+  //   // Set up collision signals
+  //   BodyEntered += OnBodyEntered;
+  //   // For an Area3D, you might also connect to area_entered if it's other areas
+  // }
+  //
+  // public override void _PhysicsProcess (double delta)
+  // {
+  //   // Move the projectile forward
+  //   GlobalTranslate (_direction * Speed * (float)delta);
+  // }
+  //
+  // private void OnBodyEntered (Node body)
+  // {
+  //   GD.Print (\"Projectile hit: \" + body.Name);
+  //
+  //   // If we are the server, we can register the \"hit\" logic here
+  //   if (Multiplayer.IsServer())
+  //   {
+  //     GD.Print (\"Server detected a hit!\");
+  //     // do damage, remove player’s health, etc.
+  //   }
+  //
+  //   QueueFree();
+  // }
+}
+"
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_muoy0"]
+
+[node name="Projectile" type="Area3D"]
+script = SubResource("CSharpScript_fj3bu")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, -4.37114e-08, -1, 0, 1, -4.37114e-08, 0, 0, 0)
+shape = SubResource("CapsuleShape3D_muoy0")
