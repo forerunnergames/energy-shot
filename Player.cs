@@ -7,6 +7,7 @@ public partial class Player : CharacterBody3D
   public const float JumpVelocity = 20.0f;
   public readonly Vector3 Gravity = new(0.0f, -50.0f, 0.0f);
   public int NetworkId => Name.ToString().ToInt();
+  public Timer HitRedTimer { get; private set; } = null!;
   private static readonly Color NormalColor = new("0027ff");
   private static readonly Color HitColor = Colors.DarkRed;
   private Camera3D _camera = null!;
@@ -14,7 +15,6 @@ public partial class Player : CharacterBody3D
   private AudioStreamPlayer3D _shootingSound = null!;
   private MeshInstance3D _mesh = null!;
   private Sprite3D _crosshairs = null!;
-  private Timer _hitRedTimer = null!;
   private int _health = 3;
   public override void _EnterTree() => SetMultiplayerAuthority (NetworkId);
   private void SetColor (Color color) => (_mesh.GetSurfaceOverrideMaterial (0) as StandardMaterial3D)!.AlbedoColor = color;
@@ -25,11 +25,11 @@ public partial class Player : CharacterBody3D
     _aim = GetNode <RayCast3D> ("Camera3D/Aim");
     _shootingSound = GetNode <AudioStreamPlayer3D> ("ShootingSound");
     _crosshairs = GetNode <Sprite3D> ("Camera3D/Crosshairs");
-    _hitRedTimer = GetNode <Timer> ("HitRedTimer");
+    HitRedTimer = GetNode <Timer> ("HitRedTimer");
 
     if (!IsMultiplayerAuthority())
     {
-      _hitRedTimer.Timeout += () => SetColor (NormalColor);
+      HitRedTimer.Timeout += () => SetColor (NormalColor);
       _crosshairs.Hide();
       return;
     }
@@ -70,10 +70,10 @@ public partial class Player : CharacterBody3D
     if (Input.IsActionJustPressed ("shoot"))
     {
       Rpc (MethodName.PlayShootEffects);
-      if (!_aim.IsColliding() || _aim.GetCollider() is not Player hitPlayer) return;
+      if (!_aim.IsColliding() || _aim.GetCollider() is not Player hitPlayer || hitPlayer.NetworkId == NetworkId) return;
       GD.Print ($"{Name}: I am shooting: {hitPlayer.GetMultiplayerAuthority()}");
       hitPlayer.SetColor (HitColor); // This is only for the puppet.
-      hitPlayer._hitRedTimer.Start(); // This is only for the puppet.
+      hitPlayer.HitRedTimer.Start(); // This is only for the puppet.
       hitPlayer.RpcId (hitPlayer.NetworkId, MethodName.Shot);
     }
 
