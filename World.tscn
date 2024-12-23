@@ -1,10 +1,11 @@
-[gd_scene load_steps=10 format=3 uid="uid://bmu2hky25lw3q"]
+[gd_scene load_steps=13 format=3 uid="uid://bmu2hky25lw3q"]
 
 [ext_resource type="Script" path="res://World.cs" id="1_jsv3h"]
-[ext_resource type="PackedScene" uid="uid://b1w1b7u4gtpbh" path="res://Player.tscn" id="2_3alfd"]
 [ext_resource type="Texture2D" uid="uid://daovrr00830xa" path="res://assets/floor/patterned_paving_diff_4k.png" id="2_g2q2r"]
 [ext_resource type="Texture2D" uid="uid://nx56m31ose5b" path="res://assets/floor/patterned_paving_nor_gl_4k.png" id="3_rcb6p"]
 [ext_resource type="Texture2D" uid="uid://qwmow5sp4lis" path="res://assets/floor/patterned_paving_arm_4k.png" id="4_5vad1"]
+[ext_resource type="PackedScene" uid="uid://y2rvvh2dq5oc" path="res://UI.tscn" id="5_8eal4"]
+[ext_resource type="PackedScene" uid="uid://b0dcb5suks4p0" path="res://HostGameStartDialog.tscn" id="6_ya0cm"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_vdo1k"]
 sky_horizon_color = Color(0.64625, 0.65575, 0.67075, 1)
@@ -31,6 +32,31 @@ ao_enabled = true
 ao_texture = ExtResource("4_5vad1")
 uv1_scale = Vector3(16, 16, 16)
 texture_filter = 5
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_omlkb"]
+bg_color = Color(1, 0, 0, 0.321569)
+border_width_left = 10
+border_width_top = 10
+border_width_right = 10
+border_width_bottom = 10
+border_color = Color(0, 0, 0, 1)
+corner_radius_top_left = 50
+corner_radius_top_right = 50
+corner_radius_bottom_right = 50
+corner_radius_bottom_left = 50
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_jewob"]
+bg_color = Color(0.756863, 0, 0, 1)
+border_width_left = 10
+border_width_top = 10
+border_width_right = 10
+border_width_bottom = 10
+border_color = Color(0, 0, 0, 0)
+corner_radius_top_left = 50
+corner_radius_top_right = 50
+corner_radius_bottom_right = 50
+corner_radius_bottom_left = 50
+shadow_size = 10
 
 [node name="World" type="Node3D"]
 script = ExtResource("1_jsv3h")
@@ -72,4 +98,42 @@ use_collision = true
 size = Vector3(100, 0.002, 100)
 material = SubResource("StandardMaterial3D_bx300")
 
-[node name="Player" parent="." instance=ExtResource("2_3alfd")]
+[node name="MultiplayerSpawner" type="MultiplayerSpawner" parent="."]
+_spawnable_scenes = PackedStringArray("res://Player.tscn")
+spawn_path = NodePath("..")
+
+[node name="UI" parent="." instance=ExtResource("5_8eal4")]
+
+[node name="Label" parent="UI/MainMenu/MarginContainer/VBoxContainer" index="0"]
+text = "Energy Shot"
+
+[node name="HostGameStartDialog" parent="UI" instance=ExtResource("6_ya0cm")]
+visible = false
+
+[node name="HUD" type="Control" parent="UI"]
+visible = false
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="HealthBar" type="ProgressBar" parent="UI/HUD"]
+layout_mode = 0
+offset_right = 1281.0
+offset_bottom = 106.0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_font_sizes/font_size = 20
+theme_override_styles/background = SubResource("StyleBoxFlat_omlkb")
+theme_override_styles/fill = SubResource("StyleBoxFlat_jewob")
+max_value = 3.0
+step = 1.0
+value = 3.0
+show_percentage = false
+
+[connection signal="spawned" from="MultiplayerSpawner" to="." method="_OnMultiplayerSpawnerSpawned"]
+
+[editable path="UI"]
