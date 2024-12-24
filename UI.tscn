@@ -1,4 +1,32 @@
-[gd_scene format=3 uid="uid://y2rvvh2dq5oc"]
+[gd_scene load_steps=5 format=3 uid="uid://y2rvvh2dq5oc"]
+
+[ext_resource type="PackedScene" uid="uid://b0dcb5suks4p0" path="res://HostGameDialog.tscn" id="1_vtns1"]
+[ext_resource type="PackedScene" uid="uid://cx5lbfyyal0ax" path="res://JoinGameDialog.tscn" id="2_msxij"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_wockn"]
+bg_color = Color(1, 0, 0, 0.321569)
+border_width_left = 10
+border_width_top = 10
+border_width_right = 10
+border_width_bottom = 10
+border_color = Color(0, 0, 0, 1)
+corner_radius_top_left = 50
+corner_radius_top_right = 50
+corner_radius_bottom_right = 50
+corner_radius_bottom_left = 50
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_uacqx"]
+bg_color = Color(0.756863, 0, 0, 1)
+border_width_left = 10
+border_width_top = 10
+border_width_right = 10
+border_width_bottom = 10
+border_color = Color(0, 0, 0, 0)
+corner_radius_top_left = 50
+corner_radius_top_right = 50
+corner_radius_bottom_right = 50
+corner_radius_bottom_left = 50
+shadow_size = 10
 
 [node name="UI" type="CanvasLayer"]
 
@@ -35,12 +63,6 @@ theme_override_constants/margin_right = 1500
 layout_mode = 2
 theme_override_constants/separation = 100
 
-[node name="ServerAddress" type="LineEdit" parent="MainMenu/MarginContainer/VBoxContainer/MarginContainer/VBoxContainer"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 100
-placeholder_text = "Server Address"
-alignment = 1
-
 [node name="HostButton" type="Button" parent="MainMenu/MarginContainer/VBoxContainer/MarginContainer/VBoxContainer"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 100
@@ -55,3 +77,33 @@ text = "Join"
 layout_mode = 2
 theme_override_font_sizes/font_size = 100
 text = "Quit"
+
+[node name="HostGameDialog" parent="." instance=ExtResource("1_vtns1")]
+visible = false
+
+[node name="JoinGameDialog" parent="." instance=ExtResource("2_msxij")]
+visible = false
+
+[node name="HUD" type="Control" parent="."]
+visible = false
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="HealthBar" type="ProgressBar" parent="HUD"]
+layout_mode = 0
+offset_right = 1281.0
+offset_bottom = 106.0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_font_sizes/font_size = 20
+theme_override_styles/background = SubResource("StyleBoxFlat_wockn")
+theme_override_styles/fill = SubResource("StyleBoxFlat_uacqx")
+max_value = 3.0
+step = 1.0
+value = 3.0
+show_percentage = false

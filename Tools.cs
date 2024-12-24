@@ -14,34 +14,43 @@ public static partial class Tools
   public static bool IsValidServerAddress (string address) => IsValidIPv4 (address) || IsValidIPv6 (address) || IsValidHostname (address);
   // @formatter:on
 
-  public static (bool success, string address) FindServerAddress (int port)
+  public static (bool success, string address, string error) FindServerAddress (int port)
   {
     var uPnp = new Upnp();
     var discoverResult = (Upnp.UpnpResult)uPnp.Discover();
 
     if (discoverResult != Upnp.UpnpResult.Success)
     {
-      GD.Print ($"UPNP discover failed, error [{discoverResult}]");
-      return (false, string.Empty);
+      var error = $"UPNP discovery failed, error [{discoverResult}]";
+      GD.Print (error);
+      return (false, string.Empty, error);
     }
 
     if (uPnp.GetGateway() == null || !uPnp.GetGateway().IsValidGateway())
     {
-      GD.Print ("UPNP invalid gateway");
-      return (false, string.Empty);
+      const string error = "UPNP invalid gateway";
+      GD.Print (error);
+      return (false, string.Empty, error);
     }
+
+    var removeMapResult = (Upnp.UpnpResult)uPnp.DeletePortMapping (port);
+
+    GD.Print (removeMapResult == Upnp.UpnpResult.Success
+      ? $"UPNP successfully removed existing port mapping on port [{port}]"
+      : $"No existing port mapping to remove on port [{port}], or an error occurred: [{removeMapResult}]");
 
     var mapResult = (Upnp.UpnpResult)uPnp.AddPortMapping (port);
 
     if (mapResult != Upnp.UpnpResult.Success)
     {
-      GD.Print ($"UPNP port mapping failed, error [{mapResult}]");
-      return (false, string.Empty);
+      var error = $"UPNP port mapping failed, error [{mapResult}]";
+      GD.Print (error);
+      return (false, string.Empty, error);
     }
 
     var address = uPnp.QueryExternalAddress();
     GD.Print ($"UPNP setup successfully, server address [{address}]");
-    return (true, address);
+    return (true, address, string.Empty);
   }
 
   private static bool IsValidIPv4 (string address)
