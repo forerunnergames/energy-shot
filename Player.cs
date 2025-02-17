@@ -3,7 +3,7 @@ using Godot;
 public partial class Player : CharacterBody3D
 {
   [Signal] public delegate void HealthChangedEventHandler (int value);
-  public const float Speed = 10.0f;
+  public const float Speed = 7.0f;
   public const float JumpVelocity = 20.0f;
   public readonly Vector3 Gravity = new(0.0f, -50.0f, 0.0f);
   public int NetworkId => Name.ToString().ToInt();
@@ -15,6 +15,7 @@ public partial class Player : CharacterBody3D
   private AudioStreamPlayer3D _shootingSound = null!;
   private MeshInstance3D _mesh = null!;
   private Sprite3D _crosshairs = null!;
+  private Timer _shotTimer = null!;
   private int _health = 3;
   public override void _EnterTree() => SetMultiplayerAuthority (NetworkId);
   private void SetColor (Color color) => (_mesh.GetSurfaceOverrideMaterial (0) as StandardMaterial3D)!.AlbedoColor = color;
@@ -25,6 +26,7 @@ public partial class Player : CharacterBody3D
     _aim = GetNode <RayCast3D> ("Camera3D/Aim");
     _shootingSound = GetNode <AudioStreamPlayer3D> ("ShootingSound");
     _crosshairs = GetNode <Sprite3D> ("Camera3D/Crosshairs");
+    _shotTimer = GetNode <Timer> ("ShotTimer");
     HitRedTimer = GetNode <Timer> ("HitRedTimer");
 
     if (!IsMultiplayerAuthority())
@@ -67,8 +69,9 @@ public partial class Player : CharacterBody3D
   {
     if (!IsMultiplayerAuthority()) return;
 
-    if (Input.IsActionJustPressed ("shoot"))
+    if (Input.IsActionJustPressed ("shoot") && _shotTimer.IsStopped())
     {
+      _shotTimer.Start();
       Rpc (MethodName.PlayShootEffects);
       if (!_aim.IsColliding() || _aim.GetCollider() is not Player hitPlayer || hitPlayer.NetworkId == NetworkId) return;
       GD.Print ($"{Name}: I am shooting: {hitPlayer.GetMultiplayerAuthority()}");
