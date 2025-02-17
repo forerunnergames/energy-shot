@@ -62,6 +62,7 @@ public partial class HostGameDialog : Control
     }
 
     var error = _peer.CreateServer (_serverPort);
+    Multiplayer.MultiplayerPeer = _peer;
 
     if (error != Error.Ok)
     {

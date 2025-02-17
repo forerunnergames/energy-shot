@@ -54,7 +54,9 @@ public partial class JoinGameDialog : Control
   {
     ConnectSignals();
     _connectionTimer.Start();
-    _bottomText.Text = $"Connecting to server at [{_serverAddress.Text}:{_serverPort}]...";
+    var message = $"Connecting to server at [{_serverAddress.Text}:{_serverPort}]...";
+    GD.Print (message);
+    _bottomText.Text = message;
     _joinGameButton.Disabled = true;
 
     if (_peer == null)
@@ -70,6 +72,7 @@ public partial class JoinGameDialog : Control
     }
 
     var error = _peer.CreateClient (_serverAddress.Text, _serverPort);
+    Multiplayer.MultiplayerPeer = _peer;
 
     // ReSharper disable once InvertIf
     if (error != Error.Ok)
@@ -91,7 +94,7 @@ public partial class JoinGameDialog : Control
     DisconnectSignals();
     Hide();
     GD.Print ($"Successfully joined game at [{_serverAddress.Text}:{_serverPort}]");
-    EmitSignal (SignalName.JoinGameSuccess, _serverAddress.Text);
+    EmitSignal (SignalName.JoinGameSuccess);
   }
 
   private void OnError (string error)

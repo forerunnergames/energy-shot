@@ -2,7 +2,7 @@ using Godot;
 
 public partial class World : Node3D
 {
-  private const int ServerPort = 55556;
+  [Export] public int ServerPort = 55556;
   private LineEdit _serverAddress = null!;
   private ENetMultiplayerPeer _peer = new();
   private PanelContainer _mainMenu = null!;
@@ -47,7 +47,6 @@ public partial class World : Node3D
   {
     _mainMenu.Hide();
     _hud.Show();
-    Multiplayer.MultiplayerPeer = _peer;
     Multiplayer.PeerConnected += OnPeerConnected;
     Multiplayer.PeerDisconnected += OnPeerDisconnected;
     AddPlayer (Multiplayer.GetUniqueId());
@@ -57,7 +56,6 @@ public partial class World : Node3D
   {
     _mainMenu.Hide();
     _hud.Show();
-    Multiplayer.MultiplayerPeer = _peer;
     Multiplayer.ServerDisconnected += OnServerDisconnected;
   }
 
@@ -66,6 +64,7 @@ public partial class World : Node3D
     GD.Print ("Server disconnected");
     _hud.Hide();
     _mainMenu.Show();
+    Input.MouseMode = Input.MouseModeEnum.Visible;
   }
 
   private void OnPeerConnected (long id)
