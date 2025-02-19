@@ -1,0 +1,138 @@
+# Run all tests in res://test/unit, when:
+# 1) A commit is pushed to any branch.
+# 2) A pull request is opened or updated.
+# 3) Another workflow calls this one.
+name: Run Tests
+
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+    branches:
+      - '**'
+    # Don't run again for report uploads during a pull request.
+    paths-ignore:
+      - '.github/workflows/*'
+  workflow_call:
+    inputs:
+      github_ref:
+        required: true
+        type: string
+    # Forward 'test_passed' from jobs.run-tests.outputs.output1 to outputs.tests_passed, for use in caller workflows.
+    # See https://docs.github.com/en/actions/using-workflows/reusing-workflows#using-outputs-from-a-reusabla-workflow
+    outputs:
+      tests_passed:
+        description: "Outputs whether or not all tests have passed"
+        value: ${{ jobs.run-tests.outputs.output1 }}
+
+jobs:
+  run-tests:
+    # Required to prevent "HttpError: Resource not accessible by integration" errors.
+    permissions: write-all
+
+    # This job runs on the latest Ubuntu version.
+    runs-on: ubuntu-latest
+
+    # Forward 'test_passed' from steps.check_tests.outputs.tests_passed to jobs.run-tests.outputs.output1.
+    outputs:
+      output1: ${{ steps.check_tests.outputs.tests_passed }}
+
+    steps:
+      # Don't re-run this workflow if a successful duplicate run exists.
+      # Cancel this workflow if it's using an outdated commit.
+      - name: Skip duplicate actions
+        id: skip-duplicate
+        uses: fkirc/skip-duplicate-actions@v5
+        with:
+          cancel_others: true
+          skip_after_successful_duplicate: true
+
+      # If github_ref is not set, then use this workflow's HEAD (github.ref).
+      # Otherwise github_ref is set & we're being called from another workflow,
+      # so use the provided github_ref value from that workflow.
+      - name: Determine ref
+        id: determine_ref
+        run: |
+          if [ -z "${{ inputs.github_ref }}" ]; then
+            echo "ref=${{ github.ref }}" >> $GITHUB_ENV
+          else
+            echo "ref=${{ inputs.github_ref }}" >> $GITHUB_ENV
+          fi
+
+      # Reports can only be published for non-fork pull requests.
+      # See https://github.com/MikeSchulze/gdUnit4-action?tab=readme-ov-file#note-on-forked-repositories
+      - name: Set publish report flag
+        id: set_publish_report
+        run: |
+          if [ "${{ github.event_name }}" == "pull_request" ] && [ "${{ github.event.pull_request.head.repo.fork }}" == "true" ]; then
+            echo "PUBLISH_REPORT=false" >> $GITHUB_ENV
+          else
+            echo "PUBLISH_REPORT=true" >> $GITHUB_ENV
+          fi
+
+      # Check out the repository so the project files are available.
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          # Use the correct ref, will either be this workflow's HEAD if run directly,
+          # or another workflow's ref that called this one.
+          ref: ${{ env.ref }}
+          # Checkout the entire commit history.
+          fetch-depth: 0
+
+      # Sanitize the ref name to avoid invalid forward slash character in the
+      # report name during a pull request, when github.ref_name is in the format
+      # "<pr_number>/merge", where <pr_number> is the pull request number.
+      - name: Sanitize ref_name
+        id: sanitize_ref_name
+        run: |
+          SANITIZED_REF_NAME=$(echo "${{ github.ref_name }}" | sed 's/[\/:]/-/g')
+          echo "SANITIZED_REF_NAME=$SANITIZED_REF_NAME" >> $GITHUB_ENV
+
+      # Run the tests in res://test/unit & generate test-results.xml report
+      # with a unique name that includes the run ID & branch name to clearly
+      # identify & distinguish between multiple test report files.
+      - name: Setup GdUnit4 and run tests
+        # Using '@v1' won't use the latest version, so specify explicit version.
+        uses: MikeSchulze/gdUnit4-action@v1.1.1
+        with:
+          godot-version: '4.3'
+          godot-status: 'stable'
+          godot-net: false # Don't run only C# tests.
+          godot-force-mono: true # Run both C# & GDScript tests using the Mono engine.
+          version: 'master'
+          paths: 'res://tests'
+          retries: 3
+          publish-report: ${{ env.PUBLISH_REPORT }}
+          # If we're on a fork, the report will be uploaded as an artifact named "artifact_<report_name>"
+          report-name: 'test-results-${{ github.run_id }}-${{ env.SANITIZED_REF_NAME }}.xml'
+
+      # Fail the workflow if the test results file can't be found.
+      # Save the test result file as env.TEST_RESULTS_FILE for reuse in other steps.
+      - name: Check if test results file exists
+        id: check_file_exists
+        run: |
+          TEST_RESULTS_FILE=$(find ./reports/ -name 'results.xml')
+          if [ -z "$TEST_RESULTS_FILE" ]; then
+            echo "Test results file not found"
+            exit 1
+          else
+            echo "Test results file found at $TEST_RESULTS_FILE"
+            echo "TEST_RESULTS_FILE=$TEST_RESULTS_FILE" >> $GITHUB_ENV
+          fi
+
+      # Make test result available to other workflows.
+      # Forward 'test_passed' to steps.check_tests.outputs.tests_passed.
+      - name: Check test results
+        id: check_tests
+        # Search for existence of any '<failure' tag in the test report xml file, & fail if any exist.
+        run: |
+          if grep -q '<failure' ${{ env.TEST_RESULTS_FILE }}; then
+            echo "Tests failed"
+            echo "tests_passed=false" >> $GITHUB_OUTPUT
+            exit 1
+          else
+            echo "Tests passed"
+            echo "tests_passed=true" >> $GITHUB_OUTPUT
+          fi
