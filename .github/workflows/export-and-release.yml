@@ -1,0 +1,85 @@
+# This workflow only runs when a tag matching the pattern "v*" is pushed,
+# AND all tests in the tests workflow have passed successfully (see run-tests.yml).
+name: Export & Release
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  # Always run the tests workflow first.
+  trigger_tests:
+    name: Trigger Tests Workflow
+    uses: ./.github/workflows/run-tests.yml
+    # Required to prevent "HttpError: Resource not accessible by integration" errors.
+    permissions: write-all
+    with:
+      # Provide the required github_ref value to the tests workflow.
+      github_ref: ${{ github.ref }}
+    # Provide any necessary secrets to the tests workflow.
+    secrets: inherit
+
+  export_game:
+    name: Export Game
+
+    # This job runs on the latest Ubuntu version.
+    runs-on: ubuntu-latest
+
+    # Require tests workflow to finish before running this job.
+    needs: trigger_tests
+
+    # Only continue if all tests in the tests workflow passed.
+    #
+    # Normally the tests workflow itself will fail if any tests failed,
+    # causing this workflow to also fail.
+    #
+    # However, if no tests fail but anything else goes wrong in the tests
+    # workflow, it may complete successfully, but 'tests_passed' will be false
+    # if it can't verify that aren't any '<failure' tags in an existing xml report.
+    #
+    # The tests workflow will also fail if a test xml report cannot be found.
+    if: needs.trigger_tests.outputs.tests_passed == 'true'
+
+    # Add permissions for release creation. This can be narrowed down if needed.
+    permissions: write-all
+
+    steps:
+      # Check out the repository so the project files are available.
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          # Checkout the entire commit history.
+          fetch-depth: 0
+
+      # Remove the addons directory before the build, to avoid failing the
+      # build with this error:
+      #   "Error: The process '/home/runner/.local/share/godot/godot_executable/Godot_v4.3-stable_mono_linux_x86_64/Godot_v4.3-stable_mono_linux.x86_64' failed with exit code null"
+      - name: Remove addons directory
+        run: rm -rf addons/
+
+      # Export the game using firebelley/godot-export with the specified Godot executable & templates.
+      - name: Export game
+        id: export
+        uses: firebelley/godot-export@master
+        with:
+          godot_executable_download_url: https://downloads.tuxfamily.org/godotengine/4.3/mono/Godot_v4.3-stable_mono_linux_x86_64.zip
+          godot_export_templates_download_url: https://downloads.tuxfamily.org/godotengine/4.3/mono/Godot_v4.3-stable_mono_export_templates.tpz
+          relative_project_path: ./
+          relative_export_path: ./my/build/destination
+          archive_output: true
+          archive_root_folder: false
+          cache: false
+          use_preset_export_path: false
+          export_debug: false
+          verbose: false
+          use_godot_3: false
+          export_as_pack: false
+
+      # Create a release using the ncipollo/release-action.
+      - name: Create GitHub release
+        uses: ncipollo/release-action@v1.14.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          generateReleaseNotes: true
+          tag: ${{ github.ref_name }}
+          artifacts: ${{ steps.export.outputs.archive_directory }}/*

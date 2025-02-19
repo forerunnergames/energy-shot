@@ -21,6 +21,19 @@
     <TrimmerRootAssembly Include="GodotSharp" />
     <TrimmerRootAssembly Include="$(TargetName)" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- Required for GdUnit4 -->
+    <PackageReference Include="gdUnit4.api" Version="4.2.5" />
+    <!-- Required for GdUnit4 IDE support (Rider, Visual Studio, Visual Studio Code) -->
+    <PackageReference Include="gdUnit4.test.adapter" Version="1.1.2" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.10.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include=".github\workflows\export-and-release.yml" />
+    <Content Include=".github\workflows\run-tests.yml" />
+    <Content Include="tests\integration\.keep" />
+    <Content Include="tests\unit\.keep" />
+  </ItemGroup>
 <!--  <ItemGroup>-->
 <!--    <PackageReference Include="NLog" Version="5.3.2" />-->
 <!--    <None Include="nlog.config">-->
