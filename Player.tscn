@@ -34,7 +34,7 @@ properties/4/replication_mode = 1
 script = ExtResource("1_nipvj")
 
 [node name="ShotTimer" type="Timer" parent="."]
-wait_time = 0.75
+wait_time = 0.25
 one_shot = true
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="."]

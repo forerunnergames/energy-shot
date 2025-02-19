@@ -86,13 +86,15 @@ public partial class Player : CharacterBody3D
     _camera.Rotation = new Vector3 (Mathf.Clamp (_camera.Rotation.X, -Mathf.Pi / 2.0f, Mathf.Pi / 2.0f), _camera.Rotation.Y, _camera.Rotation.Z);
   }
 
-  [Rpc (CallLocal = true)] private void PlayShootEffects()
+  [Rpc (CallLocal = true)]
+  private void PlayShootEffects()
   {
     _shootingSound.Play();
     GD.Print ("PlayShootEffects(): ", _aim.IsColliding(), ", collider: ", _aim.GetCollider()?.GetType());
   }
 
-  [Rpc (MultiplayerApi.RpcMode.AnyPeer)] private void Shot()
+  [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
+  private void Shot()
   {
     GD.Print ($"{GetMultiplayerAuthority()}: I was shot by {Multiplayer.GetRemoteSenderId()}!");
     --_health;
