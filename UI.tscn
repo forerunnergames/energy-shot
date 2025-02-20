@@ -51,7 +51,7 @@ theme_override_constants/separation = 200
 [node name="Label" type="Label" parent="MainMenu/MarginContainer/VBoxContainer"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 200
-text = "Energy Chops"
+text = "Energy Shot"
 horizontal_alignment = 1
 
 [node name="MarginContainer" type="MarginContainer" parent="MainMenu/MarginContainer/VBoxContainer"]

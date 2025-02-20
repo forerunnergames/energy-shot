@@ -16,8 +16,11 @@ public partial class Player : CharacterBody3D
   private MeshInstance3D _mesh = null!;
   private Sprite3D _crosshairs = null!;
   private Timer _shotTimer = null!;
+  private Timer _jumpTimer = null!;
   private int _health = 3;
   public override void _EnterTree() => SetMultiplayerAuthority (NetworkId);
+  private bool IsJumping() => _jumpTimer.IsStopped() && Input.IsActionJustPressed ("jump") && IsOnFloor();
+  private bool IsShooting() => _shotTimer.IsStopped() && Input.IsActionJustPressed ("shoot");
   private void SetColor (Color color) => (_mesh.GetSurfaceOverrideMaterial (0) as StandardMaterial3D)!.AlbedoColor = color;
 
   public override void _Ready()
@@ -27,6 +30,7 @@ public partial class Player : CharacterBody3D
     _shootingSound = GetNode <AudioStreamPlayer3D> ("ShootingSound");
     _crosshairs = GetNode <Sprite3D> ("Camera3D/Crosshairs");
     _shotTimer = GetNode <Timer> ("ShotTimer");
+    _jumpTimer = GetNode <Timer> ("JumpTimer");
     HitRedTimer = GetNode <Timer> ("HitRedTimer");
 
     if (!IsMultiplayerAuthority())
@@ -41,12 +45,19 @@ public partial class Player : CharacterBody3D
     Input.MouseMode = Input.MouseModeEnum.Captured;
   }
 
+  private void Jump (ref Vector3 velocity)
+  {
+    velocity.Y = JumpVelocity;
+    _jumpTimer.Start();
+  }
+
   public override void _PhysicsProcess (double delta)
   {
     if (!IsMultiplayerAuthority()) return;
     var velocity = Velocity;
     if (!IsOnFloor()) velocity += Gravity * (float)delta;
-    if (Input.IsActionJustPressed ("jump") && IsOnFloor()) velocity.Y = JumpVelocity;
+    if (IsJumping()) Jump (ref velocity);
+
     var inputDir = Input.GetVector ("move_left", "move_right", "move_forward", "move_back");
     var direction = (Transform.Basis * new Vector3 (inputDir.X, 0, inputDir.Y)).Normalized();
 
@@ -68,22 +79,22 @@ public partial class Player : CharacterBody3D
   public override void _UnhandledInput (InputEvent @event)
   {
     if (!IsMultiplayerAuthority()) return;
-
-    if (Input.IsActionJustPressed ("shoot") && _shotTimer.IsStopped())
-    {
-      _shotTimer.Start();
-      Rpc (MethodName.PlayShootEffects);
-      if (!_aim.IsColliding() || _aim.GetCollider() is not Player hitPlayer || hitPlayer.NetworkId == NetworkId) return;
-      GD.Print ($"{Name}: I am shooting: {hitPlayer.GetMultiplayerAuthority()}");
-      hitPlayer.SetColor (HitColor); // This is only for the puppet.
-      hitPlayer.HitRedTimer.Start(); // This is only for the puppet.
-      hitPlayer.RpcId (hitPlayer.NetworkId, MethodName.Shot);
-    }
-
+    if (IsShooting()) Shoot();
     if (@event is not InputEventMouseMotion motionEvent) return;
     RotateY (-motionEvent.Relative.X * 0.005f);
     _camera.RotateX (-motionEvent.Relative.Y * 0.005f);
     _camera.Rotation = new Vector3 (Mathf.Clamp (_camera.Rotation.X, -Mathf.Pi / 2.0f, Mathf.Pi / 2.0f), _camera.Rotation.Y, _camera.Rotation.Z);
+  }
+
+  private void Shoot()
+  {
+    _shotTimer.Start();
+    Rpc (MethodName.PlayShootEffects);
+    if (!_aim.IsColliding() || _aim.GetCollider() is not Player hitPlayer || hitPlayer.NetworkId == NetworkId) return;
+    GD.Print ($"{Name}: I am shooting: {hitPlayer.GetMultiplayerAuthority()}");
+    hitPlayer.SetColor (HitColor); // This is only for the puppet.
+    hitPlayer.HitRedTimer.Start(); // This is only for the puppet.
+    hitPlayer.RpcId (hitPlayer.NetworkId, MethodName.Shot);
   }
 
   [Rpc (CallLocal = true)]
