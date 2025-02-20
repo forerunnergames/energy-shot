@@ -37,6 +37,10 @@ script = ExtResource("1_nipvj")
 wait_time = 0.25
 one_shot = true
 
+[node name="JumpTimer" type="Timer" parent="."]
+wait_time = 3.0
+one_shot = true
+
 [node name="MeshInstance3D" type="MeshInstance3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
 mesh = SubResource("CapsuleMesh_kwhax")
