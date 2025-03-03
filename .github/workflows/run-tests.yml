@@ -95,7 +95,7 @@ jobs:
       # identify & distinguish between multiple test report files.
       - name: Setup GdUnit4 and run tests
         # Using '@v1' won't use the latest version, so specify explicit version.
-        uses: MikeSchulze/gdUnit4-action@v1.1.1
+        uses: MikeSchulze/gdUnit4-action@v1.1.5
         with:
           godot-version: '4.3'
           godot-status: 'stable'

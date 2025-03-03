@@ -1,7 +1,8 @@
-[gd_scene load_steps=5 format=3 uid="uid://y2rvvh2dq5oc"]
+[gd_scene load_steps=6 format=3 uid="uid://y2rvvh2dq5oc"]
 
 [ext_resource type="PackedScene" uid="uid://b0dcb5suks4p0" path="res://HostGameDialog.tscn" id="1_vtns1"]
 [ext_resource type="PackedScene" uid="uid://cx5lbfyyal0ax" path="res://JoinGameDialog.tscn" id="2_msxij"]
+[ext_resource type="PackedScene" uid="uid://bmpjrf8pqokyu" path="res://ConfirmationDialog2.tscn" id="3_pp62o"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_wockn"]
 bg_color = Color(1, 0, 0, 0.321569)
@@ -107,3 +108,20 @@ max_value = 3.0
 step = 1.0
 value = 3.0
 show_percentage = false
+
+[node name="Score" type="Label" parent="HUD"]
+layout_mode = 0
+offset_left = 10.0
+offset_top = 96.0
+offset_right = 223.0
+offset_bottom = 206.0
+theme_override_font_sizes/font_size = 40
+text = "Score: "
+vertical_alignment = 1
+
+[node name="QuitDialog" parent="." instance=ExtResource("3_pp62o")]
+visible = false
+offset_left = -608.0
+offset_top = -632.0
+offset_right = 592.0
+offset_bottom = -32.0

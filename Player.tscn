@@ -1,9 +1,8 @@
-[gd_scene load_steps=9 format=3 uid="uid://b1w1b7u4gtpbh"]
+[gd_scene load_steps=8 format=3 uid="uid://b1w1b7u4gtpbh"]
 
 [ext_resource type="Script" path="res://Player.cs" id="1_nipvj"]
-[ext_resource type="AudioStream" uid="uid://g8e2wwr3buse" path="res://assets/shoot.wav" id="2_5m3nw"]
 [ext_resource type="Texture2D" uid="uid://ddlk1r4wak13u" path="res://assets/crosshairs.png" id="2_37lxu"]
-[ext_resource type="ArrayMesh" uid="uid://t8g4gpr6gkrg" path="res://assets/rocket.obj" id="3_u77m3"]
+[ext_resource type="PackedScene" uid="uid://bnnjmr0ke3v6d" path="res://assets/weapons/EnergyWeapon.tscn" id="4_pk5hr"]
 
 [sub_resource type="CapsuleMesh" id="CapsuleMesh_kwhax"]
 
@@ -20,22 +19,12 @@ properties/0/replication_mode = 1
 properties/1/path = NodePath(".:rotation")
 properties/1/spawn = true
 properties/1/replication_mode = 1
-properties/2/path = NodePath("Camera3D:rotation")
+properties/2/path = NodePath(".:scale")
 properties/2/spawn = true
 properties/2/replication_mode = 1
-properties/3/path = NodePath("Camera3D/Weapon:rotation")
-properties/3/spawn = true
-properties/3/replication_mode = 1
-properties/4/path = NodePath("Camera3D/Weapon:scale")
-properties/4/spawn = true
-properties/4/replication_mode = 1
 
 [node name="Player" type="CharacterBody3D"]
 script = ExtResource("1_nipvj")
-
-[node name="ShotTimer" type="Timer" parent="."]
-wait_time = 0.25
-one_shot = true
 
 [node name="JumpTimer" type="Timer" parent="."]
 wait_time = 3.0
@@ -66,12 +55,8 @@ texture = ExtResource("2_37lxu")
 transform = Transform3D(1, 0, 0, 0, -4.37114e-08, -1, 0, 1, -4.37114e-08, 0, 0, 0)
 target_position = Vector3(0, -50, 0)
 
-[node name="Weapon" type="CSGMesh3D" parent="Camera3D"]
-transform = Transform3D(0.0987688, 0.0155578, 0.00163518, 0, 0.0104528, -0.0994522, -0.0156434, 0.0982278, 0.0103242, 0.5, 0, -1)
-mesh = ExtResource("3_u77m3")
-
-[node name="ShootingSound" type="AudioStreamPlayer3D" parent="."]
-stream = ExtResource("2_5m3nw")
+[node name="EnergyWeapon" parent="Camera3D" instance=ExtResource("4_pk5hr")]
+transform = Transform3D(-4.37114e-09, 0, 0.1, 0, 0.1, 0, -0.1, 0, -4.37114e-09, 0.5, 0.3, -1.15)
 
 [node name="HitRedTimer" type="Timer" parent="."]
 process_callback = 0
