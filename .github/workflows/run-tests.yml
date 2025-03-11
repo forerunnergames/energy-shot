@@ -101,7 +101,7 @@ jobs:
           godot-status: 'stable'
           godot-net: false # Don't run only C# tests.
           godot-force-mono: true # Run both C# & GDScript tests using the Mono engine.
-          version: 'master'
+          version: 'latest'
           paths: 'res://tests'
           retries: 3
           publish-report: ${{ env.PUBLISH_REPORT }}
