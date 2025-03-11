@@ -104,9 +104,8 @@ theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
 theme_override_font_sizes/font_size = 20
 theme_override_styles/background = SubResource("StyleBoxFlat_wockn")
 theme_override_styles/fill = SubResource("StyleBoxFlat_uacqx")
-max_value = 3.0
 step = 1.0
-value = 3.0
+value = 100.0
 show_percentage = false
 
 [node name="Score" type="Label" parent="HUD"]
