@@ -23,7 +23,6 @@ public static partial class Tools
 
   public static (bool success, string address, string error) FindServerAddress (int port)
   {
-    return (true, "127.0.0.1", string.Empty); // TODO Remove
     var uPnp = new Upnp();
     var discoverResult = (Upnp.UpnpResult)uPnp.Discover();
 
