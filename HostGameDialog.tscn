@@ -59,10 +59,35 @@ layout_mode = 2
 theme_override_font_sizes/font_size = 50
 text = "  X  "
 
-[node name="HSeparator" type="HSeparator" parent="PanelContainer/MarginContainer/VBoxContainer"]
+[node name="HSeparator1" type="HSeparator" parent="PanelContainer/MarginContainer/VBoxContainer"]
 layout_mode = 2
 
-[node name="TopText" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer"]
+[node name="TopText" type="VBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="Label1" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/TopText"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 50
+text = "Player Name"
+horizontal_alignment = 1
+
+[node name="Label2" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/TopText"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+text = "(1 to16 letters & numbers, no spaces, no special characters)"
+horizontal_alignment = 1
+
+[node name="PlayerName" type="LineEdit" parent="PanelContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_uneditable_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 100
+alignment = 1
+max_length = 20
+
+[node name="HSeparator2" type="HSeparator" parent="PanelContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="MiddleText" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 50
 text = "Finding your server address...

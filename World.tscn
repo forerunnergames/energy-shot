@@ -1,10 +1,12 @@
-[gd_scene load_steps=10 format=3 uid="uid://bmu2hky25lw3q"]
+[gd_scene load_steps=11 format=3 uid="uid://bmu2hky25lw3q"]
 
 [ext_resource type="Script" path="res://World.cs" id="1_jsv3h"]
 [ext_resource type="Texture2D" uid="uid://daovrr00830xa" path="res://assets/floor/patterned_paving_diff_4k.png" id="2_g2q2r"]
 [ext_resource type="Texture2D" uid="uid://nx56m31ose5b" path="res://assets/floor/patterned_paving_nor_gl_4k.png" id="3_rcb6p"]
 [ext_resource type="Texture2D" uid="uid://qwmow5sp4lis" path="res://assets/floor/patterned_paving_arm_4k.png" id="4_5vad1"]
 [ext_resource type="PackedScene" uid="uid://y2rvvh2dq5oc" path="res://UI.tscn" id="5_8eal4"]
+
+[sub_resource type="WorldBoundaryShape3D" id="WorldBoundaryShape3D_6x5gn"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_vdo1k"]
 sky_horizon_color = Color(0.64625, 0.65575, 0.67075, 1)
@@ -34,6 +36,12 @@ texture_filter = 5
 
 [node name="World" type="Node3D"]
 script = ExtResource("1_jsv3h")
+
+[node name="LowerWorldBoundary" type="StaticBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -40, 0)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="LowerWorldBoundary"]
+shape = SubResource("WorldBoundaryShape3D_6x5gn")
 
 [node name="Sun" type="DirectionalLight3D" parent="."]
 transform = Transform3D(-0.866025, -0.433013, 0.25, 0, 0.5, 0.866025, -0.5, 0.75, -0.433013, 0, 0, 0)

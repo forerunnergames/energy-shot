@@ -2,6 +2,8 @@ using GdUnit4;
 using Godot;
 using static GdUnit4.Assertions;
 
+namespace com.forerunnergames.energyshot;
+
 [TestSuite]
 public partial class PlaceholderTest : Node
 {

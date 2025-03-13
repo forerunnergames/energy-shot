@@ -1,28 +1,43 @@
 using Godot;
 
+namespace com.forerunnergames.energyshot;
+
 public partial class Player : CharacterBody3D
 {
-  [Signal]
-  public delegate void HealthChangedEventHandler (int value);
+  // @formatter:off
 
-  [Signal]
-  public delegate void ScoredEventHandler();
+  [Export]
+  public string DisplayName
+  {
+    get => _displayName;
+    set
+    {
+      _displayName = value;
+      UpdateNameLabel();
+    }
+  }
 
-  public const float Speed = 7.0f;
-  public const float JumpVelocity = 20.0f;
-  public readonly Vector3 Gravity = new(0.0f, -50.0f, 0.0f);
+  [Signal] public delegate void HealthChangedEventHandler (int value);
+  [Signal] public delegate void ScoredEventHandler (string shooterDisplayName, string shotDisplayName);
+  [Signal] public delegate void RespawnedEventHandler (string shotDisplayName, string shooterDisplayName);
+  [Export] public int MaxHealth = 100;
+  [Export] public float Speed = 7.0f;
+  [Export] public float JumpVelocity = 20.0f;
+  [Export] public Vector3 Gravity = new(0.0f, -50.0f, 0.0f);
   public int NetworkId => Name.ToString().ToInt();
-  public float WeaponRotationSpeed => _energyWeapon.CurrentRotationSpeed;
-  public Timer HitRedTimer { get; private set; } = null!;
+  private Timer _hitRedTimer = null!;
   private static readonly Color NormalColor = new("0027ff");
   private static readonly Color HitColor = Colors.DarkRed;
+  private ProgressBar _healthBar = null!;
   private Camera3D _camera = null!;
   private RayCast3D _aim = null!;
   private MeshInstance3D _mesh = null!;
   private Sprite3D _crossHairs = null!;
   private Timer _jumpTimer = null!;
   private EnergyWeapon _energyWeapon = null!;
-  private int _health = 100;
+  private Label3D? _displayNameLabel;
+  private string _displayName = string.Empty;
+  private int _health;
   private Vector3 _throwBackForce = Vector3.Zero;
   private float _throwBackStrength = 5.0f;
   private float _throwBackDecay = 0.8f;
@@ -30,6 +45,7 @@ public partial class Player : CharacterBody3D
   private bool _isInputEnabled;
   public override void _EnterTree() => SetMultiplayerAuthority (NetworkId);
   public void SetInputEnabled (bool isEnabled) => _isInputEnabled = isEnabled;
+  [Rpc] private void PlayShootEffects() => _energyWeapon.PlayShootingSound();
   private bool IsFalling() => !IsOnFloor();
   private bool IsJumping() => _isInputEnabled && _jumpTimer.IsStopped() && Input.IsActionJustPressed ("jump") && IsOnFloor();
   private bool IsChargingWeapon() => _isInputEnabled && Input.IsActionPressed ("shoot");
@@ -40,6 +56,8 @@ public partial class Player : CharacterBody3D
   private void DischargeWeapon() => _energyWeapon.Discharge();
   private void StartThrowBack (float energy) => _throwBackForce = _camera.GlobalTransform.Basis.Z.Normalized() * _throwBackStrength * (energy >= _throwbackEnergyThreshold ? energy : 0.0f);
   private void SetColor (Color color) => (_mesh.GetSurfaceOverrideMaterial (0) as StandardMaterial3D)!.AlbedoColor = color;
+  private static int CalculateHealthDecrease (float energyShot) => Mathf.Min (100, Mathf.RoundToInt (energyShot * 100.0f));
+  // @formatter:on
 
   public override void _Ready()
   {
@@ -48,15 +66,21 @@ public partial class Player : CharacterBody3D
     _energyWeapon = GetNode <EnergyWeapon> ("Camera3D/EnergyWeapon");
     _crossHairs = GetNode <Sprite3D> ("Camera3D/Crosshairs");
     _jumpTimer = GetNode <Timer> ("JumpTimer");
-    HitRedTimer = GetNode <Timer> ("HitRedTimer");
+    _hitRedTimer = GetNode <Timer> ("HitRedTimer");
+    _displayNameLabel = GetNode <Label3D> ("PlayerName");
+    _healthBar = GetNode <ProgressBar> ("SubViewport/HealthBar");
+    _health = MaxHealth;
 
     if (!IsMultiplayerAuthority())
     {
-      HitRedTimer.Timeout += () => SetColor (NormalColor);
+      UpdateNameLabel();
+      _hitRedTimer.Timeout += () => SetColor (NormalColor);
       _crossHairs.Hide();
       return;
     }
 
+    _healthBar.Hide();
+    _displayNameLabel.Hide();
     _energyWeapon.ShotFired += OnWeaponShotFired;
     _camera = GetNode <Camera3D> ("Camera3D");
     _camera.Current = true;
@@ -123,44 +147,46 @@ public partial class Player : CharacterBody3D
   {
     StartThrowBack (energy);
     Rpc (MethodName.PlayShootEffects);
-    if (!_aim.IsColliding() || _aim.GetCollider() is not Player hitPlayer || hitPlayer.NetworkId == NetworkId) return;
-    GD.Print ($"{Name}: I am shooting: {hitPlayer.GetMultiplayerAuthority()}");
-    hitPlayer.SetColor (HitColor); // This is only for the puppet.
-    hitPlayer.HitRedTimer.Start(); // This is only for the puppet.
-    --hitPlayer._health;
+    if (!_aim.IsColliding() || _aim.GetCollider() is not Player hitPlayerPuppet || hitPlayerPuppet.NetworkId == NetworkId) return;
+    hitPlayerPuppet.SetColor (HitColor);
+    hitPlayerPuppet._hitRedTimer.Start();
+    hitPlayerPuppet._health -= CalculateHealthDecrease (energy);
+    hitPlayerPuppet._healthBar.Value = hitPlayerPuppet._health;
+    GD.Print ($"{DisplayName}: I shot {hitPlayerPuppet.DisplayName}! (Health: {hitPlayerPuppet._health})");
 
-    if (hitPlayer._health == 0)
+    if (hitPlayerPuppet._health <= 0)
     {
-      GD.Print ("Emitting scored signal");
-      EmitSignal (SignalName.Scored);
+      hitPlayerPuppet._health = MaxHealth;
+      hitPlayerPuppet._healthBar.Value = hitPlayerPuppet._health;
+      GD.Print ($"{DisplayName}: I scored!");
+      EmitSignal (SignalName.Scored, DisplayName, hitPlayerPuppet.DisplayName);
     }
 
-    GD.Print ($"Puppet health: {hitPlayer._health}");
-    hitPlayer.RpcId (hitPlayer.NetworkId, MethodName.ReceiveShot, energy);
-  }
-
-  [Rpc (CallLocal = true)]
-  private void PlayShootEffects()
-  {
-    _energyWeapon.PlayShootingSound();
-    GD.Print ("PlayShootEffects(): ", _aim.IsColliding(), ", collider: ", _aim.GetCollider()?.GetType());
+    hitPlayerPuppet.RpcId (hitPlayerPuppet.NetworkId, MethodName.ReceiveShot, energy, DisplayName);
   }
 
   [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
-  private void ReceiveShot (float energy)
+  private void ReceiveShot (float energy, string shooterDisplayName)
   {
-    GD.Print ($"{GetMultiplayerAuthority()}: I was shot by {Multiplayer.GetRemoteSenderId()}!");
-    _health -= Mathf.Min (100, Mathf.RoundToInt (energy * 100.0f));
+    GD.Print ($"{DisplayName}: I was shot by {shooterDisplayName}!");
+    _health -= CalculateHealthDecrease (energy);
+    _healthBar.Value = _health;
 
     if (_health <= 0)
     {
-      GD.Print ($"{Name}: I respawned!");
-      _health = 100;
-      GD.Print ($"{Name} Position before: {Position}");
+      _health = MaxHealth;
+      _healthBar.Value = _health;
       Position = Vector3.Zero;
-      GD.Print ($"{Name} Position after: {Position}");
+      EmitSignal (SignalName.Respawned, DisplayName, shooterDisplayName);
+      GD.Print ($"{DisplayName}: I respawned!");
     }
 
     EmitSignal (SignalName.HealthChanged, _health);
+  }
+
+  private void UpdateNameLabel()
+  {
+    if (_displayNameLabel == null) return;
+    _displayNameLabel.Text = _displayName;
   }
 }

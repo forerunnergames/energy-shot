@@ -1,5 +1,7 @@
 using Godot;
 
+namespace com.forerunnergames.energyshot;
+
 public partial class EnergyWeapon : Node3D
 {
   // @formatter:off
@@ -18,7 +20,6 @@ public partial class EnergyWeapon : Node3D
   [Export] public float MinRotationSpeed = 1.0f;
   [Export] public float MaxRotationSpeed = 15.0f;
   [Signal] public delegate void ShotFiredEventHandler (float energy);
-  public float CurrentRotationSpeed { get; private set; }
   public bool IsSpinningUp { get; private set; }
   private AudioStreamPlayer3D _shootingSound = null!;
   private MeshInstance3D _muzzleMeshInstance = null!;
@@ -28,10 +29,11 @@ public partial class EnergyWeapon : Node3D
   private Color _chargedColor;
   private Color _weaponColor;
   private Tween? _tween;
-  public override void _PhysicsProcess (double delta) => _pivot.Rotate (Vector3.Right, CurrentRotationSpeed * (float)delta);
+  private float _currentRotationSpeed;
+  public override void _PhysicsProcess (double delta) => _pivot.Rotate (Vector3.Right, _currentRotationSpeed * (float)delta);
   public void PlayShootingSound() => _shootingSound.Play();
   public void Charge() => SpinUp();
-  private float CalculateEnergy() => CurrentRotationSpeed / MaxRotationSpeed;
+  private float CalculateEnergy() => _currentRotationSpeed / MaxRotationSpeed;
   // @formatter:on
 
   public override void _Ready()
@@ -44,11 +46,12 @@ public partial class EnergyWeapon : Node3D
     _normalColor = _muzzleMaterial.AlbedoColor;
     _chargedColor = new Color (3.0f, 0.0f, _muzzleMaterial.AlbedoColor.B, _muzzleMaterial.AlbedoColor.A);
     WeaponColor = _normalColor;
-    CurrentRotationSpeed = MinRotationSpeed;
+    _currentRotationSpeed = MinRotationSpeed;
   }
 
   public void Discharge()
   {
+    PlayShootingSound();
     EmitSignal (SignalName.ShotFired, CalculateEnergy());
     SpinDown();
   }
@@ -59,7 +62,7 @@ public partial class EnergyWeapon : Node3D
     IsSpinningUp = true;
     _tween?.Kill();
     _tween = CreateTween().SetParallel();
-    _tween.TweenProperty (this, "CurrentRotationSpeed", MaxRotationSpeed, 2.0f).SetTrans (Tween.TransitionType.Quad).SetEase (Tween.EaseType.Out);
+    _tween.TweenProperty (this, "_currentRotationSpeed", MaxRotationSpeed, 2.0f).SetTrans (Tween.TransitionType.Quad).SetEase (Tween.EaseType.Out);
     _tween.TweenProperty (this, "WeaponColor", _chargedColor, 2.0f).SetTrans (Tween.TransitionType.Quad).SetEase (Tween.EaseType.In);
   }
 
@@ -68,11 +71,11 @@ public partial class EnergyWeapon : Node3D
     IsSpinningUp = false;
     _tween?.Kill();
     _tween = CreateTween().SetParallel();
-    _tween.TweenProperty (this, "CurrentRotationSpeed", MinRotationSpeed, 2.0f).SetTrans (Tween.TransitionType.Quad).SetEase (Tween.EaseType.Out);
+    _tween.TweenProperty (this, "_currentRotationSpeed", MinRotationSpeed, 2.0f).SetTrans (Tween.TransitionType.Quad).SetEase (Tween.EaseType.Out);
     _tween.TweenProperty (this, "WeaponColor", _normalColor, 2.0f).SetTrans (Tween.TransitionType.Quad).SetEase (Tween.EaseType.Out);
   }
 
-  private StandardMaterial3D CreateCopy (StandardMaterial3D material)
+  private static StandardMaterial3D CreateCopy (StandardMaterial3D material)
   {
     var copy = new StandardMaterial3D();
     copy.AlbedoColor = material.AlbedoColor;

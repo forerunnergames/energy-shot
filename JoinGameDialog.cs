@@ -1,14 +1,16 @@
-using energyshot;
 using Godot;
+
+namespace com.forerunnergames.energyshot;
 
 public partial class JoinGameDialog : Control
 {
-  [Signal] public delegate void JoinGameSuccessEventHandler();
+  [Signal] public delegate void JoinGameSuccessEventHandler (string playerName);
   [Signal] public delegate void ClosedEventHandler();
   private Button _closeButton = null!;
   private Button _joinGameButton = null!;
+  private LineEdit _playerName = null!;
   private LineEdit _serverAddress = null!;
-  private Label _topText = null!;
+  private Label _middleText = null!;
   private Label _bottomText = null!;
   private Timer _connectionTimer = null!;
   private Callable _onConnectedToServerCallable;
@@ -16,10 +18,13 @@ public partial class JoinGameDialog : Control
   private Callable _onServerDisconnectedCallable;
   private ENetMultiplayerPeer? _peer;
   private int _serverPort = -1;
-  private void OnServerAddressTextChanged (string newText) => _joinGameButton.Disabled = !Tools.IsValidServerAddress (newText);
+  private void OnPlayerNameTextChanged (string newText) => UpdateJoinGameButtonState();
+  private void OnServerAddressTextChanged (string newText) => UpdateJoinGameButtonState();
   private void OnConnectionTimeout() => OnError ("Failed to connect to server, timed out.");
   private void OnConnectionFailed() => OnError ("Failed to connect to server.");
   private void OnServerDisconnected() => OnError ("Disconnected from server.");
+  private void UpdateJoinGameButtonState() => _joinGameButton.Disabled = !IsValid (_playerName.Text, _serverAddress.Text);
+  private static bool IsValid (string playerName, string serverAddress) => Tools.IsValidPlayerName (playerName) && Tools.IsValidServerAddress (serverAddress);
 
   public override void _Ready()
   {
@@ -28,14 +33,16 @@ public partial class JoinGameDialog : Control
     _onServerDisconnectedCallable = Callable.From (OnServerDisconnected);
     _closeButton = GetNode <Button> ("PanelContainer/MarginContainer/VBoxContainer/HBoxContainer/MarginContainer/CloseButton");
     _joinGameButton = GetNode <Button> ("PanelContainer/MarginContainer/VBoxContainer/JoinGameButton");
+    _playerName = GetNode <LineEdit> ("PanelContainer/MarginContainer/VBoxContainer/PlayerName");
     _serverAddress = GetNode <LineEdit> ("PanelContainer/MarginContainer/VBoxContainer/ServerAddress");
-    _topText = GetNode <Label> ("PanelContainer/MarginContainer/VBoxContainer/TopText");
+    _middleText = GetNode <Label> ("PanelContainer/MarginContainer/VBoxContainer/MiddleText");
     _bottomText = GetNode <Label> ("PanelContainer/MarginContainer/VBoxContainer/BottomText");
     _connectionTimer = GetNode <Timer> ("ConnectionTimer");
     _joinGameButton.Disabled = true;
     _bottomText.Text = string.Empty;
     _closeButton.Pressed += OnCloseButtonPressed;
     _joinGameButton.Pressed += OnJoinGameButtonPressed;
+    _playerName.TextChanged += OnPlayerNameTextChanged;
     _serverAddress.TextChanged += OnServerAddressTextChanged;
     _connectionTimer.Timeout += OnConnectionTimeout;
   }
@@ -45,19 +52,18 @@ public partial class JoinGameDialog : Control
     _peer = peer;
     _serverPort = serverPort;
     _bottomText.Text = string.Empty;
-    _joinGameButton.Disabled = true;
-    OnServerAddressTextChanged (_serverAddress.Text);
+    UpdateJoinGameButtonState();
     Show();
   }
 
   private void OnJoinGameButtonPressed()
   {
+    _joinGameButton.Disabled = true;
     ConnectSignals();
     _connectionTimer.Start();
     var message = $"Connecting to server at [{_serverAddress.Text}:{_serverPort}]...";
     GD.Print (message);
     _bottomText.Text = message;
-    _joinGameButton.Disabled = true;
 
     if (_peer == null)
     {
@@ -93,8 +99,8 @@ public partial class JoinGameDialog : Control
     _connectionTimer.Stop();
     DisconnectSignals();
     Hide();
-    GD.Print ($"Successfully joined game at [{_serverAddress.Text}:{_serverPort}]");
-    EmitSignal (SignalName.JoinGameSuccess);
+    GD.Print ($"Successfully connected to server at [{_serverAddress.Text}:{_serverPort}]");
+    EmitSignal (SignalName.JoinGameSuccess, _playerName.Text);
   }
 
   private void OnError (string error)
@@ -109,7 +115,7 @@ public partial class JoinGameDialog : Control
     _connectionTimer.Stop();
     DisconnectSignals();
     _peer?.Close();
-    _joinGameButton.Disabled = false;
+    UpdateJoinGameButtonState();
   }
 
   private void ConnectSignals()
