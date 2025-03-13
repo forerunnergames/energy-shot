@@ -1,8 +1,36 @@
-[gd_scene load_steps=8 format=3 uid="uid://b1w1b7u4gtpbh"]
+[gd_scene load_steps=11 format=3 uid="uid://b1w1b7u4gtpbh"]
 
 [ext_resource type="Script" path="res://Player.cs" id="1_nipvj"]
 [ext_resource type="Texture2D" uid="uid://ddlk1r4wak13u" path="res://assets/crosshairs.png" id="2_37lxu"]
 [ext_resource type="PackedScene" uid="uid://bnnjmr0ke3v6d" path="res://assets/weapons/EnergyWeapon.tscn" id="4_pk5hr"]
+
+[sub_resource type="ViewportTexture" id="ViewportTexture_udl6m"]
+viewport_path = NodePath("SubViewport")
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_qepmy"]
+bg_color = Color(1, 0, 0, 0.321569)
+border_width_left = 10
+border_width_top = 10
+border_width_right = 10
+border_width_bottom = 10
+border_color = Color(0, 0, 0, 1)
+corner_radius_top_left = 50
+corner_radius_top_right = 50
+corner_radius_bottom_right = 50
+corner_radius_bottom_left = 50
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_m0jbk"]
+bg_color = Color(0.756863, 0, 0, 1)
+border_width_left = 10
+border_width_top = 10
+border_width_right = 10
+border_width_bottom = 10
+border_color = Color(0, 0, 0, 0)
+corner_radius_top_left = 50
+corner_radius_top_right = 50
+corner_radius_bottom_right = 50
+corner_radius_bottom_left = 50
+shadow_size = 10
 
 [sub_resource type="CapsuleMesh" id="CapsuleMesh_kwhax"]
 
@@ -22,9 +50,40 @@ properties/1/replication_mode = 1
 properties/2/path = NodePath(".:scale")
 properties/2/spawn = true
 properties/2/replication_mode = 1
+properties/3/path = NodePath(".:DisplayName")
+properties/3/spawn = true
+properties/3/replication_mode = 1
 
 [node name="Player" type="CharacterBody3D"]
 script = ExtResource("1_nipvj")
+
+[node name="PlayerName" type="Label3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.3, 0)
+billboard = 1
+text = "PlayerName"
+
+[node name="HealthBarBillboard" type="Sprite3D" parent="."]
+transform = Transform3D(-0.18, 0, 6.34182e-08, 0, 0.1008, 0, -2.71793e-08, 0, -0.42, 0, 2.1, 0)
+billboard = 1
+texture = SubResource("ViewportTexture_udl6m")
+
+[node name="SubViewport" type="SubViewport" parent="."]
+transparent_bg = true
+size = Vector2i(512, 65)
+
+[node name="HealthBar" type="ProgressBar" parent="SubViewport"]
+offset_right = 498.0
+offset_bottom = 58.0
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_font_sizes/font_size = 20
+theme_override_styles/background = SubResource("StyleBoxFlat_qepmy")
+theme_override_styles/fill = SubResource("StyleBoxFlat_m0jbk")
+step = 1.0
+value = 100.0
+show_percentage = false
 
 [node name="JumpTimer" type="Timer" parent="."]
 wait_time = 3.0
