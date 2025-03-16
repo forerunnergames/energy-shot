@@ -27,6 +27,7 @@ public partial class MainMenu : Control
     _quitButton.Pressed += QuitGame;
     _world.NewGameStarted += OnNewGameStarted;
     _world.KickedFromServer += OnKickedFromServer;
+    _world.ServerShutDown += OnServerShutDown;
     _bottomMainMenuText.Text = string.Empty;
   }
 
@@ -34,6 +35,14 @@ public partial class MainMenu : Control
   {
     Hide();
     _bottomMainMenuText.Text = string.Empty;
+  }
+
+  private void OnServerShutDown()
+  {
+    GD.Print ("Server shut down");
+    _bottomMainMenuText.Text = "The server was shut down.";
+    Input.MouseMode = Input.MouseModeEnum.Visible;
+    Show();
   }
 
   private void OnKickedFromServer (string reason)

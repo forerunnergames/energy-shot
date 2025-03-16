@@ -23,6 +23,7 @@ public partial class Hud : Control
   private void OnPlayerRespawned (string shotPlayerName, string shooterPlayerName) => _messageScroller.AddMessage ($"{YouOrName (shotPlayerName)} {WasOrWere (shotPlayerName)} shot by {shooterPlayerName}");
   private void OnSelfPlayerHealthChanged (string playerName, int health) => _healthBar.Value = health;
   private void OnKickedFromServer (string reason) => Hide();
+  private void OnServerShutDown() => Hide();
   // @formatter:on
 
   public override void _Ready()
@@ -42,6 +43,7 @@ public partial class Hud : Control
     _world.PlayerRespawned += OnPlayerRespawned;
     _world.SelfPlayerHealthChanged += OnSelfPlayerHealthChanged;
     _world.KickedFromServer += OnKickedFromServer;
+    _world.ServerShutDown += OnServerShutDown;
   }
 
   public override void _UnhandledInput (InputEvent @event)
