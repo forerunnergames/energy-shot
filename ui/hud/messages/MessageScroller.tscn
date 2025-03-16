@@ -1,6 +1,6 @@
 [gd_scene load_steps=6 format=3 uid="uid://huun2vjv0k1v"]
 
-[ext_resource type="Script" path="res://MessageScroller.cs" id="1"]
+[ext_resource type="Script" path="res://ui/hud/messages/MessageScroller.cs" id="1"]
 [ext_resource type="Texture2D" uid="uid://dvl3eujgwcakd" path="res://assets/hud/arrow-down-pressed.png" id="2_1o4l3"]
 [ext_resource type="Texture2D" uid="uid://bixfciwpmce27" path="res://assets/hud/arrow-down.png" id="3_p6hta"]
 [ext_resource type="Texture2D" uid="uid://bku7sc2pyjqdi" path="res://assets/hud/arrow-up-pressed.png" id="4_y5g5t"]

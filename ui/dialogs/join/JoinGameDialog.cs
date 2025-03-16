@@ -1,6 +1,7 @@
+using com.forerunnergames.energyshot.utilities;
 using Godot;
 
-namespace com.forerunnergames.energyshot;
+namespace com.forerunnergames.energyshot.ui.dialogs;
 
 public partial class JoinGameDialog : Control
 {

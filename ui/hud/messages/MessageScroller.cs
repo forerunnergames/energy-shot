@@ -3,11 +3,10 @@ using System.Collections.Generic;
 using System.Linq;
 using Godot;
 
-namespace com.forerunnergames.energyshot;
+namespace com.forerunnergames.energyshot.ui.hud.messages;
 
 public partial class MessageScroller : Control
 {
-  // @formatter:off
   [Signal] public delegate void OnMessageScrollerExpandedEventHandler();
   [Signal] public delegate void OnMessageScrollerCollapsedEventHandler();
   [Export] public float LowMessageImportanceDisplayTimeSeconds = 0.1f;
@@ -42,7 +41,6 @@ public partial class MessageScroller : Control
   private void _OnMessageTimerTimeout() => DisplayNextMessage();
   private bool IsMessageHistoryVisible() => _messageHistoryContainer.Visible;
   private void StartMessageTimer (MessageImportance importance, bool isInstant = false) => _messageTimer.Start (isInstant ? 0.01f : _messageImportanceToDisplayTimes[importance]);
-  // @formatter:on
 
   public enum MessageImportance
   {

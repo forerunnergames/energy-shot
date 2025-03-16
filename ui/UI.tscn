@@ -1,0 +1,29 @@
+[gd_scene load_steps=7 format=3 uid="uid://y2rvvh2dq5oc"]
+
+[ext_resource type="Script" path="res://ui/UI.cs" id="1_nxkq8"]
+[ext_resource type="PackedScene" uid="uid://b0dcb5suks4p0" path="res://ui/dialogs/host/HostGameDialog.tscn" id="1_vtns1"]
+[ext_resource type="PackedScene" uid="uid://bwu2mo4euj40u" path="res://ui/menus/main/MainMenu.tscn" id="2_2sdb8"]
+[ext_resource type="PackedScene" uid="uid://cx5lbfyyal0ax" path="res://ui/dialogs/join/JoinGameDialog.tscn" id="2_msxij"]
+[ext_resource type="PackedScene" uid="uid://bmpjrf8pqokyu" path="res://ui/dialogs/confirm/ConfirmationDialog2.tscn" id="3_pp62o"]
+[ext_resource type="PackedScene" uid="uid://cobme7o27cxru" path="res://ui/hud/Hud.tscn" id="5_jmt4o"]
+
+[node name="UI" type="CanvasLayer"]
+script = ExtResource("1_nxkq8")
+
+[node name="MainMenu" parent="." instance=ExtResource("2_2sdb8")]
+
+[node name="HostGameDialog" parent="." instance=ExtResource("1_vtns1")]
+visible = false
+
+[node name="JoinGameDialog" parent="." instance=ExtResource("2_msxij")]
+visible = false
+
+[node name="Hud" parent="." instance=ExtResource("5_jmt4o")]
+visible = false
+
+[node name="QuitDialog" parent="." instance=ExtResource("3_pp62o")]
+visible = false
+offset_left = -608.0
+offset_top = -632.0
+offset_right = 592.0
+offset_bottom = -32.0

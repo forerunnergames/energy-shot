@@ -1,10 +1,10 @@
 [gd_scene load_steps=11 format=3 uid="uid://bmu2hky25lw3q"]
 
-[ext_resource type="Script" path="res://World.cs" id="1_jsv3h"]
+[ext_resource type="Script" path="res://core/world/World.cs" id="1_jsv3h"]
 [ext_resource type="Texture2D" uid="uid://daovrr00830xa" path="res://assets/floor/patterned_paving_diff_4k.png" id="2_g2q2r"]
 [ext_resource type="Texture2D" uid="uid://nx56m31ose5b" path="res://assets/floor/patterned_paving_nor_gl_4k.png" id="3_rcb6p"]
 [ext_resource type="Texture2D" uid="uid://qwmow5sp4lis" path="res://assets/floor/patterned_paving_arm_4k.png" id="4_5vad1"]
-[ext_resource type="PackedScene" uid="uid://y2rvvh2dq5oc" path="res://UI.tscn" id="5_8eal4"]
+[ext_resource type="PackedScene" uid="uid://y2rvvh2dq5oc" path="res://ui/UI.tscn" id="5_8eal4"]
 
 [sub_resource type="WorldBoundaryShape3D" id="WorldBoundaryShape3D_6x5gn"]
 
@@ -81,7 +81,7 @@ size = Vector3(100, 0.002, 100)
 material = SubResource("StandardMaterial3D_bx300")
 
 [node name="MultiplayerSpawner" type="MultiplayerSpawner" parent="."]
-_spawnable_scenes = PackedStringArray("res://Player.tscn")
+_spawnable_scenes = PackedStringArray("res://core/players/Player.tscn")
 spawn_path = NodePath("..")
 
 [node name="UI" parent="." instance=ExtResource("5_8eal4")]

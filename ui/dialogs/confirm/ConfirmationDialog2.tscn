@@ -1,6 +1,6 @@
 [gd_scene load_steps=2 format=3 uid="uid://bmpjrf8pqokyu"]
 
-[ext_resource type="Script" path="res://ConfirmationDialog2.cs" id="1_yhsco"]
+[ext_resource type="Script" path="res://ui/dialogs/confirm/ConfirmationDialog2.cs" id="1_yhsco"]
 
 [node name="ConfirmationDialog2" type="MarginContainer"]
 anchors_preset = 8

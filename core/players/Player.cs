@@ -1,13 +1,11 @@
+using com.forerunnergames.energyshot.weapons;
 using Godot;
 
-namespace com.forerunnergames.energyshot;
+namespace com.forerunnergames.energyshot.players;
 
 public partial class Player : CharacterBody3D
 {
-  // @formatter:off
-
-  [Export]
-  public string DisplayName
+  [Export] public string DisplayName
   {
     get => _displayName;
     set
@@ -18,8 +16,8 @@ public partial class Player : CharacterBody3D
   }
 
   [Signal] public delegate void HealthChangedEventHandler (int value);
-  [Signal] public delegate void ScoredEventHandler (string shooterDisplayName, string shotDisplayName);
-  [Signal] public delegate void RespawnedEventHandler (string shotDisplayName, string shooterDisplayName);
+  [Signal] public delegate void ScoredEventHandler (string shooterPlayerName, string shotPlayerName);
+  [Signal] public delegate void RespawnedEventHandler (string shotPlayerName, string shooterPlayerName);
   [Export] public int MaxHealth = 100;
   [Export] public float Speed = 7.0f;
   [Export] public float JumpVelocity = 20.0f;
@@ -41,7 +39,7 @@ public partial class Player : CharacterBody3D
   private Vector3 _throwBackForce = Vector3.Zero;
   private float _throwBackStrength = 5.0f;
   private float _throwBackDecay = 0.8f;
-  private float _throwbackEnergyThreshold = 0.5f; // Don't throw back unless energy is greater than this threshold.
+  private float _throwbackEnergyThreshold = 0.5f;
   private bool _isInputEnabled;
   public override void _EnterTree() => SetMultiplayerAuthority (NetworkId);
   public void SetInputEnabled (bool isEnabled) => _isInputEnabled = isEnabled;
@@ -57,7 +55,6 @@ public partial class Player : CharacterBody3D
   private void StartThrowBack (float energy) => _throwBackForce = _camera.GlobalTransform.Basis.Z.Normalized() * _throwBackStrength * (energy >= _throwbackEnergyThreshold ? energy : 0.0f);
   private void SetColor (Color color) => (_mesh.GetSurfaceOverrideMaterial (0) as StandardMaterial3D)!.AlbedoColor = color;
   private static int CalculateHealthDecrease (float energyShot) => Mathf.Min (100, Mathf.RoundToInt (energyShot * 100.0f));
-  // @formatter:on
 
   public override void _Ready()
   {
