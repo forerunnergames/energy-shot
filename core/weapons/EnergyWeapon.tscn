@@ -1,6 +1,6 @@
 [gd_scene load_steps=6 format=3 uid="uid://bnnjmr0ke3v6d"]
 
-[ext_resource type="Script" path="res://EnergyWeapon.cs" id="1_5ivl3"]
+[ext_resource type="Script" path="res://core/weapons/EnergyWeapon.cs" id="1_5ivl3"]
 [ext_resource type="PackedScene" uid="uid://32kdxq7do30n" path="res://assets/weapons/weapon-energy-handle.glb" id="1_1444o"]
 [ext_resource type="AudioStream" uid="uid://deimcqfydj1y" path="res://assets/sounds/shoot2.mp3" id="2_24rgj"]
 [ext_resource type="PackedScene" uid="uid://7658bb31fcet" path="res://assets/weapons/weapon-energy-muzzle.glb" id="2_cjgpm"]
@@ -11,7 +11,7 @@ properties/0/spawn = true
 properties/0/replication_mode = 1
 properties/1/path = NodePath(".:WeaponColor")
 properties/1/spawn = true
-properties/1/replication_mode = 2
+properties/1/replication_mode = 1
 
 [node name="EnergyWeapon" type="Node3D"]
 transform = Transform3D(-4.37114e-08, 0, 1, 0, 1, 0, -1, 0, -4.37114e-08, 0.5, 0.3, -1.15)

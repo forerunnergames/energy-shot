@@ -1,7 +1,7 @@
 using System.Text.RegularExpressions;
 using Godot;
 
-namespace com.forerunnergames.energyshot;
+namespace com.forerunnergames.energyshot.utilities;
 
 public static partial class Tools
 {

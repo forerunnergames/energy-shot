@@ -1,6 +1,6 @@
 using Godot;
 
-namespace com.forerunnergames.energyshot;
+namespace com.forerunnergames.energyshot.weapons;
 
 public partial class EnergyWeapon : Node3D
 {

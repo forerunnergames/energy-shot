@@ -1,5 +1,7 @@
 using Godot;
 
+namespace com.forerunnergames.energyshot.ui.dialogs;
+
 public partial class ConfirmationDialog2 : MarginContainer
 {
   [Signal] public delegate void ConfirmedEventHandler();
