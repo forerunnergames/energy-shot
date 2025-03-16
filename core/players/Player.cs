@@ -22,10 +22,18 @@ public partial class Player : CharacterBody3D
   [Export] public float Speed = 7.0f;
   [Export] public float JumpVelocity = 20.0f;
   [Export] public Vector3 Gravity = new(0.0f, -50.0f, 0.0f);
+  [Export] public float MinNameScale = 1.0f;
+  [Export] public float MaxNameScale = 20.0f;
+  [Export] public float ScaleStartDistance = 5.0f;
+  [Export] public float ScaleStopDistance = 200.0f;
+  [Export] public float HealthBarNameMinSpacing = 0.2f;
+  [Export] public float HealthBarNameMaxSpacing = 3.0f;
+  [Export] public float NameBaseHeight = 2.3f;
   public int NetworkId => Name.ToString().ToInt();
   private Timer _hitRedTimer = null!;
   private static readonly Color NormalColor = new("0027ff");
   private static readonly Color HitColor = Colors.DarkRed;
+  private Sprite3D _healthBarBillboard = null!;
   private ProgressBar _healthBar = null!;
   private Camera3D _camera = null!;
   private RayCast3D _aim = null!;
@@ -36,11 +44,8 @@ public partial class Player : CharacterBody3D
   private Label3D? _displayNameLabel;
   private string _displayName = string.Empty;
   private int _health;
-  private Vector3 _throwBackForce = Vector3.Zero;
-  private float _throwBackStrength = 5.0f;
-  private float _throwBackDecay = 0.8f;
-  private float _throwbackEnergyThreshold = 0.5f;
   private bool _isInputEnabled;
+  private static Player? _localPlayer;
   public override void _EnterTree() => SetMultiplayerAuthority (NetworkId);
   public void SetInputEnabled (bool isEnabled) => _isInputEnabled = isEnabled;
   [Rpc] private void PlayShootEffects() => _energyWeapon.PlayShootingSound();
@@ -48,11 +53,9 @@ public partial class Player : CharacterBody3D
   private bool IsJumping() => _isInputEnabled && _jumpTimer.IsStopped() && Input.IsActionJustPressed ("jump") && IsOnFloor();
   private bool IsChargingWeapon() => _isInputEnabled && Input.IsActionPressed ("shoot");
   private bool IsDischargingWeapon() => _isInputEnabled && _energyWeapon.IsSpinningUp && Input.IsActionJustReleased ("shoot");
-  private bool IsThrowingBack() => _throwBackForce != Vector3.Zero;
   private void Fall (ref Vector3 velocity, double delta) => velocity += Gravity * (float)delta;
   private void ChargeWeapon() => _energyWeapon.Charge();
   private void DischargeWeapon() => _energyWeapon.Discharge();
-  private void StartThrowBack (float energy) => _throwBackForce = _camera.GlobalTransform.Basis.Z.Normalized() * _throwBackStrength * (energy >= _throwbackEnergyThreshold ? energy : 0.0f);
   private void SetColor (Color color) => (_mesh.GetSurfaceOverrideMaterial (0) as StandardMaterial3D)!.AlbedoColor = color;
   private static int CalculateHealthDecrease (float energyShot) => Mathf.Min (100, Mathf.RoundToInt (energyShot * 100.0f));
 
@@ -66,6 +69,7 @@ public partial class Player : CharacterBody3D
     _hitRedTimer = GetNode <Timer> ("HitRedTimer");
     _displayNameLabel = GetNode <Label3D> ("PlayerName");
     _healthBar = GetNode <ProgressBar> ("SubViewport/HealthBar");
+    _healthBarBillboard = GetNode <Sprite3D> ("HealthBarBillboard");
     _health = MaxHealth;
 
     if (!IsMultiplayerAuthority())
@@ -76,6 +80,7 @@ public partial class Player : CharacterBody3D
       return;
     }
 
+    _localPlayer = this;
     _healthBar.Hide();
     _displayNameLabel.Hide();
     _energyWeapon.ShotFired += OnWeaponShotFired;
@@ -89,12 +94,36 @@ public partial class Player : CharacterBody3D
   {
     if (!IsMultiplayerAuthority()) return;
     var velocity = Velocity;
-    if (IsThrowingBack()) ThrowBack (ref velocity);
     if (IsFalling()) Fall (ref velocity, delta);
     if (IsJumping()) Jump (ref velocity);
     Move (ref velocity);
     Velocity = velocity;
     MoveAndSlide();
+  }
+
+  public override void _Process (double delta)
+  {
+    if (IsMultiplayerAuthority() || _localPlayer == null || _displayNameLabel == null) return;
+    var distance = GlobalPosition.DistanceTo (_localPlayer.GlobalPosition);
+    var scaleFactor = CalculateScaleFactor (distance);
+    var minWidthFactor = 0.8f;
+    var widthFactor = Mathf.Max (minWidthFactor, 0.5f * scaleFactor);
+    var originalHealthBarBillboardScale = new Vector3 (0.18f, 0.101f, 0.42f);
+    var healthBarBillboardScaleFactor = new Vector3 (widthFactor, 1.0f * scaleFactor, 0.5f * scaleFactor);
+    var verticalOffset = scaleFactor * 0.2f;
+    var t = (distance - ScaleStartDistance) / (ScaleStopDistance - ScaleStartDistance);
+    var currentSpacing = Mathf.Lerp (HealthBarNameMinSpacing, HealthBarNameMaxSpacing, Mathf.Clamp (t, 0.0f, 1.0f));
+    _displayNameLabel.Scale = Vector3.One * scaleFactor;
+    _displayNameLabel.Position = new Vector3 (_displayNameLabel.Position.X, NameBaseHeight + verticalOffset, _displayNameLabel.Position.Z);
+    _healthBarBillboard.Scale = originalHealthBarBillboardScale * healthBarBillboardScaleFactor;
+    _healthBarBillboard.Position = new Vector3 (_healthBarBillboard.Position.X, NameBaseHeight + verticalOffset - currentSpacing, _healthBarBillboard.Position.Z);
+  }
+
+  public override void _ExitTree()
+  {
+    base._ExitTree();
+    if (!IsMultiplayerAuthority() || _localPlayer != this) return;
+    _localPlayer = null;
   }
 
   public override void _UnhandledInput (InputEvent @event)
@@ -115,17 +144,8 @@ public partial class Player : CharacterBody3D
     _jumpTimer.Start();
   }
 
-  private void ThrowBack (ref Vector3 velocity)
-  {
-    velocity += _throwBackForce;
-    _throwBackForce *= _throwBackDecay;
-    if (_throwBackForce.Length() >= 0.1f) return;
-    _throwBackForce = Vector3.Zero;
-  }
-
   private void Move (ref Vector3 velocity)
   {
-    if (IsThrowingBack()) return;
     var inputDir = Input.GetVector ("move_left", "move_right", "move_forward", "move_back");
     var inputDirection = (Transform.Basis * new Vector3 (inputDir.X, 0, inputDir.Y)).Normalized();
 
@@ -142,7 +162,6 @@ public partial class Player : CharacterBody3D
 
   private void OnWeaponShotFired (float energy)
   {
-    StartThrowBack (energy);
     Rpc (MethodName.PlayShootEffects);
     if (!_aim.IsColliding() || _aim.GetCollider() is not Player hitPlayerPuppet || hitPlayerPuppet.NetworkId == NetworkId) return;
     hitPlayerPuppet.SetColor (HitColor);
@@ -185,5 +204,13 @@ public partial class Player : CharacterBody3D
   {
     if (_displayNameLabel == null) return;
     _displayNameLabel.Text = _displayName;
+  }
+
+  private float CalculateScaleFactor (float distance)
+  {
+    if (distance <= ScaleStartDistance) return MinNameScale;
+    if (distance >= ScaleStopDistance) return MaxNameScale;
+    var t = (distance - ScaleStartDistance) / (ScaleStopDistance - ScaleStartDistance);
+    return Mathf.Lerp (MinNameScale, MaxNameScale, t);
   }
 }

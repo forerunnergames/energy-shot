@@ -14,6 +14,7 @@ public partial class World : Node3D
   [Signal] public delegate void PlayerRespawnedEventHandler (string shotPlayerName, string shooterPlayerName);
   [Signal] public delegate void SelfPlayerHealthChangedEventHandler (string playerName, int health);
   [Signal] public delegate void KickedFromServerEventHandler (string reason);
+  [Signal] public delegate void ServerShutDownEventHandler();
   private PackedScene _playerScene = null!;
   private Player? _selfPlayer;
   private string _selfPlayerName = string.Empty;
@@ -76,6 +77,7 @@ public partial class World : Node3D
   private void OnJoinGameSuccess (string playerName)
   {
     _selfPlayerName = playerName;
+    Multiplayer.ServerDisconnected += () => EmitSignal (SignalName.ServerShutDown);
     RpcId (1, MethodName.RequestPlayerSlot, playerName);
   }
 

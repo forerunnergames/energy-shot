@@ -4,10 +4,7 @@ namespace com.forerunnergames.energyshot.weapons;
 
 public partial class EnergyWeapon : Node3D
 {
-  // @formatter:off
-
-  [Export]
-  public Color WeaponColor
+  [Export] public Color WeaponColor
   {
     get => _weaponColor;
     set
@@ -19,6 +16,8 @@ public partial class EnergyWeapon : Node3D
 
   [Export] public float MinRotationSpeed = 1.0f;
   [Export] public float MaxRotationSpeed = 15.0f;
+  [Export] public float RecoilStrength = 5.0f;
+  [Export] public float RecoilRecoverySpeed = 5.0f;
   [Signal] public delegate void ShotFiredEventHandler (float energy);
   public bool IsSpinningUp { get; private set; }
   private AudioStreamPlayer3D _shootingSound = null!;
@@ -30,11 +29,14 @@ public partial class EnergyWeapon : Node3D
   private Color _weaponColor;
   private Tween? _tween;
   private float _currentRotationSpeed;
-  public override void _PhysicsProcess (double delta) => _pivot.Rotate (Vector3.Right, _currentRotationSpeed * (float)delta);
+  private Vector3 _initialPosition;
+  private Vector3 _recoilOffset = Vector3.Zero;
+  private bool _isRecoiling;
   public void PlayShootingSound() => _shootingSound.Play();
   public void Charge() => SpinUp();
+  private void Rotate (double delta) => _pivot.Rotate (Vector3.Right, _currentRotationSpeed * (float)delta);
+  private bool IsRecoilRecovered() => _recoilOffset.Length() <= 0.01f;
   private float CalculateEnergy() => _currentRotationSpeed / MaxRotationSpeed;
-  // @formatter:on
 
   public override void _Ready()
   {
@@ -47,12 +49,29 @@ public partial class EnergyWeapon : Node3D
     _chargedColor = new Color (3.0f, 0.0f, _muzzleMaterial.AlbedoColor.B, _muzzleMaterial.AlbedoColor.A);
     WeaponColor = _normalColor;
     _currentRotationSpeed = MinRotationSpeed;
+    _initialPosition = Position;
+  }
+
+  public override void _PhysicsProcess (double delta)
+  {
+    Rotate (delta);
+    Recoil (delta);
+  }
+
+  private void Recoil (double delta)
+  {
+    if (!_isRecoiling) return;
+    RecoverRecoil (delta);
+    if (!IsRecoilRecovered()) return;
+    ResetRecoil();
   }
 
   public void Discharge()
   {
     PlayShootingSound();
-    EmitSignal (SignalName.ShotFired, CalculateEnergy());
+    var energy = CalculateEnergy();
+    EmitSignal (SignalName.ShotFired, energy);
+    StartRecoil (energy);
     SpinDown();
   }
 
@@ -73,6 +92,25 @@ public partial class EnergyWeapon : Node3D
     _tween = CreateTween().SetParallel();
     _tween.TweenProperty (this, "_currentRotationSpeed", MinRotationSpeed, 2.0f).SetTrans (Tween.TransitionType.Quad).SetEase (Tween.EaseType.Out);
     _tween.TweenProperty (this, "WeaponColor", _normalColor, 2.0f).SetTrans (Tween.TransitionType.Quad).SetEase (Tween.EaseType.Out);
+  }
+
+  private void StartRecoil (float energy)
+  {
+    _isRecoiling = true;
+    _recoilOffset = Transform.Basis.Z * RecoilStrength * energy;
+  }
+
+  private void RecoverRecoil (double delta)
+  {
+    if (!_isRecoiling) return;
+    Position = _initialPosition + _recoilOffset;
+    _recoilOffset = _recoilOffset.Lerp (Vector3.Zero, RecoilRecoverySpeed * (float)delta);
+  }
+
+  private void ResetRecoil()
+  {
+    Position = _initialPosition;
+    _isRecoiling = false;
   }
 
   private static StandardMaterial3D CreateCopy (StandardMaterial3D material)
