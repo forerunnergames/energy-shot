@@ -8,6 +8,7 @@ namespace com.forerunnergames.energyshot.ui.hud;
 public partial class Hud : Control
 {
   // @formatter:off
+  [Signal] public delegate void MessageEventHandler (string message, string excludedPlayerName);
   [Signal] public delegate void GamePausedEventHandler();
   [Signal] public delegate void GameResumedEventHandler();
   [Signal] public delegate void GameQuitEventHandler();
@@ -17,13 +18,12 @@ public partial class Hud : Control
   private ConfirmationDialog2 _quitDialog = null!;
   private Label _scoreLabel = null!;
   private string _selfPlayerName = string.Empty;
-  private bool IsSelf (string playerName) => _selfPlayerName == playerName;
-  private string YouOrName (string playerName) => IsSelf (playerName) ? "You" : playerName;
-  private string WasOrWere (string playerName) => IsSelf (playerName) ? "were" : "was";
-  private void OnPlayerRespawned (string shotPlayerName, string shooterPlayerName) => _messageScroller.AddMessage ($"{YouOrName (shotPlayerName)} {WasOrWere (shotPlayerName)} shot by {shooterPlayerName}");
+  private void OnRemoteMessageReceived (string message) => _messageScroller.AddMessage (message);
   private void OnSelfPlayerHealthChanged (string playerName, int health) => _healthBar.Value = health;
+  private bool IsSelf (string playerName) => _selfPlayerName == playerName;
   private void OnKickedFromServer (string reason) => Hide();
   private void OnServerShutDown() => Hide();
+  private void PrintMessage (string message) => _messageScroller.AddMessage (message);
   // @formatter:on
 
   public override void _Ready()
@@ -39,8 +39,10 @@ public partial class Hud : Control
     _world.NewGameStarted += OnNewGameStarted;
     _world.PlayerJoinedGame += OnPlayerJoinedGame;
     _world.PlayerLeftGame += OnPlayerLeftGame;
+    _world.RemoteMessageReceived += OnRemoteMessageReceived;
     _world.PlayerScored += OnPlayerScored;
-    _world.PlayerRespawned += OnPlayerRespawned;
+    _world.PlayerRespawnedShot += OnPlayerRespawnedShot;
+    _world.PlayerRespawnedFell += OnPlayerRespawnedFell;
     _world.SelfPlayerHealthChanged += OnSelfPlayerHealthChanged;
     _world.KickedFromServer += OnKickedFromServer;
     _world.ServerShutDown += OnServerShutDown;
@@ -62,19 +64,36 @@ public partial class Hud : Control
   private void OnPlayerJoinedGame (string playerName)
   {
     if (IsSelf (playerName)) return;
-    _messageScroller.AddMessage ($"{playerName} joined the game");
+    PrintMessage ($"{playerName} joined the game");
   }
 
   private void OnPlayerLeftGame (string playerName)
   {
     if (IsSelf (playerName)) return;
-    _messageScroller.AddMessage ($"{playerName} left the game");
+    PrintMessage ($"{playerName} left the game");
   }
 
-  private void OnPlayerScored (int score, string shooterPlayerName, string shotPlayerName)
+  private void OnPlayerRespawnedShot (string playerName, string shotByPlayerName)
   {
-    _messageScroller.AddMessage ($"{YouOrName (shooterPlayerName)} shot {shotPlayerName}");
-    if (!IsSelf (shooterPlayerName)) return;
+    if (IsSelf (shotByPlayerName))
+    {
+      PrintMessage (MessageGenerator.OnShotPlayer (isSelf: true, shotByPlayerName, playerName));
+      return;
+    }
+
+    if (!IsSelf (playerName)) return;
+    NotifyMessage (MessageGenerator.OnPlayerRespawnedShot (isSelf: true, playerName, shotByPlayerName), MessageGenerator.OnPlayerRespawnedShot (isSelf: false, playerName, shotByPlayerName), excludedPlayerName: shotByPlayerName);
+  }
+
+  private void OnPlayerRespawnedFell (string playerName)
+  {
+    if (!IsSelf (playerName)) return;
+    NotifyMessage (MessageGenerator.OnPlayerRespawnedFell (isSelf: true, playerName, out var messageIndex), MessageGenerator.OnPlayerRespawnedFell (isSelf: false, playerName, messageIndex));
+  }
+
+  private void OnPlayerScored (int score, string playerName, string shotPlayerName)
+  {
+    if (!IsSelf (playerName)) return;
     _scoreLabel.Text = $"Score: {score}";
   }
 
@@ -96,5 +115,11 @@ public partial class Hud : Control
   {
     Input.MouseMode = Input.MouseModeEnum.Captured;
     EmitSignal (SignalName.GameResumed);
+  }
+
+  private void NotifyMessage (string localMessage, string remoteMessage, string excludedPlayerName = "")
+  {
+    PrintMessage (localMessage);
+    EmitSignal (SignalName.Message, remoteMessage, excludedPlayerName);
   }
 }
