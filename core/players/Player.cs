@@ -221,6 +221,13 @@ public partial class Player : CharacterBody3D
     GD.Print ($"{DisplayName}: I respawned!");
   }
 
+  private Vector3 CalculateRandomSpawnPosition()
+  {
+    var theta = _rng.RandfRange (0.0f, Mathf.Pi * 2.0f);
+    var r = _spawnZoneCylinder.Radius * Mathf.Sqrt (_rng.Randf());
+    return new Vector3 (r * Mathf.Cos (theta) + _spawnZoneArea.Position.X, _spawnZoneArea.Position.Y, r * Mathf.Sin (theta) + _spawnZoneArea.Position.Z);
+  }
+
   private void UpdatePuppetTags()
   {
     if (IsMultiplayerAuthority() || _localPlayer == null || _nameTag == null) return;
@@ -245,13 +252,6 @@ public partial class Player : CharacterBody3D
     if (distance >= TagScaleStopDistance) return MaxNameTagScale;
     var t = (distance - TagScaleStartDistance) / (TagScaleStopDistance - TagScaleStartDistance);
     return Mathf.Lerp (MinNameTagScale, MaxNameTagScale, t);
-  }
-
-  private Vector3 CalculateRandomSpawnPosition()
-  {
-    var theta = _rng.RandfRange (0.0f, Mathf.Pi * 2.0f);
-    var r = _spawnZoneCylinder.Radius * Mathf.Sqrt (_rng.Randf());
-    return new Vector3 (r * Mathf.Cos (theta) + _spawnZoneArea.Position.X, _spawnZoneArea.Position.Y, r * Mathf.Sin (theta) + _spawnZoneArea.Position.Z);
   }
 
   private void UpdateNameTag()
