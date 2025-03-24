@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" path="res://core/world/World.cs" id="1_jsv3h"]
 [ext_resource type="Texture2D" uid="uid://daovrr00830xa" path="res://assets/floor/patterned_paving_diff_4k.png" id="2_g2q2r"]
-[ext_resource type="PackedScene" uid="uid://8revug3e4h32" path="res://core/NetworkManager.tscn" id="2_trrol"]
+[ext_resource type="PackedScene" uid="uid://8revug3e4h32" path="res://core/network/NetworkManager.tscn" id="2_trrol"]
 [ext_resource type="Texture2D" uid="uid://nx56m31ose5b" path="res://assets/floor/patterned_paving_nor_gl_4k.png" id="3_rcb6p"]
 [ext_resource type="Texture2D" uid="uid://qwmow5sp4lis" path="res://assets/floor/patterned_paving_arm_4k.png" id="4_5vad1"]
 [ext_resource type="PackedScene" uid="uid://y2rvvh2dq5oc" path="res://ui/UI.tscn" id="5_8eal4"]

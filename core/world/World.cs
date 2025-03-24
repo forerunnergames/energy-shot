@@ -47,6 +47,8 @@ public partial class World : Node3D
     _networkManager.PlayerRespawnedShot += (playerName, shotByPlayerName) => EmitSignal (SignalName.PlayerRespawnedShot, playerName, shotByPlayerName);
     _networkManager.PlayerRespawnedFell += playerName => EmitSignal (SignalName.PlayerRespawnedFell, playerName);
     _networkManager.RemoteMessageReceived += message => EmitSignal (SignalName.RemoteMessageReceived, message);
+    _networkManager.PlayerJoinGame += playerName => EmitSignal (SignalName.PlayerJoinedGame, playerName);
+    _networkManager.PlayerLeftGame += playerName => EmitSignal (SignalName.PlayerLeftGame, playerName);
   }
 
   [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
@@ -121,7 +123,7 @@ public partial class World : Node3D
     AddChild (player);
     player.DisplayName = playerName;
     GD.Print ($"Server: [{player.DisplayName} {player.NetworkId}] joined the game");
-    EmitSignal (SignalName.PlayerJoinedGame, player.DisplayName);
+    _networkManager.NotifyPlayerJoinGame (player.DisplayName);
     if (!player.IsMultiplayerAuthority()) return;
     RegisterSelf (player);
   }
@@ -140,7 +142,7 @@ public partial class World : Node3D
   {
     var player = GetNodeOrNull <Player> ($"{peerId}");
     if (player == null) return;
-    EmitSignal (SignalName.PlayerLeftGame, player.DisplayName);
+    _networkManager.NotifyPlayerLeftGame (player.DisplayName);
     player.QueueFree();
   }
 }
