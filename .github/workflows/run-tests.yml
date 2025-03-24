@@ -61,7 +61,7 @@ jobs:
           fi
 
       # Reports can only be published for non-fork pull requests.
-      # See https://github.com/MikeSchulze/gdUnit4-action?tab=readme-ov-file#note-on-forked-repositories
+      # See https://github.com/MikeSchulze/gdUnit4-action?tab=readme-ov-file#fork-considerations
       - name: Set publish report flag
         id: set_publish_report
         run: |

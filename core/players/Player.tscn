@@ -63,14 +63,14 @@ properties/5/replication_mode = 1
 [node name="Player" type="CharacterBody3D"]
 script = ExtResource("1_nipvj")
 
-[node name="PlayerName" type="Label3D" parent="."]
+[node name="NameTag" type="Label3D" parent="."]
 transform = Transform3D(1, 0, 1.42109e-14, 0, 1, 0, 0, 0, 1, 0, 2.3, 0)
 billboard = 1
 no_depth_test = true
 text = "PlayerName"
 outline_size = 20
 
-[node name="HealthBarBillboard" type="Sprite3D" parent="."]
+[node name="HealthTag" type="Sprite3D" parent="."]
 transform = Transform3D(-0.18, 0, 6.34182e-08, 0, 0.1008, 0, -2.71793e-08, 0, -0.42, 0, 2.1, 0)
 billboard = 1
 no_depth_test = true

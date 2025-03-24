@@ -8,6 +8,7 @@ namespace com.forerunnergames.energyshot.ui;
 // ReSharper disable once InconsistentNaming
 public partial class UI : CanvasLayer
 {
+  [Signal] public delegate void MessageEventHandler (string message, string excludedPlayerName);
   [Signal] public delegate void HostGameSuccessEventHandler (string playerName);
   [Signal] public delegate void JoinGameSuccessEventHandler (string playerName);
   [Signal] public delegate void GamePausedEventHandler();
@@ -30,6 +31,7 @@ public partial class UI : CanvasLayer
     _joinGameDialog = GetNode <JoinGameDialog> ("JoinGameDialog");
     _mainMenu.HostGameRequest += OnHostGameRequest;
     _mainMenu.JoinGameRequest += OnJoinGameRequest;
+    _hud.Message += (message, excludedPlayerName) => EmitSignal (SignalName.Message, message, excludedPlayerName);
     _hud.GamePaused += () => EmitSignal (SignalName.GamePaused);
     _hud.GameResumed += () => EmitSignal (SignalName.GameResumed);
     _hud.GameQuit += () => EmitSignal (SignalName.GameQuit);
