@@ -5,11 +5,12 @@ namespace com.forerunnergames.energyshot.ui.dialogs;
 
 public partial class JoinGameDialog : Control
 {
-  [Signal] public delegate void JoinGameSuccessEventHandler (string playerName);
+  [Signal] public delegate void JoinGameSuccessEventHandler (string playerName, int difficulty);
   [Signal] public delegate void ClosedEventHandler();
   private Button _closeButton = null!;
   private Button _joinGameButton = null!;
   private LineEdit _playerName = null!;
+  private OptionButton _difficulty = null!;
   private LineEdit _serverAddress = null!;
   private Label _middleText = null!;
   private Label _bottomText = null!;
@@ -35,6 +36,7 @@ public partial class JoinGameDialog : Control
     _closeButton = GetNode <Button> ("PanelContainer/MarginContainer/VBoxContainer/HBoxContainer/MarginContainer/CloseButton");
     _joinGameButton = GetNode <Button> ("PanelContainer/MarginContainer/VBoxContainer/JoinGameButton");
     _playerName = GetNode <LineEdit> ("PanelContainer/MarginContainer/VBoxContainer/PlayerName");
+    _difficulty = GetNode <OptionButton> ("PanelContainer/MarginContainer/VBoxContainer/Difficulty");
     _serverAddress = GetNode <LineEdit> ("PanelContainer/MarginContainer/VBoxContainer/ServerAddress");
     _middleText = GetNode <Label> ("PanelContainer/MarginContainer/VBoxContainer/MiddleText");
     _bottomText = GetNode <Label> ("PanelContainer/MarginContainer/VBoxContainer/BottomText");
@@ -55,6 +57,7 @@ public partial class JoinGameDialog : Control
     _bottomText.Text = string.Empty;
     if (string.IsNullOrEmpty (_playerName.Text)) _playerName.Text = Settings.PlayerName;
     if (string.IsNullOrEmpty (_serverAddress.Text)) _serverAddress.Text = Settings.LastJoinAddress;
+    _difficulty.Selected = Settings.Difficulty;
     UpdateJoinGameButtonState();
     Show();
   }
@@ -105,8 +108,9 @@ public partial class JoinGameDialog : Control
     Hide();
     Settings.PlayerName = _playerName.Text;
     Settings.LastJoinAddress = _serverAddress.Text;
+    Settings.Difficulty = _difficulty.Selected;
     GD.Print ($"Successfully connected to server at [{_serverAddress.Text}:{_serverPort}]");
-    EmitSignal (SignalName.JoinGameSuccess, _playerName.Text);
+    EmitSignal (SignalName.JoinGameSuccess, _playerName.Text, _difficulty.Selected);
   }
 
   private void OnError (string error)

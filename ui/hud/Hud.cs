@@ -78,12 +78,13 @@ public partial class Hud : Control
     ToggleQuitDialog();
   }
 
-  private void OnNewGameStarted (string selfPlayerName)
+  private void OnNewGameStarted (string selfPlayerName, int selfMaxHealth)
   {
     _selfPlayerName = selfPlayerName;
     _messageScroller.Reset();
-    _healthBar.Value = _healthBar.MaxValue;
-    UpdateVignette ((int)_healthBar.MaxValue);
+    _healthBar.MaxValue = selfMaxHealth;
+    _healthBar.Value = selfMaxHealth;
+    UpdateVignette (selfMaxHealth);
     Show();
   }
 
