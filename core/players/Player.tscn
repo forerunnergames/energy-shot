@@ -59,6 +59,9 @@ properties/4/replication_mode = 1
 properties/5/path = NodePath("Camera3D:position")
 properties/5/spawn = true
 properties/5/replication_mode = 1
+properties/6/path = NodePath(".:Health")
+properties/6/spawn = true
+properties/6/replication_mode = 2
 
 [node name="Player" type="CharacterBody3D"]
 script = ExtResource("1_nipvj")

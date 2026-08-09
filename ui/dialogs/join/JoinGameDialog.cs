@@ -79,14 +79,15 @@ public partial class JoinGameDialog : Control
     }
 
     var error = _peer.CreateClient (_serverAddress.Text, _serverPort);
-    Multiplayer.MultiplayerPeer = _peer;
 
-    // ReSharper disable once InvertIf
     if (error != Error.Ok)
     {
       OnError ($"Failed to join game, error [{error}]");
-      return; // ReSharper disable once RedundantJumpStatement
+      return;
     }
+
+    // Only assign a working peer, so a failed attempt doesn't leave a dead peer active (see issue #24).
+    Multiplayer.MultiplayerPeer = _peer;
   }
 
   private void OnCloseButtonPressed()

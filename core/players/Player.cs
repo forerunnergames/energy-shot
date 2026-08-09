@@ -19,6 +19,22 @@ public partial class Player : CharacterBody3D
   }
   // @formatter:on
 
+  // Replicated via MultiplayerSynchronizer; only the owning player writes it, so every
+  // peer's health bar for this player stays in sync (see issue #20).
+  [Export]
+  public int Health
+  {
+    get => _health;
+    set
+    {
+      var previous = _health;
+      _health = value;
+      if (_healthBar != null) _healthBar.Value = value;
+      if (IsMultiplayerAuthority() || value >= previous) return;
+      FlashHitColor();
+    }
+  }
+
   [Signal] public delegate void HealthChangedEventHandler (int value);
   [Signal] public delegate void ScoredEventHandler (string playerName, string shotPlayerName);
   [Signal] public delegate void RespawnedShotEventHandler (string playerName, string shotByPlayerName);
@@ -55,7 +71,15 @@ public partial class Player : CharacterBody3D
   private int _health;
   private bool _isInputEnabled;
   private static Player? _localPlayer;
-  public override void _Process (double delta) => UpdatePuppetTags();
+  public override void _Process (double delta)
+  {
+    if (!IsMultiplayerActive()) return;
+    UpdatePuppetTags();
+  }
+
+  // Guards against "The multiplayer instance isn't currently active" error spam from
+  // IsMultiplayerAuthority() after the session ends but before player nodes are freed (see issue #22).
+  private bool IsMultiplayerActive() => Multiplayer.MultiplayerPeer != null && Multiplayer.MultiplayerPeer.GetConnectionStatus() == MultiplayerPeer.ConnectionStatus.Connected;
   public override void _EnterTree() => SetMultiplayerAuthority (NetworkId);
   public void SetInputEnabled (bool isEnabled) => _isInputEnabled = isEnabled;
   private bool IsFalling() => !IsOnFloor();
@@ -106,6 +130,7 @@ public partial class Player : CharacterBody3D
 
   public override void _PhysicsProcess (double delta)
   {
+    if (!IsMultiplayerActive()) return;
     if (!IsMultiplayerAuthority()) return;
     var velocity = Velocity;
     if (IsFalling()) Fall (ref velocity, delta);
@@ -164,29 +189,44 @@ public partial class Player : CharacterBody3D
     HitPuppet (result.puppet, energy);
   }
 
+  // The victim is the single owner of its health: the shooter only reports the hit,
+  // the victim applies damage & replicates Health to everyone, & tells the shooter
+  // when it scored a kill (see issue #20).
   private void HitPuppet (Player playerPuppet, float energy)
   {
-    playerPuppet.SetColor (HitColor);
-    playerPuppet._hitRedTimer.Start();
-    playerPuppet._health -= CalculateHealthDecrease (energy);
-    playerPuppet._healthBar.Value = playerPuppet._health;
-    GD.Print ($"{DisplayName}: I hit {playerPuppet.DisplayName}! (Health: {playerPuppet._health})");
+    GD.Print ($"{DisplayName}: I hit {playerPuppet.DisplayName}!");
     playerPuppet.RpcId (playerPuppet.NetworkId, MethodName.ReceiveHit, energy, DisplayName);
-    if (playerPuppet._health > 0) return;
-    playerPuppet._health = MaxHealth;
-    playerPuppet._healthBar.Value = playerPuppet._health;
-    GD.Print ($"{DisplayName}: I scored!");
-    EmitSignal (SignalName.Scored, DisplayName, playerPuppet.DisplayName);
+  }
+
+  private void FlashHitColor()
+  {
+    SetColor (HitColor);
+    _hitRedTimer.Start();
   }
 
   [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
   private void ReceiveHit (float energy, string shotByPlayerName)
   {
-    _health -= CalculateHealthDecrease (energy);
-    _healthBar.Value = _health;
-    GD.Print ($"{DisplayName}: I was hit by {shotByPlayerName}! Health {_health}");
-    if (_health <= 0) RespawnShot (shotByPlayerName);
-    EmitSignal (SignalName.HealthChanged, _health);
+    if (!IsMultiplayerAuthority()) return;
+    var shooterId = Multiplayer.GetRemoteSenderId();
+    Health -= CalculateHealthDecrease (energy);
+    GD.Print ($"{DisplayName}: I was hit by {shotByPlayerName}! Health {Health}");
+
+    if (Health <= 0)
+    {
+      GetParent().GetNodeOrNull <Player> ($"{shooterId}")?.RpcId (shooterId, MethodName.NotifyScored, DisplayName);
+      RespawnShot (shotByPlayerName);
+    }
+
+    EmitSignal (SignalName.HealthChanged, Health);
+  }
+
+  [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
+  private void NotifyScored (string shotPlayerName)
+  {
+    if (!IsMultiplayerAuthority()) return;
+    GD.Print ($"{DisplayName}: I scored!");
+    EmitSignal (SignalName.Scored, DisplayName, shotPlayerName);
   }
 
   private void HandleCollisions()

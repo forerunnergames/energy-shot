@@ -62,21 +62,28 @@ public partial class World : Node3D
 
     if (duplicateId != null)
     {
-      RpcId (senderId, MethodName.OnKickedFromServer, "You're already in the game.");
-      Multiplayer.MultiplayerPeer.DisconnectPeer (senderId);
+      Kick (senderId, "You're already in the game.");
       GD.PrintErr ($"Server: Disconnected client ID [{senderId}], duplicate ID, [{duplicateId.DisplayName} (ID: {duplicateId.NetworkId})] is already in game");
       return;
     }
 
     if (duplicateName != null)
     {
-      RpcId (senderId, MethodName.OnKickedFromServer, "Your name is already in use by another player.");
-      Multiplayer.MultiplayerPeer.DisconnectPeer (senderId);
+      Kick (senderId, "Your name is already in use by another player.");
       GD.PrintErr ($"Server: Disconnected client ID [{senderId}], duplicate display name, [{duplicateName.DisplayName} (ID: {duplicateName.NetworkId})] is already in game");
       return;
     }
 
     AddPlayer (senderId, playerName);
+  }
+
+  // Delay the disconnect so the kick-reason RPC isn't dropped by an immediate peer disconnect (see issue #23).
+  private async void Kick (int peerId, string reason)
+  {
+    RpcId (peerId, MethodName.OnKickedFromServer, reason);
+    await ToSignal (GetTree().CreateTimer (0.5), SceneTreeTimer.SignalName.Timeout);
+    if (!Multiplayer.GetPeers().Contains (peerId)) return;
+    Multiplayer.MultiplayerPeer.DisconnectPeer (peerId);
   }
 
   private void OnHostGameSuccess (string playerName)
