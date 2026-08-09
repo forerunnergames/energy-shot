@@ -21,6 +21,12 @@ public static class Settings
     set => Set ("last_join_address", value);
   }
 
+  public static int Difficulty
+  {
+    get => GetInt ("difficulty");
+    set => Set ("difficulty", value);
+  }
+
   private static string Get (string key)
   {
     var config = new ConfigFile();
@@ -28,7 +34,14 @@ public static class Settings
     return (string)config.GetValue (Section, key, string.Empty);
   }
 
-  private static void Set (string key, string value)
+  private static int GetInt (string key)
+  {
+    var config = new ConfigFile();
+    config.Load (FilePath);
+    return (int)config.GetValue (Section, key, 0);
+  }
+
+  private static void Set (string key, Variant value)
   {
     var config = new ConfigFile();
     config.Load (FilePath);

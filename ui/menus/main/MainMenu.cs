@@ -31,7 +31,7 @@ public partial class MainMenu : Control
     _bottomMainMenuText.Text = string.Empty;
   }
 
-  private void OnNewGameStarted (string selfPlayerName)
+  private void OnNewGameStarted (string selfPlayerName, int selfMaxHealth)
   {
     Hide();
     _bottomMainMenuText.Text = string.Empty;

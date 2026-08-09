@@ -8,7 +8,7 @@ namespace com.forerunnergames.energyshot.core.world;
 
 public partial class World : Node3D
 {
-  [Signal] public delegate void NewGameStartedEventHandler (string selfPlayerName);
+  [Signal] public delegate void NewGameStartedEventHandler (string selfPlayerName, int selfMaxHealth);
   [Signal] public delegate void PlayerJoinedGameEventHandler (string playerName);
   [Signal] public delegate void PlayerLeftGameEventHandler (string playerName);
   [Signal] public delegate void PlayerScoredEventHandler (int score, string playerName, string shotPlayerName);
@@ -53,11 +53,11 @@ public partial class World : Node3D
   }
 
   [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
-  private void RequestPlayerSlot (string playerName)
+  private void RequestPlayerSlot (string playerName, int difficulty)
   {
     if (!Multiplayer.IsServer()) return;
     var senderId = Multiplayer.GetRemoteSenderId();
-    GD.Print ($"Server: {senderId} {playerName} is requesting to join the game");
+    GD.Print ($"Server: {senderId} {playerName} is requesting to join the game (difficulty {difficulty})");
     var duplicateId = FindPlayer (senderId);
     var duplicateName = FindPlayer (playerName);
 
@@ -75,7 +75,7 @@ public partial class World : Node3D
       return;
     }
 
-    AddPlayer (senderId, playerName);
+    AddPlayer (senderId, playerName, Player.MaxHealthFor (difficulty));
   }
 
   // Delay the disconnect so the kick-reason RPC isn't dropped by an immediate peer disconnect (see issue #23).
@@ -87,18 +87,18 @@ public partial class World : Node3D
     Multiplayer.MultiplayerPeer.DisconnectPeer (peerId);
   }
 
-  private void OnHostGameSuccess (string playerName)
+  private void OnHostGameSuccess (string playerName, int difficulty)
   {
     Multiplayer.PeerConnected += OnClientConnectedToServer;
     Multiplayer.PeerDisconnected += OnClientDisconnectedFromServer;
-    AddPlayer (Multiplayer.GetUniqueId(), playerName);
+    AddPlayer (Multiplayer.GetUniqueId(), playerName, Player.MaxHealthFor (difficulty));
   }
 
-  private void OnJoinGameSuccess (string playerName)
+  private void OnJoinGameSuccess (string playerName, int difficulty)
   {
     _selfPlayerName = playerName;
     Multiplayer.ServerDisconnected += () => EmitSignal (SignalName.ServerShutDown);
-    RpcId (1, MethodName.RequestPlayerSlot, playerName);
+    RpcId (1, MethodName.RequestPlayerSlot, playerName, difficulty);
   }
 
   private void OnClientDisconnectedFromServer (long id)
@@ -122,10 +122,11 @@ public partial class World : Node3D
     RegisterSelf (spawnedPlayer);
   }
 
-  private void AddPlayer (int peerId, string playerName)
+  private void AddPlayer (int peerId, string playerName, int maxHealth)
   {
     var player = _playerScene.Instantiate <Player>();
     player.Name = $"{peerId}";
+    player.MaxHealth = maxHealth;
     player.RespawnedShot += (respawnedPlayerName, shotByPlayerName) => _networkManager.NotifyPlayerRespawnedShot (respawnedPlayerName, shotByPlayerName);
     player.RespawnedFell += respawnedPlayerName => _networkManager.NotifyPlayerRespawnedFell (respawnedPlayerName);
     AddChild (player);
@@ -143,7 +144,7 @@ public partial class World : Node3D
     selfPlayer.HealthChanged += value => EmitSignal (SignalName.SelfPlayerHealthChanged, selfPlayer.DisplayName, value);
     selfPlayer.Scored += (playerName, shotPlayerName) => EmitSignal (SignalName.PlayerScored, ++_score, playerName, shotPlayerName);
     GD.Print ($"{_selfPlayer.NetworkId}: Registered my player {_selfPlayer.DisplayName}");
-    EmitSignal (SignalName.NewGameStarted, _selfPlayer.DisplayName);
+    EmitSignal (SignalName.NewGameStarted, _selfPlayer.DisplayName, _selfPlayer.MaxHealth);
   }
 
   private void RemovePlayer (long peerId)

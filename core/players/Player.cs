@@ -41,7 +41,23 @@ public partial class Player : CharacterBody3D
   [Signal] public delegate void RespawnedFellEventHandler (string playerName);
   // Replicated like Health so every peer can render the leaderboard.
   [Export] public int Score { get; set; }
-  [Export] public int MaxHealth = 200;
+
+  // Difficulty handicap: beginners get a bigger health pool. Replicated so every
+  // peer scales this player's health bar correctly.
+  [Export]
+  public int MaxHealth
+  {
+    get => _maxHealth;
+    set
+    {
+      _maxHealth = value;
+      if (_healthBar != null) _healthBar.MaxValue = value;
+    }
+  }
+
+  // Maps a difficulty selection (0=Beginner, 1=Intermediate, 2=Expert) to a health
+  // pool; anything unrecognized (including spoofed values) gets Expert health.
+  public static int MaxHealthFor (int difficulty) => difficulty switch { 0 => 400, 1 => 300, _ => 200 };
   [Export] public float MouseSensitivity = 0.0025f;
   [Export] public float FullAutoDurationSeconds = 3.0f;
   [Export] public float FullAutoCooldownSeconds = 15.0f;
@@ -79,6 +95,7 @@ public partial class Player : CharacterBody3D
   private ProgressBar _healthBar = null!;
   private string _displayName = string.Empty;
   private int _health;
+  private int _maxHealth = 200;
   private bool _isInputEnabled;
   private static Player? _localPlayer;
   public override void _Process (double delta)
