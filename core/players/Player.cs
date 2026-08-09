@@ -58,6 +58,21 @@ public partial class Player : CharacterBody3D
   // Maps a difficulty selection (0=Beginner, 1=Intermediate, 2=Expert) to a health
   // pool; anything unrecognized (including spoofed values) gets Expert health.
   public static int MaxHealthFor (int difficulty) => difficulty switch { 0 => 400, 1 => 300, _ => 200 };
+
+  // 5s of invulnerability after every (re)spawn, canceled by firing. Replicated so
+  // every peer renders the armored (white) player & the victim rejects damage.
+  [Export]
+  public bool SpawnArmor
+  {
+    get => _spawnArmor;
+    set
+    {
+      _spawnArmor = value;
+      if (_mesh != null) SetColor (value ? SpawnArmorColor : NormalColor);
+    }
+  }
+
+  [Export] public float SpawnArmorSeconds = 5.0f;
   [Export] public float MouseSensitivity = 0.0025f;
   [Export] public float FullAutoDurationSeconds = 3.0f;
   [Export] public float FullAutoCooldownSeconds = 15.0f;
@@ -78,6 +93,9 @@ public partial class Player : CharacterBody3D
   private readonly RandomNumberGenerator _rng = new();
   private static readonly Color NormalColor = new("0027ff");
   private static readonly Color HitColor = Colors.DarkRed;
+  private static readonly Color SpawnArmorColor = Colors.White;
+  private bool _spawnArmor;
+  private ulong _spawnArmorEndMs;
   private NetworkManager _networkManager = null!;
   private Node3D _spawnRoom = null!;
   private MeshInstance3D _mesh = null!;
@@ -139,8 +157,9 @@ public partial class Player : CharacterBody3D
     if (!IsMultiplayerAuthority())
     {
       UpdateNameTag();
-      _hitRedTimer.Timeout += () => SetColor (NormalColor);
+      _hitRedTimer.Timeout += () => SetColor (SpawnArmor ? SpawnArmorColor : NormalColor);
       _crossHairs.Hide();
+      SetColor (SpawnArmor ? SpawnArmorColor : NormalColor);
       return;
     }
 
@@ -154,12 +173,14 @@ public partial class Player : CharacterBody3D
     _isInputEnabled = true;
     Input.MouseMode = Input.MouseModeEnum.Captured;
     Position = CalculateRandomSpawnPosition();
+    ActivateSpawnArmor();
   }
 
   public override void _PhysicsProcess (double delta)
   {
     if (!IsMultiplayerActive()) return;
     if (!IsMultiplayerAuthority()) return;
+    UpdateSpawnArmor();
     UpdateFullAuto (delta);
     var velocity = Velocity;
     if (IsFalling()) Fall (ref velocity, delta);
@@ -168,6 +189,26 @@ public partial class Player : CharacterBody3D
     Velocity = velocity;
     if (!MoveAndSlide()) return;
     HandleCollisions();
+  }
+
+  private void ActivateSpawnArmor()
+  {
+    SpawnArmor = true;
+    _spawnArmorEndMs = Time.GetTicksMsec() + (ulong)(SpawnArmorSeconds * 1000.0f);
+  }
+
+  private void CancelSpawnArmorIfFired()
+  {
+    if (!SpawnArmor) return;
+    SpawnArmor = false;
+    GD.Print ($"{DisplayName}: Spawn armor canceled by firing");
+  }
+
+  private void UpdateSpawnArmor()
+  {
+    if (!SpawnArmor || Time.GetTicksMsec() < _spawnArmorEndMs) return;
+    SpawnArmor = false;
+    GD.Print ($"{DisplayName}: Spawn armor expired");
   }
 
   private void UpdateFullAuto (double delta)
@@ -233,6 +274,7 @@ public partial class Player : CharacterBody3D
 
   private void OnWeaponShotFired (float energy)
   {
+    CancelSpawnArmorIfFired();
     var direction = -_camera.GlobalTransform.Basis.Z;
     var origin = _camera.GlobalPosition + direction * 0.9f;
     SpawnBolt (origin, direction, energy, isLive: true);
@@ -276,6 +318,7 @@ public partial class Player : CharacterBody3D
   private void ReceiveHit (float energy, string shotByPlayerName)
   {
     if (!IsMultiplayerAuthority()) return;
+    if (SpawnArmor) return;
     var shooterId = Multiplayer.GetRemoteSenderId();
     Health -= CalculateHealthDecrease (energy);
     GD.Print ($"{DisplayName}: I was hit by {shotByPlayerName}! Health {Health}");
@@ -329,6 +372,7 @@ public partial class Player : CharacterBody3D
     Health = MaxHealth;
     Velocity = Vector3.Zero;
     Position = CalculateRandomSpawnPosition();
+    ActivateSpawnArmor();
     SetInputEnabled (isEnabled: false);
     GD.Print ($"{DisplayName}: I respawned!");
     await ToSignal (GetTree().CreateTimer (RespawnInputLockSeconds), SceneTreeTimer.SignalName.Timeout);
