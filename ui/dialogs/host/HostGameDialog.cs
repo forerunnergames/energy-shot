@@ -44,9 +44,9 @@ public partial class HostGameDialog : Control
     _bottomText.Text = string.Empty;
     UpdateHostGameButtonState();
     Show();
-    await ToSignal (GetTree(), SceneTree.SignalName.ProcessFrame);
-    await ToSignal (GetTree(), SceneTree.SignalName.ProcessFrame);
-    var (success, address, error) = Tools.FindServerAddress (serverPort);
+    // UPnP discovery can take seconds; run it off the main thread so the UI stays responsive (see issue #25).
+    var (success, address, error) = await System.Threading.Tasks.Task.Run (() => Tools.FindServerAddress (serverPort));
+    if (!IsInsideTree()) return;
     _middleText.Text = success ? "Your server address:" : $"Failed to find your server address. Please type it manually\n{error}";
     _serverAddress.Text = address;
     _bottomText.Text = success ? "Please share this with your friends so they can join your game!" : string.Empty;
@@ -75,13 +75,15 @@ public partial class HostGameDialog : Control
     }
 
     var error = _peer.CreateServer (_serverPort);
-    Multiplayer.MultiplayerPeer = _peer;
 
     if (error != Error.Ok)
     {
       OnError ($"Failed to host game, error [{error}]");
       return;
     }
+
+    // Only assign a working peer, so a failed attempt doesn't leave a dead peer active (see issue #24).
+    Multiplayer.MultiplayerPeer = _peer;
 
     GD.Print ($"Successfully hosted server at [{_serverAddress.Text}:{_serverPort}]!");
     Hide();
