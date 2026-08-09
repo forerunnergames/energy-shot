@@ -16,6 +16,9 @@ public partial class EnergyWeapon : Node3D
 
   [Export] public float MinRotationSpeed = 1.0f;
   [Export] public float MaxRotationSpeed = 15.0f;
+  // Caps fire rate: after a shot, the weapon can't begin a new charge until the
+  // cooldown elapses, so fast clicks & auto-clickers can't spam shots.
+  [Export] public float ShotCooldownSeconds = 1.0f;
   [Export] public float RecoilStrength = 5.0f;
   [Export] public float RecoilRecoverySpeed = 5.0f;
   [Signal] public delegate void ShotFiredEventHandler (float energy);
@@ -32,8 +35,14 @@ public partial class EnergyWeapon : Node3D
   private Vector3 _initialPosition;
   private Vector3 _recoilOffset = Vector3.Zero;
   private bool _isRecoiling;
+  private float _cooldownLeft;
   public void PlayShootingSound() => _shootingSound.Play();
-  public void Charge() => SpinUp();
+
+  public void Charge()
+  {
+    if (_cooldownLeft > 0.0f) return;
+    SpinUp();
+  }
   private void Rotate (double delta) => _pivot.Rotate (Vector3.Right, _currentRotationSpeed * (float)delta);
   private bool IsRecoilRecovered() => _recoilOffset.Length() <= 0.01f;
   private float CalculateEnergy() => _currentRotationSpeed / MaxRotationSpeed;
@@ -54,6 +63,7 @@ public partial class EnergyWeapon : Node3D
 
   public override void _PhysicsProcess (double delta)
   {
+    _cooldownLeft = Mathf.Max (0.0f, _cooldownLeft - (float)delta);
     Rotate (delta);
     Recoil (delta);
   }
@@ -68,6 +78,8 @@ public partial class EnergyWeapon : Node3D
 
   public void Discharge()
   {
+    if (!IsSpinningUp) return;
+    _cooldownLeft = ShotCooldownSeconds;
     PlayShootingSound();
     var energy = CalculateEnergy();
     EmitSignal (SignalName.ShotFired, energy);
