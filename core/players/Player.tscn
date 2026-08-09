@@ -62,6 +62,9 @@ properties/5/replication_mode = 1
 properties/6/path = NodePath(".:Health")
 properties/6/spawn = true
 properties/6/replication_mode = 2
+properties/7/path = NodePath(".:Score")
+properties/7/spawn = true
+properties/7/replication_mode = 2
 
 [node name="Player" type="CharacterBody3D"]
 script = ExtResource("1_nipvj")
@@ -121,10 +124,6 @@ no_depth_test = true
 fixed_size = true
 render_priority = 100
 texture = ExtResource("2_37lxu")
-
-[node name="Aim" type="RayCast3D" parent="Camera3D"]
-transform = Transform3D(1, 0, 0, 0, -4.37114e-08, -1, 0, 1, -4.37114e-08, 0, 0, 0)
-target_position = Vector3(0, -50, 0)
 
 [node name="EnergyWeapon" parent="Camera3D" instance=ExtResource("4_pk5hr")]
 transform = Transform3D(-4.37114e-09, 0, 0.1, 0, 0.1, 0, -0.1, 0, -4.37114e-09, 0.5, 0.3, -1.15)

@@ -1,3 +1,4 @@
+using System.Linq;
 using com.forerunnergames.energyshot.core.world;
 using com.forerunnergames.energyshot.ui.dialogs;
 using com.forerunnergames.energyshot.ui.hud.messages;
@@ -17,9 +18,29 @@ public partial class Hud : Control
   private MessageScroller _messageScroller = null!;
   private ConfirmationDialog2 _quitDialog = null!;
   private Label _scoreLabel = null!;
+  private Label _leaderboardEntries = null!;
+  private ShaderMaterial _vignette = null!;
   private string _selfPlayerName = string.Empty;
   private void OnRemoteMessageReceived (string message) => _messageScroller.AddMessage (message);
-  private void OnSelfPlayerHealthChanged (string playerName, int health) => _healthBar.Value = health;
+
+  private void OnSelfPlayerHealthChanged (string playerName, int health)
+  {
+    _healthBar.Value = health;
+    UpdateVignette (health);
+  }
+
+  // Red vignette fades in below 40% health, fully saturated at death's door.
+  private void UpdateVignette (int health)
+  {
+    var threshold = 0.4f * (float)_healthBar.MaxValue;
+    _vignette.SetShaderParameter ("intensity", Mathf.Clamp (1.0f - health / threshold, 0.0f, 1.0f));
+  }
+
+  private void UpdateLeaderboard()
+  {
+    var players = _world.GetPlayers().OrderByDescending (player => player.Score).ThenBy (player => player.DisplayName);
+    _leaderboardEntries.Text = string.Join ("\n", players.Select (player => $"{player.DisplayName}  {player.Score}"));
+  }
   private bool IsSelf (string playerName) => _selfPlayerName == playerName;
   private void OnKickedFromServer (string reason) => Hide();
   private void OnServerShutDown() => Hide();
@@ -32,6 +53,9 @@ public partial class Hud : Control
     _healthBar = GetNode <ProgressBar> ("VBoxContainer/Health/ProgressBar");
     _messageScroller = GetNode <MessageScroller> ("MessageScroller");
     _scoreLabel = GetNode <Label> ("VBoxContainer/Score/Label");
+    _leaderboardEntries = GetNode <Label> ("Leaderboard/MarginContainer/VBoxContainer/Entries");
+    _vignette = (ShaderMaterial)GetNode <ColorRect> ("Vignette").Material;
+    GetNode <Timer> ("LeaderboardTimer").Timeout += UpdateLeaderboard;
     _quitDialog = GetNode <ConfirmationDialog2> ("QuitDialog");
     _quitDialog.Confirmed += () => EmitSignal (SignalName.GameQuit);
     _quitDialog.Canceled += CancelQuit;
@@ -58,6 +82,8 @@ public partial class Hud : Control
   {
     _selfPlayerName = selfPlayerName;
     _messageScroller.Reset();
+    _healthBar.Value = _healthBar.MaxValue;
+    UpdateVignette ((int)_healthBar.MaxValue);
     Show();
   }
 

@@ -28,6 +28,7 @@ public partial class World : Node3D
   private int FindPlayerId (string displayName) => FindPlayer (displayName)?.NetworkId ?? 0;
   private Player? FindPlayer (string displayName) => GetChildren().OfType <Player>().FirstOrDefault (player => player.DisplayName == displayName);
   private Player? FindPlayer (int peerId) => GetChildren().OfType <Player>().FirstOrDefault (player => player.NetworkId == peerId);
+  public System.Collections.Generic.IEnumerable <Player> GetPlayers() => GetChildren().OfType <Player>();
   private void OnGamePaused() => _selfPlayer?.SetInputEnabled (isEnabled: false);
   private void OnGameResumed() => _selfPlayer?.SetInputEnabled (isEnabled: true);
   private void OnGameQuit() => GetTree().Quit();
