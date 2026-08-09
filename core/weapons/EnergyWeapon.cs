@@ -75,6 +75,14 @@ public partial class EnergyWeapon : Node3D
     SpinDown();
   }
 
+  // Full-auto shots: fixed low energy, no charge-up required.
+  public void FireLowPower (float energy)
+  {
+    PlayShootingSound();
+    EmitSignal (SignalName.ShotFired, energy);
+    StartRecoil (energy);
+  }
+
   private void SpinUp()
   {
     if (IsSpinningUp) return;

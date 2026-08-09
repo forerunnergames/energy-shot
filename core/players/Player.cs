@@ -39,7 +39,15 @@ public partial class Player : CharacterBody3D
   [Signal] public delegate void ScoredEventHandler (string playerName, string shotPlayerName);
   [Signal] public delegate void RespawnedShotEventHandler (string playerName, string shotByPlayerName);
   [Signal] public delegate void RespawnedFellEventHandler (string playerName);
-  [Export] public int MaxHealth = 100;
+  // Replicated like Health so every peer can render the leaderboard.
+  [Export] public int Score { get; set; }
+  [Export] public int MaxHealth = 200;
+  [Export] public float MouseSensitivity = 0.0025f;
+  [Export] public float FullAutoDurationSeconds = 3.0f;
+  [Export] public float FullAutoCooldownSeconds = 15.0f;
+  [Export] public float FullAutoShotIntervalSeconds = 0.15f;
+  [Export] public float FullAutoEnergy = 0.12f;
+  [Export] public float RespawnInputLockSeconds = 2.0f;
   [Export] public float Speed = 7.0f;
   [Export] public float JumpVelocity = 20.0f;
   [Export] public Vector3 Gravity = new(0.0f, -50.0f, 0.0f);
@@ -55,11 +63,13 @@ public partial class Player : CharacterBody3D
   private static readonly Color NormalColor = new("0027ff");
   private static readonly Color HitColor = Colors.DarkRed;
   private NetworkManager _networkManager = null!;
-  private Area3D _spawnZoneArea = null!;
-  private CylinderShape3D _spawnZoneCylinder = null!;
+  private Node3D _spawnRoom = null!;
   private MeshInstance3D _mesh = null!;
-  private RayCast3D _aim = null!;
+  private PackedScene _laserBoltScene = null!;
   private EnergyWeapon _energyWeapon = null!;
+  private float _fullAutoSecondsLeft;
+  private float _fullAutoCooldownLeft;
+  private float _nextAutoShotIn;
   private Sprite3D _crossHairs = null!;
   private Timer _jumpTimer = null!;
   private Timer _hitRedTimer = null!;
@@ -84,21 +94,20 @@ public partial class Player : CharacterBody3D
   public void SetInputEnabled (bool isEnabled) => _isInputEnabled = isEnabled;
   private bool IsFalling() => !IsOnFloor();
   private bool IsJumping() => _isInputEnabled && _jumpTimer.IsStopped() && Input.IsActionJustPressed ("jump") && IsOnFloor();
-  private bool IsChargingWeapon() => _isInputEnabled && Input.IsActionPressed ("shoot");
+  private bool IsFullAutoActive() => _fullAutoSecondsLeft > 0.0f;
+  private bool IsChargingWeapon() => _isInputEnabled && !IsFullAutoActive() && Input.IsActionPressed ("shoot");
   private bool IsDischargingWeapon() => _isInputEnabled && _energyWeapon.IsSpinningUp && Input.IsActionJustReleased ("shoot");
   private void Fall (ref Vector3 velocity, double delta) => velocity += Gravity * (float)delta;
   private void ChargeWeapon() => _energyWeapon.Charge();
   private void DischargeWeapon() => _energyWeapon.Discharge();
   private void SetColor (Color color) => (_mesh.GetSurfaceOverrideMaterial (0) as StandardMaterial3D)!.AlbedoColor = color;
-  private (bool hit, Player? puppet) TryHitPlayerPuppet() => _aim.IsColliding() && _aim.GetCollider() is Player hitPlayer && hitPlayer.NetworkId != NetworkId ? (true, hitPlayer) : (false, null);
   private static int CalculateHealthDecrease (float energyShot) => Mathf.Min (100, Mathf.RoundToInt (energyShot * 100.0f));
 
   public override void _Ready()
   {
-    _spawnZoneArea = GetNode <Area3D> ("/root/World/SpawnZone");
-    _spawnZoneCylinder = (GetNode <CollisionShape3D> ("/root/World/SpawnZone/CollisionShape3D").Shape as CylinderShape3D)!;
+    _spawnRoom = GetNode <Node3D> ("/root/World/SpawnRoom");
+    _laserBoltScene = ResourceLoader.Load <PackedScene> ("res://core/weapons/LaserBolt.tscn");
     _mesh = GetNode <MeshInstance3D> ("MeshInstance3D");
-    _aim = GetNode <RayCast3D> ("Camera3D/Aim");
     _energyWeapon = GetNode <EnergyWeapon> ("Camera3D/EnergyWeapon");
     _crossHairs = GetNode <Sprite3D> ("Camera3D/Crosshairs");
     _jumpTimer = GetNode <Timer> ("JumpTimer");
@@ -106,7 +115,9 @@ public partial class Player : CharacterBody3D
     _nameTag = GetNode <Label3D> ("NameTag");
     _healthTag = GetNode <Sprite3D> ("HealthTag");
     _healthBar = GetNode <ProgressBar> ("SubViewport/HealthBar");
+    _healthBar.MaxValue = MaxHealth;
     _health = MaxHealth;
+    _healthBar.Value = _health;
 
     if (!IsMultiplayerAuthority())
     {
@@ -132,6 +143,7 @@ public partial class Player : CharacterBody3D
   {
     if (!IsMultiplayerActive()) return;
     if (!IsMultiplayerAuthority()) return;
+    UpdateFullAuto (delta);
     var velocity = Velocity;
     if (IsFalling()) Fall (ref velocity, delta);
     if (IsJumping()) Jump (ref velocity);
@@ -139,6 +151,26 @@ public partial class Player : CharacterBody3D
     Velocity = velocity;
     if (!MoveAndSlide()) return;
     HandleCollisions();
+  }
+
+  private void UpdateFullAuto (double delta)
+  {
+    var dt = (float)delta;
+    _fullAutoCooldownLeft = Mathf.Max (0.0f, _fullAutoCooldownLeft - dt);
+
+    if (_isInputEnabled && Input.IsActionJustPressed ("ability") && _fullAutoCooldownLeft <= 0.0f)
+    {
+      _fullAutoSecondsLeft = FullAutoDurationSeconds;
+      _fullAutoCooldownLeft = FullAutoCooldownSeconds;
+      _nextAutoShotIn = 0.0f;
+    }
+
+    if (!IsFullAutoActive()) return;
+    _fullAutoSecondsLeft -= dt;
+    _nextAutoShotIn -= dt;
+    if (!_isInputEnabled || !Input.IsActionPressed ("shoot") || _nextAutoShotIn > 0.0f) return;
+    _nextAutoShotIn = FullAutoShotIntervalSeconds;
+    _energyWeapon.FireLowPower (FullAutoEnergy);
   }
 
   public override void _ExitTree()
@@ -155,8 +187,8 @@ public partial class Player : CharacterBody3D
     if (IsChargingWeapon()) ChargeWeapon();
     if (IsDischargingWeapon()) DischargeWeapon();
     if (@event is not InputEventMouseMotion motionEvent) return;
-    RotateY (-motionEvent.Relative.X * 0.005f);
-    _camera.RotateX (-motionEvent.Relative.Y * 0.005f);
+    RotateY (-motionEvent.Relative.X * MouseSensitivity);
+    _camera.RotateX (-motionEvent.Relative.Y * MouseSensitivity);
     _camera.Rotation = new Vector3 (Mathf.Clamp (_camera.Rotation.X, -Mathf.Pi / 2.0f, Mathf.Pi / 2.0f), _camera.Rotation.Y, _camera.Rotation.Z);
   }
 
@@ -184,9 +216,28 @@ public partial class Player : CharacterBody3D
 
   private void OnWeaponShotFired (float energy)
   {
-    var result = TryHitPlayerPuppet();
-    if (!result.hit || result.puppet == null) return;
-    HitPuppet (result.puppet, energy);
+    var direction = -_camera.GlobalTransform.Basis.Z;
+    var origin = _camera.GlobalPosition + direction * 0.9f;
+    SpawnBolt (origin, direction, energy, isLive: true);
+    Rpc (MethodName.SpawnVisualLaser, origin, direction, energy);
+  }
+
+  // Visual-only copy of the shooter's bolt on every other peer.
+  [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
+  private void SpawnVisualLaser (Vector3 origin, Vector3 direction, float energy) => SpawnBolt (origin, direction, energy, isLive: false);
+
+  private void SpawnBolt (Vector3 origin, Vector3 direction, float energy, bool isLive)
+  {
+    var bolt = _laserBoltScene.Instantiate <LaserBolt>();
+    GetParent().AddChild (bolt);
+    bolt.Launch (origin, direction, energy, isLive, this);
+    if (isLive) bolt.HitPlayer += OnLaserHitPlayer;
+  }
+
+  private void OnLaserHitPlayer (CharacterBody3D body, float energy)
+  {
+    if (body is not Player victim || victim.NetworkId == NetworkId) return;
+    HitPuppet (victim, energy);
   }
 
   // The victim is the single owner of its health: the shooter only reports the hit,
@@ -225,6 +276,7 @@ public partial class Player : CharacterBody3D
   private void NotifyScored (string shotPlayerName)
   {
     if (!IsMultiplayerAuthority()) return;
+    ++Score;
     GD.Print ($"{DisplayName}: I scored!");
     EmitSignal (SignalName.Scored, DisplayName, shotPlayerName);
   }
@@ -253,19 +305,23 @@ public partial class Player : CharacterBody3D
     EmitSignal (SignalName.RespawnedFell, DisplayName);
   }
 
-  private void Respawn()
+  // Respawn into the spawn room above the arena (drop in to re-enter), with a short
+  // input lock, so respawns are no longer instant teleports into the fight.
+  private async void Respawn()
   {
-    _health = MaxHealth;
-    _healthBar.Value = _health;
+    Health = MaxHealth;
+    Velocity = Vector3.Zero;
     Position = CalculateRandomSpawnPosition();
+    SetInputEnabled (isEnabled: false);
     GD.Print ($"{DisplayName}: I respawned!");
+    await ToSignal (GetTree().CreateTimer (RespawnInputLockSeconds), SceneTreeTimer.SignalName.Timeout);
+    SetInputEnabled (isEnabled: true);
   }
 
   private Vector3 CalculateRandomSpawnPosition()
   {
-    var theta = _rng.RandfRange (0.0f, Mathf.Pi * 2.0f);
-    var r = _spawnZoneCylinder.Radius * Mathf.Sqrt (_rng.Randf());
-    return new Vector3 (r * Mathf.Cos (theta) + _spawnZoneArea.Position.X, _spawnZoneArea.Position.Y, r * Mathf.Sin (theta) + _spawnZoneArea.Position.Z);
+    var offset = new Vector3 (_rng.RandfRange (-4.0f, 4.0f), 1.0f, _rng.RandfRange (-4.0f, 4.0f));
+    return _spawnRoom.Position + offset;
   }
 
   private void UpdatePuppetTags()

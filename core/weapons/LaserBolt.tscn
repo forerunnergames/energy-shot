@@ -1,0 +1,22 @@
+[gd_scene load_steps=4 format=3 uid="uid://c4lboltenergy17"]
+
+[ext_resource type="Script" path="res://core/weapons/LaserBolt.cs" id="1_lbolt"]
+
+[sub_resource type="CapsuleMesh" id="CapsuleMesh_lbolt"]
+radius = 0.06
+height = 1.2
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_lbolt"]
+shading_mode = 0
+albedo_color = Color(0.2, 0.6, 3, 1)
+emission_enabled = true
+emission = Color(0.2, 0.6, 3, 1)
+emission_energy_multiplier = 2.0
+
+[node name="LaserBolt" type="Node3D"]
+script = ExtResource("1_lbolt")
+
+[node name="Mesh" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, 0, 0, 0)
+material_override = SubResource("StandardMaterial3D_lbolt")
+mesh = SubResource("CapsuleMesh_lbolt")
