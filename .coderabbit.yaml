@@ -1,0 +1,15 @@
+language: "en-US"
+reviews:
+  profile: "assertive"
+  # Post the review as "request changes" until all comments are resolved,
+  # so branch protection blocks merging on unresolved CodeRabbit feedback.
+  request_changes_workflow: true
+  auto_review:
+    enabled: true
+  path_filters:
+    - "!addons/**"
+    - "!gdunit4_testadapter_v5/**"
+    - "!**/*.uid"
+    - "!**/*.import"
+chat:
+  auto_reply: true

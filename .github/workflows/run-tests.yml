@@ -95,9 +95,9 @@ jobs:
       # identify & distinguish between multiple test report files.
       - name: Setup GdUnit4 and run tests
         # Using '@v1' won't use the latest version, so specify explicit version.
-        uses: MikeSchulze/gdUnit4-action@v1.1.5
+        uses: MikeSchulze/gdUnit4-action@v1.3.0
         with:
-          godot-version: '4.3'
+          godot-version: '4.7.1'
           godot-status: 'stable'
           godot-net: false # Don't run only C# tests.
           godot-force-mono: true # Run both C# & GDScript tests using the Mono engine.
