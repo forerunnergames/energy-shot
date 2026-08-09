@@ -53,6 +53,8 @@ public partial class JoinGameDialog : Control
     _peer = peer;
     _serverPort = serverPort;
     _bottomText.Text = string.Empty;
+    if (string.IsNullOrEmpty (_playerName.Text)) _playerName.Text = Settings.PlayerName;
+    if (string.IsNullOrEmpty (_serverAddress.Text)) _serverAddress.Text = Settings.LastJoinAddress;
     UpdateJoinGameButtonState();
     Show();
   }
@@ -101,6 +103,8 @@ public partial class JoinGameDialog : Control
     _connectionTimer.Stop();
     DisconnectSignals();
     Hide();
+    Settings.PlayerName = _playerName.Text;
+    Settings.LastJoinAddress = _serverAddress.Text;
     GD.Print ($"Successfully connected to server at [{_serverAddress.Text}:{_serverPort}]");
     EmitSignal (SignalName.JoinGameSuccess, _playerName.Text);
   }

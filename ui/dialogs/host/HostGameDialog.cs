@@ -42,6 +42,7 @@ public partial class HostGameDialog : Control
     _middleText.Text = "Finding your server address...";
     _serverAddress.Text = string.Empty;
     _bottomText.Text = string.Empty;
+    if (string.IsNullOrEmpty (_playerName.Text)) _playerName.Text = Settings.PlayerName;
     UpdateHostGameButtonState();
     Show();
     // UPnP discovery can take seconds; run it off the main thread so the UI stays responsive (see issue #25).
@@ -86,6 +87,7 @@ public partial class HostGameDialog : Control
     Multiplayer.MultiplayerPeer = _peer;
 
     GD.Print ($"Successfully hosted server at [{_serverAddress.Text}:{_serverPort}]!");
+    Settings.PlayerName = _playerName.Text;
     Hide();
     EmitSignal (SignalName.HostGameSuccess, _playerName.Text);
   }
