@@ -18,6 +18,7 @@ public partial class World : Node3D
   [Signal] public delegate void RemoteMessageReceivedEventHandler (string message);
   [Signal] public delegate void KickedFromServerEventHandler (string reason);
   [Signal] public delegate void ServerShutDownEventHandler();
+  private const int DefaultServerPort = 55556;
   private NetworkManager _networkManager = null!;
   private UI _ui = null!;
   private PackedScene _playerScene = null!;
@@ -52,6 +53,7 @@ public partial class World : Node3D
     _networkManager.PlayerJoinGame += playerName => EmitSignal (SignalName.PlayerJoinedGame, playerName);
     _networkManager.PlayerLeftGame += playerName => EmitSignal (SignalName.PlayerLeftGame, playerName);
     if (OS.GetCmdlineUserArgs().Contains ("--playtest")) CallDeferred (MethodName.StartPlaytest);
+    if (IsDedicatedServer()) StartDedicatedServer();
   }
 
   private void StartPlaytest() => AddChild (new playtest.PlaytestDriver());
@@ -74,6 +76,36 @@ public partial class World : Node3D
     if (error != Error.Ok) GD.PrintErr ($"Playtest join failed: {error}");
     Multiplayer.MultiplayerPeer = peer;
     Multiplayer.ConnectedToServer += () => OnJoinGameSuccess (playerName, difficulty);
+  }
+
+  private static bool IsDedicatedServer() => OS.GetCmdlineUserArgs().Contains ("--server");
+
+  private static int ParseServerPort()
+  {
+    var args = OS.GetCmdlineUserArgs();
+    var index = System.Array.IndexOf (args, "--port");
+    return index != -1 && index + 1 < args.Length && int.TryParse (args[index + 1], out var port) ? port : DefaultServerPort;
+  }
+
+  // Headless dedicated server (issue #27): no UI, no local player; clients join via the existing RequestPlayerSlot RPC flow.
+  private void StartDedicatedServer()
+  {
+    _ui.Hide();
+    var port = ParseServerPort();
+    var peer = new ENetMultiplayerPeer();
+    var error = peer.CreateServer (port);
+
+    if (error != Error.Ok)
+    {
+      GD.PrintErr ($"Server: Failed to create dedicated server on port [{port}], error [{error}]");
+      GetTree().Quit (1);
+      return;
+    }
+
+    Multiplayer.MultiplayerPeer = peer;
+    Multiplayer.PeerConnected += OnClientConnectedToServer;
+    Multiplayer.PeerDisconnected += OnClientDisconnectedFromServer;
+    GD.Print ($"Server: Dedicated server listening on port [{port}]");
   }
 
   [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
