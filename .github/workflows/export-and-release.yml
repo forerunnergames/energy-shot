@@ -53,17 +53,17 @@ jobs:
 
       # Remove the addons directory before the build, to avoid failing the
       # build with this error:
-      #   "Error: The process '/home/runner/.local/share/godot/godot_executable/Godot_v4.3-stable_mono_linux_x86_64/Godot_v4.3-stable_mono_linux.x86_64' failed with exit code null"
+      # "Error: The process '.../Godot_v4.7.1-stable_mono_linux.x86_64' failed with exit code null"
       - name: Remove addons directory
         run: rm -rf addons/
 
       # Export the game using firebelley/godot-export with the specified Godot executable & templates.
       - name: Export game
         id: export
-        uses: firebelley/godot-export@master
+        uses: firebelley/godot-export@v8.0.0
         with:
-          godot_executable_download_url: https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3-stable_mono_linux_x86_64.zip
-          godot_export_templates_download_url: https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3-stable_mono_export_templates.tpz
+          godot_executable_download_url: https://github.com/godotengine/godot/releases/download/4.7.1-stable/Godot_v4.7.1-stable_mono_linux_x86_64.zip
+          godot_export_templates_download_url: https://github.com/godotengine/godot/releases/download/4.7.1-stable/Godot_v4.7.1-stable_mono_export_templates.tpz
           relative_project_path: ./
           relative_export_path: ./my/build/destination
           archive_output: true
@@ -72,12 +72,93 @@ jobs:
           use_preset_export_path: false
           export_debug: false
           verbose: false
-          use_godot_3: false
           export_as_pack: false
+
+      # Sign and notarize the macOS app using rcodesign (works from Linux)
+      # These steps are optional - if they fail, the unsigned macOS build will still be included
+      - name: Extract macOS app for signing
+        continue-on-error: true
+        id: extract_macos
+        run: |
+          cd ${{ steps.export.outputs.archive_directory }}
+          # Find the macOS zip file (should be named something like "macOS.zip")
+          MACOS_ZIP=$(ls -1 | grep -i macos | grep -i .zip | head -n 1)
+          echo "Found macOS archive: $MACOS_ZIP"
+          # Extract it
+          unzip -q "$MACOS_ZIP"
+          # Find the .app bundle
+          APP_BUNDLE=$(find . -name "*.app" -maxdepth 2 -print -quit)
+          echo "Found app bundle: $APP_BUNDLE"
+          echo "MACOS_ZIP=$MACOS_ZIP" >> $GITHUB_ENV
+          echo "APP_BUNDLE=$APP_BUNDLE" >> $GITHUB_ENV
+
+      - name: Setup signing credentials
+        if: steps.extract_macos.outcome == 'success'
+        continue-on-error: true
+        run: |
+          # Download rcodesign
+          curl -L https://github.com/indygreg/apple-platform-rs/releases/download/apple-codesign%2F0.28.0/apple-codesign-0.28.0-x86_64-unknown-linux-musl.tar.gz | tar xz
+          # Create the P12 certificate file from base64
+          echo '${{ secrets.APPLE_CERTIFICATE_P12 }}' | base64 -d > certificate.p12
+          # Create the .p8 private key file
+          echo '${{ secrets.APPLE_API_KEY_CONTENT }}' > AuthKey_${{ secrets.APPLE_API_KEY }}.p8
+          # Use rcodesign to encode the API key into proper JSON format
+          ./apple-codesign-0.28.0-x86_64-unknown-linux-musl/rcodesign encode-app-store-connect-api-key \
+            -o api-key.json \
+            "${{ secrets.APPLE_API_ISSUER }}" \
+            "${{ secrets.APPLE_API_KEY }}" \
+            AuthKey_${{ secrets.APPLE_API_KEY }}.p8
+          # Clean up the private key file
+          rm AuthKey_${{ secrets.APPLE_API_KEY }}.p8
+
+      - name: Sign and notarize macOS app
+        if: steps.extract_macos.outcome == 'success'
+        continue-on-error: true
+        id: sign_macos
+        uses: indygreg/apple-code-sign-action@v1
+        with:
+          input_path: ${{ steps.export.outputs.archive_directory }}/${{ env.APP_BUNDLE }}
+          p12_file: certificate.p12
+          p12_password: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          app_store_connect_api_key_json_file: api-key.json
+          notarize: true
+          staple: true
+
+      - name: Re-archive signed macOS app
+        if: steps.sign_macos.outcome == 'success'
+        continue-on-error: true
+        run: |
+          cd ${{ steps.export.outputs.archive_directory }}
+          # Remove the original unsigned zip
+          rm -f "$MACOS_ZIP"
+          # Create new zip with signed app
+          APP_NAME=$(basename "$APP_BUNDLE")
+          zip -qr "$MACOS_ZIP" "$APP_NAME"
+          # Clean up the extracted app
+          rm -rf "$APP_NAME"
+          echo "Created signed archive: $MACOS_ZIP"
+
+      - name: Print signing status
+        run: |
+          if [ "${{ steps.sign_macos.outcome }}" == "success" ]; then
+            echo "✅ macOS app was signed and notarized successfully"
+          else
+            echo "⚠️  macOS signing skipped or failed - unsigned build will be included in release"
+          fi
+
+      # Name release assets <Product>-<OS>-<version>.zip (e.g. EnergyShot-macOS-v0.1.0.zip).
+      # Runs after macOS signing re-archives so the signed zip gets renamed too.
+      - name: Rename release artifacts
+        run: |
+          cd ${{ steps.export.outputs.archive_directory }}
+          for f in *.zip; do
+            mv "$f" "EnergyShot-${f%.zip}-${{ github.ref_name }}.zip"
+          done
+          ls -1
 
       # Create a release using the ncipollo/release-action.
       - name: Create GitHub release
-        uses: ncipollo/release-action@v1.14.0
+        uses: ncipollo/release-action@v1.20.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           generateReleaseNotes: true
