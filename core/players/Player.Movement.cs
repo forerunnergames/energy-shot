@@ -46,14 +46,23 @@ public partial class Player
     ApplyCameraHeight();
   }
 
-  // Hold C to crouch: shorter profile & half speed (see issue #51).
+  // Hold C to crouch: shorter profile & half speed (see issue #51). Standing back up
+  // requires overhead clearance so the head can't clip into geometry above.
   private void UpdateCrouch()
   {
     var crouching = WantsCrouch();
     if (crouching == _crouching) return;
-    _crouching = crouching;
-    ApplyCrouchScale();
+    if (!crouching && IsOverheadBlocked()) return;
+    Crouching = crouching;
     ApplyCameraHeight();
+  }
+
+  private bool IsOverheadBlocked()
+  {
+    var from = GlobalPosition;
+    var to = from + Vector3.Up * 2.1f; // Standing capsule head height + margin.
+    var query = PhysicsRayQueryParameters3D.Create (from, to, exclude: new Godot.Collections.Array <Rid> { GetRid() });
+    return GetWorld3D().DirectSpaceState.IntersectRay (query).Count > 0;
   }
 
   // Body & hitbox go horizontal while sliding, upright otherwise; runs on every peer
@@ -69,8 +78,10 @@ public partial class Player
     _collisionShape.Position = position;
   }
 
+  // Runs on every peer via the replicated Crouching property.
   private void ApplyCrouchScale()
   {
+    if (_mesh == null) return;
     var scale = new Vector3 (1.0f, _crouching ? CrouchHeightScale : 1.0f, 1.0f);
     _mesh.Scale = scale;
     _collisionShape.Scale = scale;

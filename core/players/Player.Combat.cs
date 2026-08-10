@@ -126,6 +126,7 @@ public partial class Player
     var hit = GetWorld3D().DirectSpaceState.IntersectRay (query);
     if (hit.Count == 0) return;
     if (hit["collider"].AsGodotObject() is CharacterBody3D) return; // Ground only, not players.
+    if (hit["normal"].AsVector3().Y < 0.5f) return; // Floors only - walls don't launch you.
     Velocity = new Vector3 (Velocity.X, JumpVelocity * RocketBoostMultiplier * energy, Velocity.Z);
   }
 

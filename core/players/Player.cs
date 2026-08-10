@@ -95,6 +95,19 @@ public partial class Player : CharacterBody3D
     }
   }
 
+  // Replicated like Sliding so every peer renders (& can shoot at) the shorter
+  // crouched hitbox (see issue #51).
+  [Export]
+  public bool Crouching
+  {
+    get => _crouching;
+    set
+    {
+      _crouching = value;
+      ApplyCrouchScale();
+    }
+  }
+
   [Export] public float SpawnArmorSeconds = 5.0f;
   [Export] public float MouseSensitivity = 0.0025f;
   [Export] public float FullAutoDurationSeconds = 3.0f;

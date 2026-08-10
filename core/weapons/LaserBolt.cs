@@ -46,12 +46,20 @@ public partial class LaserBolt : Node3D
     var from = GlobalPosition;
     _velocity.Y -= DropAcceleration * dt; // ponytail: simple laser drop, no drag
     var to = from + _velocity * dt;
-    var query = PhysicsRayQueryParameters3D.Create (from, to, exclude: _exclusions);
-    // Point-blank bolts can spawn inside the target's collider; without this the
-    // sweep never registers & the bolt sails through (see issue #52).
-    query.HitFromInside = true;
-    var hit = GetWorld3D().DirectSpaceState.IntersectRay (query);
-    if (hit.Count > 0 && !ResolveHit (hit)) return;
+
+    // Re-query the same segment after each pierce so a player behind pierced
+    // geometry still gets hit in the same physics frame.
+    for (var pierces = 0; pierces < 8; ++pierces)
+    {
+      var query = PhysicsRayQueryParameters3D.Create (from, to, exclude: _exclusions);
+      // Point-blank bolts can spawn inside the target's collider; without this the
+      // sweep never registers & the bolt sails through (see issue #52).
+      query.HitFromInside = true;
+      var hit = GetWorld3D().DirectSpaceState.IntersectRay (query);
+      if (hit.Count == 0) break;
+      if (!ResolveHit (hit)) return;
+    }
+
     GlobalPosition = to;
     Orient();
   }
