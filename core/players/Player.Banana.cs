@@ -101,7 +101,8 @@ public partial class Player
     if (SpawnArmor) return;
     GD.Print ($"{DisplayName}: I was blasted by {firedByPlayerName}'s banana!");
     ApplyBlastKnockback (blastOrigin);
-    ApplyDamage (energy, firedByPlayerName, isSurvivableAtFullHealth: true);
+    // Blast knockback is applied radially above; no directional knockback on top.
+    ApplyDamage (energy, firedByPlayerName, knockbackScale: 0.0f, isSurvivableAtFullHealth: true);
   }
 
   private void ApplyBlastKnockback (Vector3 blastOrigin)

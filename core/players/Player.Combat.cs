@@ -110,9 +110,23 @@ public partial class Player
     var kick = energy * CameraKickRadians;
     _camera.RotateX (kick);
     _cameraKickRemaining += kick;
+    TryRocketBoost (direction, energy);
     var origin = _camera.GlobalPosition + direction * 0.9f;
     SpawnBolt (origin, direction, energy, isLive: true);
     Rpc (MethodName.SpawnVisualLaser, origin, direction, energy);
+  }
+
+  // Firing at the ground close beneath you rocket-boosts you upward, scaling with
+  // charge (see issue #56).
+  private void TryRocketBoost (Vector3 direction, float energy)
+  {
+    if (direction.Y >= 0.0f) return;
+    var from = _camera.GlobalPosition;
+    var query = PhysicsRayQueryParameters3D.Create (from, from + direction * RocketBoostRange, exclude: new Godot.Collections.Array <Rid> { GetRid() });
+    var hit = GetWorld3D().DirectSpaceState.IntersectRay (query);
+    if (hit.Count == 0) return;
+    if (hit["collider"].AsGodotObject() is CharacterBody3D) return; // Ground only, not players.
+    Velocity = new Vector3 (Velocity.X, JumpVelocity * RocketBoostMultiplier * energy, Velocity.Z);
   }
 
   // Visual-only copy of the shooter's bolt on every other peer.
@@ -149,7 +163,7 @@ public partial class Player
     if (!IsMultiplayerAuthority()) return;
     if (SpawnArmor) return;
     GD.Print ($"{DisplayName}: I was hit by {shotByPlayerName}!");
-    ApplyDamage (energy, shotByPlayerName);
+    ApplyDamage (energy, shotByPlayerName, knockbackScale: 1.0f);
   }
 
   [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
@@ -159,7 +173,7 @@ public partial class Player
     if (SpawnArmor) return;
     GD.Print ($"{DisplayName}: I was punched by {punchedByPlayerName}!");
     EmitSignal (SignalName.Punched);
-    ApplyDamage (PunchEnergy, punchedByPlayerName);
+    ApplyDamage (PunchEnergy, punchedByPlayerName, PunchKnockbackScale);
   }
 
   // One-per-life full heal (issue #62): restocked on every (re)spawn.
@@ -174,7 +188,7 @@ public partial class Player
     EmitSignal (SignalName.HealthChanged, Health);
   }
 
-  private void ApplyDamage (float energy, string attackerName, bool isSurvivableAtFullHealth = false)
+  private void ApplyDamage (float energy, string attackerName, float knockbackScale, bool isSurvivableAtFullHealth = false)
   {
     var attackerId = Multiplayer.GetRemoteSenderId();
     // Difficulty damage handicap: lower-skill attackers hit higher-skill targets harder
@@ -188,6 +202,7 @@ public partial class Player
     if (isSurvivableAtFullHealth && Health >= MaxHealth) decrease = Mathf.Min (decrease, Health - 1);
     Health -= decrease;
     LastZapEnergy = energy;
+    ApplyKnockback (attacker, energy, knockbackScale);
     _damageSound.Play();
 
     if (Health <= 0)
@@ -198,6 +213,18 @@ public partial class Player
     }
 
     EmitSignal (SignalName.HealthChanged, Health);
+  }
+
+  // Shove the victim away from the attacker (plus a slight pop upward), scaled by
+  // shot energy; punches shove about a third as much (see issue #45).
+  private void ApplyKnockback (Player? attacker, float energy, float scale)
+  {
+    if (attacker == null) return;
+    var away = GlobalPosition - attacker.GlobalPosition;
+    var horizontal = new Vector3 (away.X, 0.0f, away.Z);
+    if (horizontal.LengthSquared() < 0.001f) return;
+    var strength = KnockbackStrength * energy * scale;
+    Velocity += horizontal.Normalized() * strength + Vector3.Up * strength * 0.3f;
   }
 
   [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
