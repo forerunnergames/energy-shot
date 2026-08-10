@@ -118,6 +118,21 @@ public partial class PlaytestDriver : Node
     // Wait out everyone's initial spawn armor before the damage phase.
     await WaitUntil (() => !victim.SpawnArmor, 15, "victim's initial spawn armor expired");
 
+    // Punch phase: walk up to the victim & punch them; verify melee damage lands.
+    var healthBeforePunch = victim.Health;
+    await WaitUntil (() => ApproachedVictim (victim), 30, "walked into punch range of victim");
+
+    for (var attempt = 0; attempt < 10 && victim.Health >= healthBeforePunch; ++attempt)
+    {
+      AimAt (victim.GlobalPosition + Vector3.Up);
+      PressAction ("punch");
+      await Task.Delay (80);
+      ReleaseAction ("punch");
+      await Task.Delay (700);
+    }
+
+    Assert (victim.Health < healthBeforePunch, $"punch damaged the victim ({healthBeforePunch} -> {victim.Health})");
+
     // Charged shots until the victim dies (shooter is told via NotifyScored -> Score).
     // Retry until a bolt actually spawns each attempt - under CI load, physics time
     // (which drives the weapon cooldown) can lag the wall clock these delays use.
@@ -181,14 +196,29 @@ public partial class PlaytestDriver : Node
 
   // ---------------------------------------------------------------- helpers
 
+  // One approach step per poll: aim at the victim & hold forward until within 2m.
+  private bool ApproachedVictim (Player victim)
+  {
+    var distance = Self.GlobalPosition.DistanceTo (victim.GlobalPosition);
+
+    if (distance <= 2.0f)
+    {
+      Input.ActionRelease ("move_forward");
+      return true;
+    }
+
+    AimAt (victim.GlobalPosition + Vector3.Up);
+    Input.ActionPress ("move_forward");
+    return false;
+  }
+
   private void AimAt (Vector3 target)
   {
     var self = Self;
     var flatTarget = new Vector3 (target.X, self.GlobalPosition.Y, target.Z);
-    self.LookAt (flatTarget, Vector3.Up);
-    self.RotateY (Mathf.Pi); // LookAt points -Z at the target; the player faces +Z of its basis... flip to match camera forward.
+    if (flatTarget.DistanceSquaredTo (self.GlobalPosition) > 0.01f) self.LookAt (flatTarget, Vector3.Up); // -Z (forward) faces the target.
     var camera = self.GetNode <Camera3D> ("Camera3D");
-    camera.LookAt (target, Vector3.Up);
+    if (!target.IsEqualApprox (camera.GlobalPosition)) camera.LookAt (target, Vector3.Up);
   }
 
   private async Task ChargeAndFire (float chargeSeconds)

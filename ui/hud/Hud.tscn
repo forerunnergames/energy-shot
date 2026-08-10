@@ -1,12 +1,17 @@
-[gd_scene load_steps=9 format=3 uid="uid://cobme7o27cxru"]
+[gd_scene load_steps=12 format=3 uid="uid://cobme7o27cxru"]
 
 [ext_resource type="Script" path="res://ui/hud/Hud.cs" id="1_5s36p"]
 [ext_resource type="PackedScene" uid="uid://huun2vjv0k1v" path="res://ui/hud/messages/MessageScroller.tscn" id="1_6ovnf"]
 [ext_resource type="PackedScene" uid="uid://bmpjrf8pqokyu" path="res://ui/dialogs/confirm/ConfirmationDialog2.tscn" id="3_v7kl8"]
 [ext_resource type="Shader" path="res://ui/hud/vignette.gdshader" id="4_vgntt"]
+[ext_resource type="Shader" path="res://ui/hud/blur.gdshader" id="5_blur"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_vgntt"]
 shader = ExtResource("4_vgntt")
+shader_parameter/intensity = 0.0
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_blur"]
+shader = ExtResource("5_blur")
 shader_parameter/intensity = 0.0
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_ldrbd"]
@@ -51,6 +56,16 @@ grow_vertical = 2
 mouse_filter = 2
 script = ExtResource("1_5s36p")
 metadata/_edit_vertical_guides_ = [1918.0]
+
+[node name="Blur" type="ColorRect" parent="."]
+material = SubResource("ShaderMaterial_blur")
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
 
 [node name="Vignette" type="ColorRect" parent="."]
 material = SubResource("ShaderMaterial_vgntt")
