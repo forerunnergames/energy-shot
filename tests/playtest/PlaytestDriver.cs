@@ -138,13 +138,26 @@ public partial class PlaytestDriver : Node
     // (which drives the weapon cooldown) can lag the wall clock these delays use.
     var kills = 0;
     Self.Scored += (_, _) => ++kills;
+    // The 5s respawn-armor window can elapse during the shot loop's waits, so watch
+    // for it continuously instead of only checking after the loop.
+    var respawnArmorSeen = false;
+    WatchForRespawnArmor();
+
+    async void WatchForRespawnArmor()
+    {
+      while (!respawnArmorSeen && IsInsideTree())
+      {
+        respawnArmorSeen = kills > 0 && victim.SpawnArmor;
+        await Task.Delay (50);
+      }
+    }
 
     for (var attempt = 0; attempt < 25 && kills == 0; ++attempt)
     {
       AimAt (victim.GlobalPosition + Vector3.Up);
       var boltsBeforeShot = _boltsSpawned;
       await ChargeAndFire (chargeSeconds: 2.3f);
-      await TryWaitUntil (() => _boltsSpawned > boltsBeforeShot, 3);
+      await TryWaitUntil (() => _boltsSpawned > boltsBeforeShot || kills > 0, 3);
       GD.Print ($"PLAYTEST: shot attempt {attempt}: bolts fired {_boltsSpawned}, victim health {victim.Health}");
     }
 
@@ -152,7 +165,7 @@ public partial class PlaytestDriver : Node
     Assert (Self.Score == 1, $"own replicated Score is 1, got {Self.Score}");
 
     // Victim must come back armored in the spawn room.
-    await WaitUntil (() => victim.SpawnArmor, 15, "victim respawned with spawn armor");
+    await WaitUntil (() => respawnArmorSeen, 15, "victim respawned with spawn armor");
 
     // Fire-rate cap: spamming can spawn at most 1 bolt (cooldown blocks recharging).
     AimAt (Self.GlobalPosition + new Vector3 (0, 1, 10)); // Aim away from everyone.
