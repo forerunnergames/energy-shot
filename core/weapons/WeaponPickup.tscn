@@ -1,0 +1,41 @@
+[gd_scene load_steps=6 format=3 uid="uid://c3weaponpickup1"]
+
+[ext_resource type="Script" path="res://core/weapons/WeaponPickup.cs" id="1_wpnpk"]
+[ext_resource type="PackedScene" uid="uid://32kdxq7do30n" path="res://assets/weapons/weapon-energy-handle.glb" id="2_handl"]
+[ext_resource type="PackedScene" uid="uid://7658bb31fcet" path="res://assets/weapons/weapon-energy-muzzle.glb" id="3_muzzl"]
+
+[sub_resource type="SphereShape3D" id="SphereShape3D_wpnpk"]
+radius = 1.2
+
+[sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_wpnpk"]
+properties/0/path = NodePath(".:position")
+properties/0/spawn = true
+properties/0/replication_mode = 0
+properties/1/path = NodePath(".:Weapon")
+properties/1/spawn = true
+properties/1/replication_mode = 0
+
+[node name="WeaponPickup" type="Area3D"]
+collision_layer = 0
+collision_mask = 2
+script = ExtResource("1_wpnpk")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+shape = SubResource("SphereShape3D_wpnpk")
+
+[node name="Visual" type="Node3D" parent="."]
+
+[node name="Laser" type="Node3D" parent="Visual"]
+transform = Transform3D(0.15, 0, 0, 0, 0.15, 0, 0, 0, 0.15, 0, 0, 0)
+
+[node name="Handle" parent="Visual/Laser" instance=ExtResource("2_handl")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -2.6, 0)
+
+[node name="Muzzle" parent="Visual/Laser" instance=ExtResource("3_muzzl")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.65, 0)
+
+[node name="Banana" type="MeshInstance3D" parent="Visual"]
+visible = false
+
+[node name="MultiplayerSynchronizer" type="MultiplayerSynchronizer" parent="."]
+replication_config = SubResource("SceneReplicationConfig_wpnpk")

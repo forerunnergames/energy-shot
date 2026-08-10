@@ -132,6 +132,7 @@ public partial class Player
 
   private void RespawnShot (string shotByPlayerName)
   {
+    DropAllHeldWeapons(); // Death drops everything carried at the death spot (issue #72).
     Respawn();
     EmitSignal (SignalName.RespawnedShot, DisplayName, shotByPlayerName);
   }
@@ -139,6 +140,7 @@ public partial class Player
   private void RespawnFell()
   {
     --Score; // Falling off the world costs a point.
+    ClearHeldWeapons(); // A drop below the world would be unreachable; the weapons respawn at spawn points instead (issue #72).
     Respawn();
     EmitSignal (SignalName.RespawnedFell, DisplayName);
   }

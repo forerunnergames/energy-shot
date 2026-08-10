@@ -9,7 +9,7 @@ namespace com.forerunnergames.energyshot.ui;
 public partial class UI : CanvasLayer
 {
   [Signal] public delegate void MessageEventHandler (string message, string excludedPlayerName);
-  [Signal] public delegate void HostGameSuccessEventHandler (string playerName, int difficulty);
+  [Signal] public delegate void HostGameSuccessEventHandler (string playerName, int difficulty, int maxPlayers);
   [Signal] public delegate void JoinGameSuccessEventHandler (string playerName, int difficulty);
   [Signal] public delegate void GamePausedEventHandler();
   [Signal] public delegate void GameResumedEventHandler();
@@ -35,7 +35,7 @@ public partial class UI : CanvasLayer
     _hud.GamePaused += () => EmitSignal (SignalName.GamePaused);
     _hud.GameResumed += () => EmitSignal (SignalName.GameResumed);
     _hud.GameQuit += () => EmitSignal (SignalName.GameQuit);
-    _hostGameDialog.HostGameSuccess += (playerName, difficulty) => EmitSignal (SignalName.HostGameSuccess, playerName, difficulty);
+    _hostGameDialog.HostGameSuccess += (playerName, difficulty, maxPlayers) => EmitSignal (SignalName.HostGameSuccess, playerName, difficulty, maxPlayers);
     _joinGameDialog.JoinGameSuccess += (playerName, difficulty) => EmitSignal (SignalName.JoinGameSuccess, playerName, difficulty);
   }
 }

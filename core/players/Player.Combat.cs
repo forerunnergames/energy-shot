@@ -12,8 +12,9 @@ public partial class Player
   public float ShotReadyFraction => _energyWeapon.CooldownFraction;
   public float PunchReadyFraction => 1.0f - _punchCooldownLeft / PunchCooldownSeconds;
   public float FullAutoReadyFraction => 1.0f - _fullAutoCooldownLeft / FullAutoCooldownSeconds;
-  private bool IsChargingWeapon() => _isInputEnabled && !IsBananaEquipped && !IsFullAutoActive() && Input.IsActionPressed ("shoot");
-  private bool IsDischargingWeapon() => _isInputEnabled && !IsBananaEquipped && _energyWeapon.IsSpinningUp && Input.IsActionJustReleased ("shoot");
+  // Unarmed players can't charge or fire the laser (issue #72).
+  private bool IsChargingWeapon() => _isInputEnabled && HasLaser && !IsBananaEquipped && !IsFullAutoActive() && Input.IsActionPressed ("shoot");
+  private bool IsDischargingWeapon() => _isInputEnabled && HasLaser && !IsBananaEquipped && _energyWeapon.IsSpinningUp && Input.IsActionJustReleased ("shoot");
   private void ChargeWeapon() => _energyWeapon.Charge();
   private void DischargeWeapon() => _energyWeapon.Discharge();
   private static int CalculateHealthDecrease (float energyShot) => Mathf.Min (100, Mathf.RoundToInt (energyShot * 100.0f));
@@ -64,7 +65,7 @@ public partial class Player
     _fullAutoCooldownLeft = Mathf.Max (0.0f, _fullAutoCooldownLeft - dt);
     if (wasRecharging && _fullAutoCooldownLeft <= 0.0f) _energyWeapon.PlayFullAutoReadySound();
 
-    if (_isInputEnabled && Input.IsActionJustPressed ("ability") && _fullAutoCooldownLeft <= 0.0f)
+    if (_isInputEnabled && HasLaser && Input.IsActionJustPressed ("ability") && _fullAutoCooldownLeft <= 0.0f)
     {
       _fullAutoSecondsLeft = FullAutoDurationSeconds;
       _fullAutoCooldownLeft = FullAutoCooldownSeconds;
@@ -76,7 +77,7 @@ public partial class Player
     _fullAutoSecondsLeft -= dt;
     if (_fullAutoSecondsLeft <= 0.0f) _energyWeapon.SetFullAutoMode (false);
     _nextAutoShotIn -= dt;
-    if (!_isInputEnabled || IsBananaEquipped || !Input.IsActionPressed ("shoot") || _nextAutoShotIn > 0.0f) return;
+    if (!_isInputEnabled || !HasLaser || IsBananaEquipped || !Input.IsActionPressed ("shoot") || _nextAutoShotIn > 0.0f) return;
     _nextAutoShotIn = FullAutoShotIntervalSeconds;
     _energyWeapon.FireLowPower (FullAutoEnergy);
   }

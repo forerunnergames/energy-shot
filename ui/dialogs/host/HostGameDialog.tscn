@@ -97,6 +97,21 @@ popup/item_1/id = 1
 popup/item_2/text = "Expert (1x health)"
 popup/item_2/id = 2
 
+[node name="MaxPlayersLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 50
+text = "Max Players"
+horizontal_alignment = 1
+
+[node name="MaxPlayers" type="SpinBox" parent="PanelContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 90
+min_value = 2.0
+max_value = 12.0
+value = 12.0
+rounded = true
+alignment = 1
+
 [node name="HSeparator2" type="HSeparator" parent="PanelContainer/MarginContainer/VBoxContainer"]
 layout_mode = 2
 

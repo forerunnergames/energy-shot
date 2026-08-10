@@ -6,6 +6,7 @@
 [ext_resource type="Texture2D" uid="uid://nx56m31ose5b" path="res://assets/floor/patterned_paving_nor_gl_4k.png" id="3_rcb6p"]
 [ext_resource type="Texture2D" uid="uid://qwmow5sp4lis" path="res://assets/floor/patterned_paving_arm_4k.png" id="4_5vad1"]
 [ext_resource type="PackedScene" uid="uid://y2rvvh2dq5oc" path="res://ui/UI.tscn" id="5_8eal4"]
+[ext_resource type="Script" path="res://core/weapons/WeaponSpawner.cs" id="6_wspwn"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_vdo1k"]
 sky_horizon_color = Color(0.64625, 0.65575, 0.67075, 1)
@@ -122,6 +123,11 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -28, 8, 26)
 use_collision = true
 size = Vector3(8, 0.5, 8)
 
+[node name="BananaPlatform" type="CSGBox3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 28, 11)
+use_collision = true
+size = Vector3(6, 0.5, 6)
+
 [node name="Ground" type="CSGBox3D" parent="."]
 use_collision = true
 size = Vector3(100, 0.002, 100)
@@ -160,8 +166,11 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -100, 0)
 [node name="CollisionShape3D" type="CollisionShape3D" parent="LowerWorldBoundary"]
 shape = SubResource("WorldBoundaryShape3D_6x5gn")
 
+[node name="WeaponSpawner" type="Node3D" parent="."]
+script = ExtResource("6_wspwn")
+
 [node name="MultiplayerSpawner" type="MultiplayerSpawner" parent="."]
-_spawnable_scenes = PackedStringArray("res://core/players/Player.tscn")
+_spawnable_scenes = PackedStringArray("res://core/players/Player.tscn", "res://core/weapons/WeaponPickup.tscn")
 spawn_path = NodePath("..")
 
 [node name="UI" parent="." instance=ExtResource("5_8eal4")]

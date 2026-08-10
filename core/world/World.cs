@@ -21,7 +21,10 @@ public partial class World : Node3D
   [Signal] public delegate void KickedFromServerEventHandler (string reason);
   [Signal] public delegate void ServerShutDownEventHandler();
   private const int DefaultServerPort = 55556;
+  // Hard engine limit on players per game (issue #73); hosts can choose fewer.
+  public const int MaxPlayers = 12;
   private NetworkManager _networkManager = null!;
+  private int _maxPlayers = MaxPlayers;
   private UI _ui = null!;
   private PackedScene _playerScene = null!;
   private Player? _selfPlayer;
@@ -69,7 +72,7 @@ public partial class World : Node3D
     var error = peer.CreateServer (port);
     if (error != Error.Ok) GD.PrintErr ($"Playtest host failed: {error}");
     Multiplayer.MultiplayerPeer = peer;
-    OnHostGameSuccess (playerName, difficulty);
+    OnHostGameSuccess (playerName, difficulty, MaxPlayers);
   }
 
   public void StartClientSession (string playerName, int difficulty, string address, int port)
@@ -138,6 +141,14 @@ public partial class World : Node3D
       return;
     }
 
+    // Host-chosen player cap (issue #73).
+    if (GetPlayers().Count() >= _maxPlayers)
+    {
+      Kick (senderId, "Game is full.");
+      GD.PrintErr ($"Server: Disconnected client ID [{senderId}], game is full ({_maxPlayers} players)");
+      return;
+    }
+
     AddPlayer (senderId, playerName, Player.MaxHealthFor (difficulty));
   }
 
@@ -150,8 +161,9 @@ public partial class World : Node3D
     Multiplayer.MultiplayerPeer.DisconnectPeer (peerId);
   }
 
-  private void OnHostGameSuccess (string playerName, int difficulty)
+  private void OnHostGameSuccess (string playerName, int difficulty, int maxPlayers)
   {
+    _maxPlayers = Mathf.Clamp (maxPlayers, 2, MaxPlayers);
     Multiplayer.PeerConnected += OnClientConnectedToServer;
     Multiplayer.PeerDisconnected += OnClientDisconnectedFromServer;
     AddPlayer (Multiplayer.GetUniqueId(), playerName, Player.MaxHealthFor (difficulty));
