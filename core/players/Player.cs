@@ -1,3 +1,4 @@
+using com.forerunnergames.energyshot.items;
 using com.forerunnergames.energyshot.utilities;
 using com.forerunnergames.energyshot.weapons;
 using Godot;
@@ -39,6 +40,7 @@ public partial class Player : CharacterBody3D
   }
 
   [Signal] public delegate void HealthChangedEventHandler (int value);
+  [Signal] public delegate void BreadEatenEventHandler (string playerName);
   [Signal] public delegate void PunchedEventHandler();
   [Signal] public delegate void ScoredEventHandler (string playerName, string shotPlayerName);
   [Signal] public delegate void RespawnedShotEventHandler (string playerName, string shotByPlayerName);
@@ -90,6 +92,10 @@ public partial class Player : CharacterBody3D
   [Export] public float PunchCooldownSeconds = 0.6f;
   [Export] public float PunchRange = 2.5f;
   [Export] public float PunchEnergy = 0.2f;
+  [Export] public float BananaBlastRadius = 6.0f;
+  [Export] public float BananaDirectRadius = 1.5f;
+  [Export] public float BananaBlastEnergy = 0.9f;
+  [Export] public float BananaKnockbackSpeed = 18.0f;
   [Export] public float CameraKickRadians = 0.06f;
   [Export] public float CameraKickRecoverySpeed = 0.4f;
   [Export] public float Speed = 7.0f;
@@ -111,7 +117,11 @@ public partial class Player : CharacterBody3D
   private Node3D _spawnRoom = null!;
   private MeshInstance3D _mesh = null!;
   private PackedScene _laserBoltScene = null!;
+  private PackedScene _bananaProjectileScene = null!;
   private EnergyWeapon _energyWeapon = null!;
+  private BananaLauncher _bananaLauncher = null!;
+  private readonly Bread _bread = new();
+  private bool _isBananaEquipped;
   private float _fullAutoSecondsLeft;
   private float _fullAutoCooldownLeft;
   private float _nextAutoShotIn;
@@ -145,8 +155,11 @@ public partial class Player : CharacterBody3D
   {
     _spawnRoom = GetNode <Node3D> ("/root/World/SpawnRoom");
     _laserBoltScene = ResourceLoader.Load <PackedScene> ("res://core/weapons/LaserBolt.tscn");
+    _bananaProjectileScene = ResourceLoader.Load <PackedScene> ("res://core/weapons/BananaProjectile.tscn");
     _mesh = GetNode <MeshInstance3D> ("MeshInstance3D");
     _energyWeapon = GetNode <EnergyWeapon> ("Camera3D/EnergyWeapon");
+    _bananaLauncher = GetNode <BananaLauncher> ("Camera3D/BananaLauncher");
+    UpdateWeaponVisibility();
     _crossHairs = GetNode <Sprite3D> ("Camera3D/Crosshairs");
     _jumpTimer = GetNode <Timer> ("JumpTimer");
     _hitRedTimer = GetNode <Timer> ("HitRedTimer");
@@ -204,6 +217,9 @@ public partial class Player : CharacterBody3D
     if (!IsMultiplayerActive()) return;
     if (!IsMultiplayerAuthority()) return;
     UpdateSpawnArmor();
+    UpdateWeaponSelection();
+    UpdateBananaLauncher();
+    UpdateBread();
     UpdateFullAuto (delta);
     UpdatePunch (delta);
     UpdateCameraKick (delta);

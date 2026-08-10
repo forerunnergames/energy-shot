@@ -64,6 +64,7 @@ public partial class Player
     Health = MaxHealth;
     Velocity = Vector3.Zero;
     Position = CalculateRandomSpawnPosition();
+    _bread.Restock(); // Fresh bread every life (issue #62).
     ActivateSpawnArmor();
     SetInputEnabled (isEnabled: false);
     _respawnSound.Play();

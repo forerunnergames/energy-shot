@@ -1,0 +1,9 @@
+[gd_scene load_steps=2 format=3 uid="uid://c1bananaproj00"]
+
+[ext_resource type="Script" path="res://core/weapons/BananaProjectile.cs" id="1_bnprj"]
+
+[node name="BananaProjectile" type="Node3D"]
+script = ExtResource("1_bnprj")
+
+[node name="Mesh" type="MeshInstance3D" parent="."]
+transform = Transform3D(0.06, 0, 0, 0, 0.06, 0, 0, 0, 0.06, -0.3, -0.1, 0)

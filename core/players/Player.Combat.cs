@@ -8,7 +8,7 @@ namespace com.forerunnergames.energyshot.players;
 public partial class Player
 {
   private bool IsFullAutoActive() => _fullAutoSecondsLeft > 0.0f;
-  private bool IsChargingWeapon() => _isInputEnabled && !IsFullAutoActive() && Input.IsActionPressed ("shoot");
+  private bool IsChargingWeapon() => _isInputEnabled && !IsBananaEquipped && !IsFullAutoActive() && Input.IsActionPressed ("shoot");
   private bool IsDischargingWeapon() => _isInputEnabled && _energyWeapon.IsSpinningUp && Input.IsActionJustReleased ("shoot");
   private void ChargeWeapon() => _energyWeapon.Charge();
   private void DischargeWeapon() => _energyWeapon.Discharge();
@@ -68,7 +68,7 @@ public partial class Player
     if (!IsFullAutoActive()) return;
     _fullAutoSecondsLeft -= dt;
     _nextAutoShotIn -= dt;
-    if (!_isInputEnabled || !Input.IsActionPressed ("shoot") || _nextAutoShotIn > 0.0f) return;
+    if (!_isInputEnabled || IsBananaEquipped || !Input.IsActionPressed ("shoot") || _nextAutoShotIn > 0.0f) return;
     _nextAutoShotIn = FullAutoShotIntervalSeconds;
     _energyWeapon.FireLowPower (FullAutoEnergy);
   }
@@ -154,7 +154,19 @@ public partial class Player
     ApplyDamage (PunchEnergy, punchedByPlayerName);
   }
 
-  private void ApplyDamage (float energy, string attackerName)
+  // One-per-life full heal (issue #62): restocked on every (re)spawn.
+  private void UpdateBread()
+  {
+    if (!_isInputEnabled || !Input.IsActionJustPressed ("eat_bread")) return;
+    if (Health >= MaxHealth) return; // Don't waste the bread at full health.
+    if (!_bread.TryEat()) return;
+    Health = MaxHealth;
+    GD.Print ($"{DisplayName}: I ate my bread & feel brand new!");
+    EmitSignal (SignalName.BreadEaten, DisplayName);
+    EmitSignal (SignalName.HealthChanged, Health);
+  }
+
+  private void ApplyDamage (float energy, string attackerName, bool isSurvivableAtFullHealth = false)
   {
     var attackerId = Multiplayer.GetRemoteSenderId();
     // Difficulty damage handicap: lower-skill attackers hit higher-skill targets harder
@@ -163,7 +175,10 @@ public partial class Player
     // pool already is the handicap.
     var attacker = GetParent().GetNodeOrNull <Player> ($"{attackerId}");
     var handicap = 1.0f + 0.5f * Mathf.Max (0, TierOf (MaxHealth) - TierOf (attacker?.MaxHealth ?? MaxHealth));
-    Health -= Mathf.RoundToInt (CalculateHealthDecrease (energy) * handicap);
+    var decrease = Mathf.RoundToInt (CalculateHealthDecrease (energy) * handicap);
+    // A banana blast never one-shots a full-health player (issue #61): leave ≥1 HP.
+    if (isSurvivableAtFullHealth && Health >= MaxHealth) decrease = Mathf.Min (decrease, Health - 1);
+    Health -= decrease;
     LastZapEnergy = energy;
     _damageSound.Play();
 

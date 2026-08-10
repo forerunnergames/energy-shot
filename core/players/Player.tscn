@@ -1,8 +1,9 @@
-[gd_scene load_steps=17 format=3 uid="uid://b1w1b7u4gtpbh"]
+[gd_scene load_steps=18 format=3 uid="uid://b1w1b7u4gtpbh"]
 
 [ext_resource type="Script" path="res://core/players/Player.cs" id="1_nipvj"]
 [ext_resource type="Texture2D" uid="uid://ddlk1r4wak13u" path="res://assets/crosshairs.png" id="2_37lxu"]
 [ext_resource type="PackedScene" uid="uid://bnnjmr0ke3v6d" path="res://core/weapons/EnergyWeapon.tscn" id="4_pk5hr"]
+[ext_resource type="PackedScene" path="res://core/weapons/BananaLauncher.tscn" id="4_bnrfl"]
 [ext_resource type="AudioStream" path="res://assets/sounds/punch.mp3" id="5_punch"]
 [ext_resource type="AudioStream" path="res://assets/sounds/jump.mp3" id="10_jump"]
 [ext_resource type="AudioStream" path="res://assets/sounds/hitmarker.wav" id="6_hitmk"]
@@ -77,6 +78,9 @@ properties/8/replication_mode = 2
 properties/9/path = NodePath(".:SpawnArmor")
 properties/9/spawn = true
 properties/9/replication_mode = 2
+properties/10/path = NodePath(".:IsBananaEquipped")
+properties/10/spawn = true
+properties/10/replication_mode = 2
 
 [node name="Player" type="CharacterBody3D"]
 collision_layer = 2
@@ -142,6 +146,10 @@ texture = ExtResource("2_37lxu")
 
 [node name="EnergyWeapon" parent="Camera3D" instance=ExtResource("4_pk5hr")]
 transform = Transform3D(-4.37114e-09, 0, 0.1, 0, 0.1, 0, -0.1, 0, -4.37114e-09, 0.5, 0.3, -1.15)
+
+[node name="BananaLauncher" parent="Camera3D" instance=ExtResource("4_bnrfl")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.45, -0.35, -0.9)
+visible = false
 
 [node name="HitRedTimer" type="Timer" parent="."]
 process_callback = 0
