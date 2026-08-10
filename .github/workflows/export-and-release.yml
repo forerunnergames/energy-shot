@@ -169,12 +169,14 @@ jobs:
       # Skipped gracefully if the deploy secrets are absent.
       - name: Deploy dedicated server
         continue-on-error: true
-        if: ${{ secrets.DROPLET_HOST != '' }}
         env:
           DROPLET_HOST: ${{ secrets.DROPLET_HOST }}
           REPO: ${{ github.repository }}
           TAG: ${{ github.ref_name }}
         run: |
+          # The secrets context isn't available in step `if` expressions, so the
+          # no-credentials case is guarded here instead.
+          if [ -z "$DROPLET_HOST" ]; then echo "Deploy secrets absent; skipping deploy"; exit 0; fi
           # Key is removed on every exit path; host key is pinned, not trusted-on-first-use.
           trap 'rm -f droplet_key known_hosts' EXIT
           echo "${{ secrets.DROPLET_SSH_KEY }}" > droplet_key
