@@ -21,6 +21,9 @@ public partial class Hud : Control
   private Label _leaderboardEntries = null!;
   private ShaderMaterial _vignette = null!;
   private ShaderMaterial _blur = null!;
+  private ProgressBar _shotBar = null!;
+  private ProgressBar _punchBar = null!;
+  private ProgressBar _fullAutoBar = null!;
   private float _blurIntensity;
   private int _zapStreak;
   private int _zappedStreak;
@@ -65,6 +68,9 @@ public partial class Hud : Control
     _leaderboardEntries = GetNode <Label> ("Leaderboard/MarginContainer/VBoxContainer/Entries");
     _vignette = (ShaderMaterial)GetNode <ColorRect> ("Vignette").Material;
     _blur = (ShaderMaterial)GetNode <ColorRect> ("Blur").Material;
+    _shotBar = GetNode <ProgressBar> ("VBoxContainer/Cooldowns/Shot/Bar");
+    _punchBar = GetNode <ProgressBar> ("VBoxContainer/Cooldowns/Punch/Bar");
+    _fullAutoBar = GetNode <ProgressBar> ("VBoxContainer/Cooldowns/FullAuto/Bar");
     _world.SelfPlayerPunched += OnSelfPlayerPunched;
     GetNode <Timer> ("LeaderboardTimer").Timeout += UpdateLeaderboard;
     _quitDialog = GetNode <ConfirmationDialog2> ("QuitDialog");
@@ -89,12 +95,27 @@ public partial class Hud : Control
     ToggleQuitDialog();
   }
 
-  // Punch blur stacks per hit & fades back to sharp.
   public override void _Process (double delta)
+  {
+    UpdateBlur (delta);
+    UpdateCooldownBars();
+  }
+
+  // Punch blur stacks per hit & fades back to sharp.
+  private void UpdateBlur (double delta)
   {
     if (_blurIntensity <= 0.0f) return;
     _blurIntensity = Mathf.Max (0.0f, _blurIntensity - 0.25f * (float)delta);
     _blur.SetShaderParameter ("intensity", _blurIntensity);
+  }
+
+  private void UpdateCooldownBars()
+  {
+    var self = _world.SelfPlayer;
+    if (self == null || !Visible) return;
+    _shotBar.Value = self.ShotReadyFraction;
+    _punchBar.Value = self.PunchReadyFraction;
+    _fullAutoBar.Value = self.FullAutoReadyFraction;
   }
 
   private void OnSelfPlayerPunched()
@@ -125,33 +146,36 @@ public partial class Hud : Control
     PrintMessage ($"{playerName} left the game");
   }
 
+  // Every peer sees the exact same message text (#53): the victim picks the zap line
+  // once & broadcasts it to everyone (including the shooter); streak lines are picked
+  // once & shared the same way.
   private void OnPlayerRespawnedShot (string playerName, string shotByPlayerName)
   {
-    var fullCharge = _world.SelfPlayer?.LastZapEnergy >= 0.95f;
-
     if (IsSelf (shotByPlayerName))
     {
-      PrintMessage (MessageGenerator.OnZapped (playerName, shotByPlayerName, selfIsVictim: false, selfIsZapper: true, fullCharge: false));
       ++_zapStreak;
       _zappedStreak = 0;
-      if (_zapStreak >= 3) NotifyMessage (MessageGenerator.OnZapStreak (shotByPlayerName), MessageGenerator.OnZapStreak (shotByPlayerName));
+      if (_zapStreak >= 3) Announce (MessageGenerator.OnZapStreak (shotByPlayerName));
       return;
     }
 
     if (!IsSelf (playerName)) return;
-    NotifyMessage (MessageGenerator.OnZapped (playerName, shotByPlayerName, selfIsVictim: true, selfIsZapper: false, fullCharge), MessageGenerator.OnZapped (playerName, shotByPlayerName, selfIsVictim: false, selfIsZapper: false, fullCharge), excludedPlayerName: shotByPlayerName);
+    var fullCharge = _world.SelfPlayer?.LastZapEnergy >= 0.95f;
+    Announce (MessageGenerator.OnZapped (playerName, shotByPlayerName, selfIsVictim: false, selfIsZapper: false, fullCharge));
     ++_zappedStreak;
     _zapStreak = 0;
-    if (_zappedStreak >= 3) NotifyMessage (MessageGenerator.OnZappedStreak (playerName), MessageGenerator.OnZappedStreak (playerName));
+    if (_zappedStreak >= 3) Announce (MessageGenerator.OnZappedStreak (playerName));
   }
+
+  private void Announce (string message) => NotifyMessage (message, message);
 
   private void OnPlayerRespawnedFell (string playerName)
   {
     if (!IsSelf (playerName)) return;
     UpdateScoreLabel(); // Falling costs a point; show it immediately.
-    NotifyMessage (MessageGenerator.OnPlayerRespawnedFell (isSelf: true, playerName, out var messageIndex), MessageGenerator.OnPlayerRespawnedFell (isSelf: false, playerName, messageIndex));
+    Announce (MessageGenerator.OnPlayerRespawnedFell (isSelf: false, playerName, out _)); // Same text for every peer (#53).
     ++_fallStreak;
-    if (_fallStreak >= 3) NotifyMessage (MessageGenerator.OnFallStreak (playerName), MessageGenerator.OnFallStreak (playerName));
+    if (_fallStreak >= 3) Announce (MessageGenerator.OnFallStreak (playerName));
   }
 
   private void OnPlayerScored (int score, string playerName, string shotPlayerName)

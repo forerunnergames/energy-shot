@@ -23,8 +23,12 @@ public partial class EnergyWeapon : Node3D
   [Export] public float RecoilRecoverySpeed = 5.0f;
   [Signal] public delegate void ShotFiredEventHandler (float energy);
   public bool IsSpinningUp { get; private set; }
+  private static readonly Color FullAutoColor = new(3.0f, 0.1f, 0.1f);
   private AudioStreamPlayer3D _shootingSound = null!;
   private AudioStreamPlayer3D _chargingSound = null!;
+  private AudioStreamPlayer3D _fullAutoSwitchSound = null!;
+  private AudioStreamPlayer3D _fullAutoReadySound = null!;
+  private bool _isFullAutoMode;
   private MeshInstance3D _muzzleMeshInstance = null!;
   private Node3D _pivot = null!;
   private StandardMaterial3D _muzzleMaterial = null!;
@@ -38,10 +42,26 @@ public partial class EnergyWeapon : Node3D
   private bool _isRecoiling;
   private float _cooldownLeft;
   public void PlayShootingSound() => _shootingSound.Play();
+  public void PlayFullAutoReadySound() => _fullAutoReadySound.Play();
+  public float CooldownFraction => 1.0f - _cooldownLeft / ShotCooldownSeconds;
+
+  // Full-auto mode feedback (#58): red gun while active, switch sound on entry.
+  // Entering full-auto also cancels any in-progress charge so its state, sound, &
+  // spin speed don't linger through the burst.
+  public void SetFullAutoMode (bool active)
+  {
+    _isFullAutoMode = active;
+    if (active) _fullAutoSwitchSound.Play();
+    IsSpinningUp = false;
+    _chargingSound.Stop();
+    _tween?.Kill();
+    _currentRotationSpeed = MinRotationSpeed;
+    WeaponColor = active ? FullAutoColor : _normalColor;
+  }
 
   public void Charge()
   {
-    if (_cooldownLeft > 0.0f) return;
+    if (_cooldownLeft > 0.0f || _isFullAutoMode) return;
     SpinUp();
   }
   private void Rotate (double delta) => _pivot.Rotate (Vector3.Right, _currentRotationSpeed * (float)delta);
@@ -53,6 +73,8 @@ public partial class EnergyWeapon : Node3D
     _pivot = GetNode <Node3D> ("Pivot");
     _shootingSound = GetNode <AudioStreamPlayer3D> ("ShootingSound");
     _chargingSound = GetNode <AudioStreamPlayer3D> ("ChargingSound");
+    _fullAutoSwitchSound = GetNode <AudioStreamPlayer3D> ("FullAutoSwitchSound");
+    _fullAutoReadySound = GetNode <AudioStreamPlayer3D> ("FullAutoReadySound");
     _muzzleMeshInstance = GetNode <Node3D> ("Pivot/Muzzle").GetNode <MeshInstance3D> ("Cube_001");
     _muzzleMaterial = CreateCopy ((_muzzleMeshInstance.Mesh.SurfaceGetMaterial (0) as StandardMaterial3D)!);
     _muzzleMeshInstance.MaterialOverride = _muzzleMaterial;
