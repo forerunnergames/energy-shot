@@ -27,6 +27,8 @@ public partial class HostGameDialog : Control
     _hostGameButton = GetNode <Button> ("PanelContainer/MarginContainer/VBoxContainer/HostGameButton");
     _playerName = GetNode <LineEdit> ("PanelContainer/MarginContainer/VBoxContainer/PlayerName");
     _difficulty = GetNode <OptionButton> ("PanelContainer/MarginContainer/VBoxContainer/Difficulty");
+    // The dropdown's popup items don't inherit the button's font size override.
+    _difficulty.GetPopup().AddThemeFontSizeOverride ("font_size", 90);
     _serverAddress = GetNode <LineEdit> ("PanelContainer/MarginContainer/VBoxContainer/ServerAddress");
     _middleText = GetNode <Label> ("PanelContainer/MarginContainer/VBoxContainer/MiddleText");
     _bottomText = GetNode <Label> ("PanelContainer/MarginContainer/VBoxContainer/BottomText");

@@ -46,11 +46,16 @@ public partial class EnergyWeapon : Node3D
   public float CooldownFraction => 1.0f - _cooldownLeft / ShotCooldownSeconds;
 
   // Full-auto mode feedback (#58): red gun while active, switch sound on entry.
+  // Entering full-auto also cancels any in-progress charge so its state, sound, &
+  // spin speed don't linger through the burst.
   public void SetFullAutoMode (bool active)
   {
     _isFullAutoMode = active;
     if (active) _fullAutoSwitchSound.Play();
+    IsSpinningUp = false;
+    _chargingSound.Stop();
     _tween?.Kill();
+    _currentRotationSpeed = MinRotationSpeed;
     WeaponColor = active ? FullAutoColor : _normalColor;
   }
 

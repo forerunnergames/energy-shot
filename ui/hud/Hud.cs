@@ -173,7 +173,7 @@ public partial class Hud : Control
   {
     if (!IsSelf (playerName)) return;
     UpdateScoreLabel(); // Falling costs a point; show it immediately.
-    NotifyMessage (MessageGenerator.OnPlayerRespawnedFell (isSelf: true, playerName, out var messageIndex), MessageGenerator.OnPlayerRespawnedFell (isSelf: false, playerName, messageIndex));
+    Announce (MessageGenerator.OnPlayerRespawnedFell (isSelf: false, playerName, out _)); // Same text for every peer (#53).
     ++_fallStreak;
     if (_fallStreak >= 3) Announce (MessageGenerator.OnFallStreak (playerName));
   }
