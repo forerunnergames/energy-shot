@@ -168,6 +168,7 @@ public partial class Player
     if (!IsMultiplayerAuthority()) return;
     if (SpawnArmor) return;
     GD.Print ($"{DisplayName}: I was hit by {shotByPlayerName}!");
+    LastDamageKind = energy <= FullAutoEnergy + 0.01f ? DamageKind.FullAuto : DamageKind.Laser; // Message context (issue #84).
     ApplyDamage (energy, shotByPlayerName, knockbackScale: 1.0f);
   }
 
@@ -177,6 +178,7 @@ public partial class Player
     if (!IsMultiplayerAuthority()) return;
     if (SpawnArmor) return;
     GD.Print ($"{DisplayName}: I was punched by {punchedByPlayerName}!");
+    LastDamageKind = DamageKind.Punch; // Message context (issue #84).
     _punchSound.Play(); // The victim hears the connect too (issue #71).
     ApplyPunchStun(); // Stacking slow; the blur stacks HUD-side via Punched (issues #68 & #71).
     TryDropWeaponFromPunch();

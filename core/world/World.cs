@@ -53,8 +53,8 @@ public partial class World : Node3D
     _ui.GamePaused += OnGamePaused;
     _ui.GameResumed += OnGameResumed;
     _ui.GameQuit += OnGameQuit;
-    _networkManager.PlayerRespawnedShot += (playerName, shotByPlayerName) => EmitSignal (SignalName.PlayerRespawnedShot, playerName, shotByPlayerName);
-    _networkManager.PlayerRespawnedFell += playerName => EmitSignal (SignalName.PlayerRespawnedFell, playerName);
+    _networkManager.PlayerRespawnedShot += (playerName, shotByPlayerName) => OnPlayerRespawned (playerName, SignalName.PlayerRespawnedShot, shotByPlayerName);
+    _networkManager.PlayerRespawnedFell += playerName => OnPlayerRespawned (playerName, SignalName.PlayerRespawnedFell);
     _networkManager.RemoteMessageReceived += message => EmitSignal (SignalName.RemoteMessageReceived, message);
     _networkManager.PlayerJoinGame += playerName => EmitSignal (SignalName.PlayerJoinedGame, playerName);
     _networkManager.PlayerLeftGame += playerName => EmitSignal (SignalName.PlayerLeftGame, playerName);
@@ -63,6 +63,16 @@ public partial class World : Node3D
   }
 
   private void StartPlaytest() => AddChild (new playtest.PlaytestDriver());
+
+  // Any respawn ends that player's streak (issue #88): clear the local streak display
+  // on this reliable broadcast, so the glow & pulsing leaderboard entry can't outlive
+  // a death even if a peer missed the one-off ZapStreakCount reset delta.
+  private void OnPlayerRespawned (string playerName, StringName signal, string? shotByPlayerName = null)
+  {
+    FindPlayer (playerName)?.ClearStreakDisplayLocally();
+    if (shotByPlayerName == null) EmitSignal (signal, playerName);
+    else EmitSignal (signal, playerName, shotByPlayerName);
+  }
 
   // Session entry points for the automated playtest harness: same code paths the
   // host/join dialogs use, minus the UI & UPnP.
