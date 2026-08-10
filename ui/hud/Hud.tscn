@@ -1,10 +1,11 @@
-[gd_scene load_steps=12 format=3 uid="uid://cobme7o27cxru"]
+[gd_scene load_steps=14 format=3 uid="uid://cobme7o27cxru"]
 
 [ext_resource type="Script" path="res://ui/hud/Hud.cs" id="1_5s36p"]
 [ext_resource type="PackedScene" uid="uid://huun2vjv0k1v" path="res://ui/hud/messages/MessageScroller.tscn" id="1_6ovnf"]
 [ext_resource type="PackedScene" uid="uid://bmpjrf8pqokyu" path="res://ui/dialogs/confirm/ConfirmationDialog2.tscn" id="3_v7kl8"]
 [ext_resource type="Shader" path="res://ui/hud/vignette.gdshader" id="4_vgntt"]
 [ext_resource type="Shader" path="res://ui/hud/blur.gdshader" id="5_blur"]
+[ext_resource type="Shader" path="res://ui/hud/splatter.gdshader" id="6_spltr"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_vgntt"]
 shader = ExtResource("4_vgntt")
@@ -13,6 +14,11 @@ shader_parameter/intensity = 0.0
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_blur"]
 shader = ExtResource("5_blur")
 shader_parameter/intensity = 0.0
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_spltr"]
+shader = ExtResource("6_spltr")
+shader_parameter/intensity = 0.0
+shader_parameter/slide = 0.0
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_ldrbd"]
 bg_color = Color(0, 0, 0, 0.392157)
@@ -69,6 +75,16 @@ mouse_filter = 2
 
 [node name="Vignette" type="ColorRect" parent="."]
 material = SubResource("ShaderMaterial_vgntt")
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Splatter" type="ColorRect" parent="."]
+material = SubResource("ShaderMaterial_spltr")
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -152,6 +168,25 @@ theme_override_font_sizes/font_size = 28
 text = "Full-Auto"
 
 [node name="Bar" type="ProgressBar" parent="VBoxContainer/Cooldowns/FullAuto"]
+custom_minimum_size = Vector2(0, 22)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+max_value = 1.0
+step = 0.01
+value = 1.0
+show_percentage = false
+
+[node name="Banana" type="HBoxContainer" parent="VBoxContainer/Cooldowns"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="VBoxContainer/Cooldowns/Banana"]
+custom_minimum_size = Vector2(220, 0)
+layout_mode = 2
+theme_override_font_sizes/font_size = 28
+text = "Banana"
+
+[node name="Bar" type="ProgressBar" parent="VBoxContainer/Cooldowns/Banana"]
 custom_minimum_size = Vector2(0, 22)
 layout_mode = 2
 size_flags_horizontal = 3

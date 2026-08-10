@@ -7,12 +7,13 @@ namespace com.forerunnergames.energyshot.players;
 public partial class Player
 {
   private bool IsFalling() => !IsOnFloor();
-  private bool IsJumping() => _isInputEnabled && _jumpTimer.IsStopped() && Input.IsActionJustPressed ("jump") && IsOnFloor();
+  // Stun blocks jumping & sliding (issues #70 & #71).
+  private bool IsJumping() => _isInputEnabled && !IsStunned && _jumpTimer.IsStopped() && Input.IsActionJustPressed ("jump") && IsOnFloor();
   private void Fall (ref Vector3 velocity, double delta) => velocity += Gravity * (float)delta;
-  private bool WantsSlide() => _isInputEnabled && Input.IsActionPressed ("slide");
+  private bool WantsSlide() => _isInputEnabled && !IsStunned && Input.IsActionPressed ("slide");
   // Slide wins: crouch is ignored while sliding (see issue #51).
   private bool WantsCrouch() => _isInputEnabled && !Sliding && Input.IsActionPressed ("crouch");
-  private float MoveSpeed() => Sliding ? Speed * SlideSpeedMultiplier : _crouching ? Speed * CrouchSpeedMultiplier : Speed;
+  private float MoveSpeed() => (Sliding ? Speed * SlideSpeedMultiplier : _crouching ? Speed * CrouchSpeedMultiplier : Speed) * StunSpeedMultiplier();
 
   // Hold to slide: double speed & a horizontal pose, capped at SlideDurationSeconds,
   // then a cooldown before the next slide (see issue #41).
@@ -151,6 +152,8 @@ public partial class Player
     Velocity = Vector3.Zero;
     Position = CalculateRandomSpawnPosition();
     _bread.Restock(); // Fresh bread every life (issue #62).
+    _energyWeapon.ResetCharge(); // Every life starts with a cold weapon (issue #67).
+    ClearStun(); // Death shakes off any punch/banana stun.
     ActivateSpawnArmor();
     SetInputEnabled (isEnabled: false);
     _respawnSound.Play();

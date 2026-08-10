@@ -87,9 +87,12 @@ public partial class Player
     if (!_isInputEnabled || _punchCooldownLeft > 0.0f || !Input.IsActionJustPressed ("punch")) return;
     _punchCooldownLeft = PunchCooldownSeconds;
     CancelSpawnArmorIfFired(); // Punching drops your spawn armor, same as firing.
-    _punchSound.Play();
+    var hand = ChooseRandomPunchHand();
+    AnimatePunch (hand);
+    Rpc (MethodName.PlayRemotePunch, hand);
     var victim = FindAimedPlayer (PunchRange);
     if (victim == null) return;
+    _punchSound.Play(); // Connect-only (issue #71): no sound on a whiffed swing.
     GD.Print ($"{DisplayName}: I punched {victim.DisplayName}!");
     victim.RpcId (victim.NetworkId, MethodName.ReceivePunch, DisplayName);
   }
@@ -173,8 +176,26 @@ public partial class Player
     if (!IsMultiplayerAuthority()) return;
     if (SpawnArmor) return;
     GD.Print ($"{DisplayName}: I was punched by {punchedByPlayerName}!");
+    _punchSound.Play(); // The victim hears the connect too (issue #71).
+    ApplyPunchStun(); // Stacking slow; the blur stacks HUD-side via Punched (issues #68 & #71).
+    TryDropWeaponFromPunch();
     EmitSignal (SignalName.Punched);
     ApplyDamage (PunchEnergy, punchedByPlayerName, PunchKnockbackScale);
+  }
+
+  // 20% chance a connect knocks the victim's weapon loose (issue #71). The pickup/drop
+  // system lands in another branch; until DropHeldWeapon() exists, this just logs.
+  private void TryDropWeaponFromPunch()
+  {
+    if (_rng.Randf() >= PunchDropChance) return;
+
+    if (!HasMethod ("DropHeldWeapon"))
+    {
+      GD.Print ($"{DisplayName}: That punch nearly knocked my weapon loose!");
+      return;
+    }
+
+    Call ("DropHeldWeapon");
   }
 
   // One-per-life full heal (issue #62): restocked on every (re)spawn.

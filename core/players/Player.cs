@@ -132,8 +132,10 @@ public partial class Player : CharacterBody3D
   // Brief - the spawn room & spawn armor already prevent instant re-engagement (#48).
   [Export] public float RespawnInputLockSeconds = 0.3f;
   [Export] public float PunchCooldownSeconds = 0.6f;
-  [Export] public float PunchRange = 2.5f;
+  // Longer than physically normal - close-range fights were too hard to land (issue #71).
+  [Export] public float PunchRange = 4.0f;
   [Export] public float PunchEnergy = 0.2f;
+  [Export] public float PunchDropChance = 0.2f;
   [Export] public float BananaBlastRadius = 6.0f;
   [Export] public float BananaDirectRadius = 1.5f;
   [Export] public float BananaBlastEnergy = 0.9f;
@@ -222,6 +224,7 @@ public partial class Player : CharacterBody3D
     _energyWeapon = GetNode <EnergyWeapon> ("Camera3D/EnergyWeapon");
     _bananaLauncher = GetNode <BananaLauncher> ("Camera3D/BananaLauncher");
     UpdateWeaponVisibility();
+    CreateHands();
     _crossHairs = GetNode <Sprite3D> ("Camera3D/Crosshairs");
     _jumpTimer = GetNode <Timer> ("JumpTimer");
     _hitRedTimer = GetNode <Timer> ("HitRedTimer");
@@ -288,6 +291,8 @@ public partial class Player : CharacterBody3D
     UpdateFullAuto (delta);
     UpdatePunch (delta);
     UpdateCameraKick (delta);
+    UpdateCameraShake (delta);
+    UpdateStun (delta);
     UpdateSlide (delta);
     UpdateCrouch();
     var velocity = Velocity;

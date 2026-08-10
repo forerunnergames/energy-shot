@@ -21,10 +21,16 @@ public partial class Hud : Control
   private RichTextLabel _leaderboardEntries = null!;
   private ShaderMaterial _vignette = null!;
   private ShaderMaterial _blur = null!;
+  private ShaderMaterial _splatter = null!;
   private ProgressBar _shotBar = null!;
   private ProgressBar _punchBar = null!;
   private ProgressBar _fullAutoBar = null!;
+  private ProgressBar _bananaBar = null!;
   private float _blurIntensity;
+  private float _splatterSecondsLeft;
+  private float _splatterSlide;
+  private const float SplatterSeconds = 5.0f; // Matches the banana stun window (issue #70).
+  private const float SplatterSlidePerSecond = 0.06f;
   private int _zapStreak;
   private int _zappedStreak;
   private int _fallStreak;
@@ -74,10 +80,13 @@ public partial class Hud : Control
     _leaderboardEntries = GetNode <RichTextLabel> ("Leaderboard/MarginContainer/VBoxContainer/Entries");
     _vignette = (ShaderMaterial)GetNode <ColorRect> ("Vignette").Material;
     _blur = (ShaderMaterial)GetNode <ColorRect> ("Blur").Material;
+    _splatter = (ShaderMaterial)GetNode <ColorRect> ("Splatter").Material;
     _shotBar = GetNode <ProgressBar> ("VBoxContainer/Cooldowns/Shot/Bar");
     _punchBar = GetNode <ProgressBar> ("VBoxContainer/Cooldowns/Punch/Bar");
     _fullAutoBar = GetNode <ProgressBar> ("VBoxContainer/Cooldowns/FullAuto/Bar");
+    _bananaBar = GetNode <ProgressBar> ("VBoxContainer/Cooldowns/Banana/Bar");
     _world.SelfPlayerPunched += OnSelfPlayerPunched;
+    _world.SelfPlayerSplattered += OnSelfPlayerSplattered;
     GetNode <Timer> ("LeaderboardTimer").Timeout += UpdateLeaderboard;
     _quitDialog = GetNode <ConfirmationDialog2> ("QuitDialog");
     _quitDialog.Confirmed += () => EmitSignal (SignalName.GameQuit);
@@ -104,15 +113,28 @@ public partial class Hud : Control
   public override void _Process (double delta)
   {
     UpdateBlur (delta);
+    UpdateSplatter (delta);
     UpdateCooldownBars();
   }
 
-  // Punch blur stacks per hit & fades back to sharp.
+  // Punch blur stacks per hit & fades back to sharp; a heavy stack fades slower, so
+  // being near-blind lingers (issue #68).
   private void UpdateBlur (double delta)
   {
     if (_blurIntensity <= 0.0f) return;
-    _blurIntensity = Mathf.Max (0.0f, _blurIntensity - 0.25f * (float)delta);
+    var fadePerSecond = Mathf.Lerp (0.25f, 0.1f, _blurIntensity);
+    _blurIntensity = Mathf.Max (0.0f, _blurIntensity - fadePerSecond * (float)delta);
     _blur.SetShaderParameter ("intensity", _blurIntensity);
+  }
+
+  // The splat slides slowly down the screen & fades out with the banana stun (issue #70).
+  private void UpdateSplatter (double delta)
+  {
+    if (_splatterSecondsLeft <= 0.0f) return;
+    _splatterSecondsLeft = Mathf.Max (0.0f, _splatterSecondsLeft - (float)delta);
+    _splatterSlide += SplatterSlidePerSecond * (float)delta;
+    _splatter.SetShaderParameter ("slide", _splatterSlide);
+    _splatter.SetShaderParameter ("intensity", _splatterSecondsLeft / SplatterSeconds);
   }
 
   private void UpdateCooldownBars()
@@ -122,12 +144,22 @@ public partial class Hud : Control
     _shotBar.Value = self.ShotReadyFraction;
     _punchBar.Value = self.PunchReadyFraction;
     _fullAutoBar.Value = self.FullAutoReadyFraction;
+    _bananaBar.Value = self.BananaReadyFraction;
   }
 
+  // ~3 hits reach max blur (issue #68): the shader's top LOD is a near-whiteout.
   private void OnSelfPlayerPunched()
   {
-    _blurIntensity = Mathf.Min (1.0f, _blurIntensity + 0.34f);
+    _blurIntensity = Mathf.Min (1.0f, _blurIntensity + 0.4f);
     _blur.SetShaderParameter ("intensity", _blurIntensity);
+  }
+
+  private void OnSelfPlayerSplattered()
+  {
+    _splatterSecondsLeft = SplatterSeconds;
+    _splatterSlide = 0.0f;
+    _splatter.SetShaderParameter ("slide", 0.0f);
+    _splatter.SetShaderParameter ("intensity", 1.0f);
   }
 
   private void OnNewGameStarted (string selfPlayerName, int selfMaxHealth)

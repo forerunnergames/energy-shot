@@ -16,6 +16,7 @@ public partial class World : Node3D
   [Signal] public delegate void PlayerRespawnedFellEventHandler (string playerName);
   [Signal] public delegate void SelfPlayerHealthChangedEventHandler (string playerName, int health);
   [Signal] public delegate void SelfPlayerPunchedEventHandler();
+  [Signal] public delegate void SelfPlayerSplatteredEventHandler();
   [Signal] public delegate void RemoteMessageReceivedEventHandler (string message);
   [Signal] public delegate void KickedFromServerEventHandler (string reason);
   [Signal] public delegate void ServerShutDownEventHandler();
@@ -210,6 +211,7 @@ public partial class World : Node3D
     _selfPlayer = selfPlayer;
     selfPlayer.HealthChanged += value => EmitSignal (SignalName.SelfPlayerHealthChanged, selfPlayer.DisplayName, value);
     selfPlayer.Punched += () => EmitSignal (SignalName.SelfPlayerPunched);
+    selfPlayer.Splattered += () => EmitSignal (SignalName.SelfPlayerSplattered);
     selfPlayer.Scored += (playerName, shotPlayerName) => EmitSignal (SignalName.PlayerScored, ++_score, playerName, shotPlayerName);
     GD.Print ($"{_selfPlayer.NetworkId}: Registered my player {_selfPlayer.DisplayName}");
     EmitSignal (SignalName.NewGameStarted, _selfPlayer.DisplayName, _selfPlayer.MaxHealth);
