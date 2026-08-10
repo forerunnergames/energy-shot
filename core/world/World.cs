@@ -80,13 +80,17 @@ public partial class World : Node3D
     Multiplayer.ConnectedToServer += () => OnJoinGameSuccess (playerName, difficulty);
   }
 
-  private static bool IsDedicatedServer() => OS.GetCmdlineUserArgs().Contains ("--server");
+  // Dedicated-server exports carry the feature tag, so the server binary needs no flag;
+  // --server also works for running from a normal build (e.g. local testing).
+  private static bool IsDedicatedServer() => OS.HasFeature ("dedicated_server") || OS.GetCmdlineUserArgs().Contains ("--server");
 
   private static int ParseServerPort()
   {
     var args = OS.GetCmdlineUserArgs();
     var index = System.Array.IndexOf (args, "--port");
-    return index != -1 && index + 1 < args.Length && int.TryParse (args[index + 1], out var port) ? port : DefaultServerPort;
+    if (index == -1 || index + 1 >= args.Length) return DefaultServerPort;
+    if (!int.TryParse (args[index + 1], out var port) || port is <= 0 or > 65535) return DefaultServerPort;
+    return port;
   }
 
   // Headless dedicated server (issue #27): no UI, no local player; clients join via the existing RequestPlayerSlot RPC flow.
