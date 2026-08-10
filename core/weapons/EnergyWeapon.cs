@@ -18,7 +18,7 @@ public partial class EnergyWeapon : Node3D
   [Export] public float MaxRotationSpeed = 15.0f;
   // Caps fire rate: after a shot, the weapon can't begin a new charge until the
   // cooldown elapses, so fast clicks & auto-clickers can't spam shots.
-  [Export] public float ShotCooldownSeconds = 1.0f;
+  [Export] public float ShotCooldownSeconds = 0.5f;
   [Export] public float RecoilStrength = 5.0f;
   [Export] public float RecoilRecoverySpeed = 5.0f;
   [Signal] public delegate void ShotFiredEventHandler (float energy);
