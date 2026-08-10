@@ -5,9 +5,12 @@
 name: Run Tests
 
 on:
+  # Push runs only on main; PR branches are covered by the pull_request event,
+  # so the same commit never runs twice (duplicates used to cancel each other &
+  # block merges with a failed required check).
   push:
     branches:
-      - '**'
+      - main
   pull_request:
     branches:
       - '**'
