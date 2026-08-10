@@ -164,3 +164,27 @@ jobs:
           generateReleaseNotes: true
           tag: ${{ github.ref_name }}
           artifacts: ${{ steps.export.outputs.archive_directory }}/*
+
+      # Deploy the dedicated server build to the official game server droplet.
+      # Skipped gracefully if the deploy secrets are absent.
+      - name: Deploy dedicated server
+        continue-on-error: true
+        if: env.DROPLET_HOST != ''
+        env:
+          DROPLET_HOST: ${{ secrets.DROPLET_HOST }}
+        run: |
+          echo "${{ secrets.DROPLET_SSH_KEY }}" > droplet_key
+          chmod 600 droplet_key
+          ssh -i droplet_key -o StrictHostKeyChecking=accept-new root@"$DROPLET_HOST" bash -s <<'DEPLOY'
+          set -e
+          cd /opt/energy-shot/build
+          rm -rf ./*
+          curl -sL -o server.zip "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/EnergyShot-Linux.Server-${{ github.ref_name }}.zip"
+          unzip -oq server.zip && rm server.zip
+          chmod +x energy-shot-server.x86_64
+          chown -R game:game /opt/energy-shot
+          systemctl restart energy-shot
+          sleep 3
+          systemctl is-active energy-shot
+          DEPLOY
+          rm droplet_key
