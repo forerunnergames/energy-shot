@@ -59,6 +59,10 @@ public partial class Player : CharacterBody3D
   // pool; anything unrecognized (including spoofed values) gets Expert health.
   public static int MaxHealthFor (int difficulty) => difficulty switch { 0 => 400, 1 => 300, _ => 200 };
 
+  // Recovers the difficulty tier (0=Beginner, 1=Intermediate, 2=Expert) from the
+  // replicated health pool, for the damage handicap.
+  private static int TierOf (int maxHealth) => maxHealth switch { 400 => 0, 300 => 1, _ => 2 };
+
   // 5s of invulnerability after every (re)spawn, canceled by firing. Replicated so
   // every peer renders the armored (white) player & the victim rejects damage.
   [Export]
@@ -320,7 +324,13 @@ public partial class Player : CharacterBody3D
     if (!IsMultiplayerAuthority()) return;
     if (SpawnArmor) return;
     var shooterId = Multiplayer.GetRemoteSenderId();
-    Health -= CalculateHealthDecrease (energy);
+    // Difficulty damage handicap: lower-skill attackers hit higher-skill targets harder
+    // (+50% per tier gap: Beginner->Intermediate 1.5x, Beginner->Expert 2x,
+    // Intermediate->Expert 1.5x). Attacking downward is unchanged - the bigger health
+    // pool already is the handicap.
+    var shooter = GetParent().GetNodeOrNull <Player> ($"{shooterId}");
+    var handicap = 1.0f + 0.5f * Mathf.Max (0, TierOf (MaxHealth) - TierOf (shooter?.MaxHealth ?? MaxHealth));
+    Health -= Mathf.RoundToInt (CalculateHealthDecrease (energy) * handicap);
     GD.Print ($"{DisplayName}: I was hit by {shotByPlayerName}! Health {Health}");
 
     if (Health <= 0)
