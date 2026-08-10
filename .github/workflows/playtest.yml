@@ -4,9 +4,11 @@
 name: Playtest
 
 on:
+  # Push runs only on main; PR branches are covered by the pull_request event,
+  # so the same commit never runs twice.
   push:
     branches:
-      - '**'
+      - main
   pull_request:
     branches:
       - '**'
