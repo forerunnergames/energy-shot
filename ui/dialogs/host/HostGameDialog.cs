@@ -5,22 +5,25 @@ namespace com.forerunnergames.energyshot.ui.dialogs;
 
 public partial class HostGameDialog : Control
 {
-  [Signal] public delegate void HostGameSuccessEventHandler (string playerName, int difficulty, int maxPlayers);
+  [Signal] public delegate void HostGameSuccessEventHandler (string playerName, int difficulty, int maxPlayers, string password);
   [Signal] public delegate void ClosedEventHandler();
   private Button _closeButton = null!;
   private Button _hostGameButton = null!;
   private LineEdit _playerName = null!;
   private OptionButton _difficulty = null!;
   private SpinBox _maxPlayers = null!;
+  private LineEdit _password = null!;
   private LineEdit _serverAddress = null!;
   private Label _middleText = null!;
   private Label _bottomText = null!;
   private ENetMultiplayerPeer? _peer;
   private int _serverPort = -1;
   private void OnPlayerNameTextChanged (string newText) => UpdateHostGameButtonState();
+  private void OnPasswordTextChanged (string newText) => UpdateHostGameButtonState();
   private void OnServerAddressTextChanged (string newText) => UpdateHostGameButtonState();
-  private void UpdateHostGameButtonState() => _hostGameButton.Disabled = !IsValid (_playerName.Text, _serverAddress.Text);
-  private static bool IsValid (string playerName, string serverAddress) => Tools.IsValidPlayerName (playerName) && Tools.IsValidServerAddress (serverAddress);
+  private void UpdateHostGameButtonState() => _hostGameButton.Disabled = !IsValid (_playerName.Text, _serverAddress.Text, _password.Text);
+  // Hosted games always require a password (issue #90).
+  private static bool IsValid (string playerName, string serverAddress, string password) => Tools.IsValidPlayerName (playerName) && Tools.IsValidServerAddress (serverAddress) && !string.IsNullOrEmpty (password);
 
   public override void _Ready()
   {
@@ -31,11 +34,13 @@ public partial class HostGameDialog : Control
     // The dropdown's popup items don't inherit the button's font size override.
     _difficulty.GetPopup().AddThemeFontSizeOverride ("font_size", 90);
     _maxPlayers = GetNode <SpinBox> ("PanelContainer/MarginContainer/VBoxContainer/MaxPlayers");
+    _password = GetNode <LineEdit> ("PanelContainer/MarginContainer/VBoxContainer/Password");
     _serverAddress = GetNode <LineEdit> ("PanelContainer/MarginContainer/VBoxContainer/ServerAddress");
     _middleText = GetNode <Label> ("PanelContainer/MarginContainer/VBoxContainer/MiddleText");
     _bottomText = GetNode <Label> ("PanelContainer/MarginContainer/VBoxContainer/BottomText");
     _hostGameButton.Disabled = true;
     _playerName.TextChanged += OnPlayerNameTextChanged;
+    _password.TextChanged += OnPasswordTextChanged;
     _serverAddress.TextChanged += OnServerAddressTextChanged;
     _closeButton.Pressed += Hide;
     _hostGameButton.Pressed += OnHostGameButtonPressed;
@@ -49,6 +54,7 @@ public partial class HostGameDialog : Control
     _serverAddress.Text = string.Empty;
     _bottomText.Text = string.Empty;
     if (string.IsNullOrEmpty (_playerName.Text)) _playerName.Text = Settings.PlayerName;
+    if (string.IsNullOrEmpty (_password.Text)) _password.Text = Settings.HostPassword;
     _difficulty.Selected = Settings.Difficulty;
     _maxPlayers.Value = Settings.MaxPlayers;
     UpdateHostGameButtonState();
@@ -98,8 +104,9 @@ public partial class HostGameDialog : Control
     Settings.PlayerName = _playerName.Text;
     Settings.Difficulty = _difficulty.Selected;
     Settings.MaxPlayers = (int)_maxPlayers.Value;
+    Settings.HostPassword = _password.Text;
     Hide();
-    EmitSignal (SignalName.HostGameSuccess, _playerName.Text, _difficulty.Selected, (int)_maxPlayers.Value);
+    EmitSignal (SignalName.HostGameSuccess, _playerName.Text, _difficulty.Selected, (int)_maxPlayers.Value, _password.Text);
   }
 
   private void OnError (string error)

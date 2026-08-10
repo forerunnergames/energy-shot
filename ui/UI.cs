@@ -9,8 +9,9 @@ namespace com.forerunnergames.energyshot.ui;
 public partial class UI : CanvasLayer
 {
   [Signal] public delegate void MessageEventHandler (string message, string excludedPlayerName);
-  [Signal] public delegate void HostGameSuccessEventHandler (string playerName, int difficulty, int maxPlayers);
-  [Signal] public delegate void JoinGameSuccessEventHandler (string playerName, int difficulty);
+  [Signal] public delegate void HostGameSuccessEventHandler (string playerName, int difficulty, int maxPlayers, string password);
+  [Signal] public delegate void JoinGameSuccessEventHandler (string playerName, int difficulty, string password);
+  [Signal] public delegate void JoinCanceledEventHandler();
   [Signal] public delegate void GamePausedEventHandler();
   [Signal] public delegate void GameResumedEventHandler();
   [Signal] public delegate void GameQuitEventHandler();
@@ -20,6 +21,7 @@ public partial class UI : CanvasLayer
   private Hud _hud = null!;
   private HostGameDialog _hostGameDialog = null!;
   private JoinGameDialog _joinGameDialog = null!;
+  private JoiningScreen _joiningScreen = null!;
   private void OnHostGameRequest() => _hostGameDialog.Show (_peer, ServerPort);
   private void OnJoinGameRequest() => _joinGameDialog.Show (_peer, ServerPort);
 
@@ -29,13 +31,25 @@ public partial class UI : CanvasLayer
     _hud = GetNode <Hud> ("Hud");
     _hostGameDialog = GetNode <HostGameDialog> ("HostGameDialog");
     _joinGameDialog = GetNode <JoinGameDialog> ("JoinGameDialog");
+    _joiningScreen = GetNode <JoiningScreen> ("JoiningScreen");
     _mainMenu.HostGameRequest += OnHostGameRequest;
     _mainMenu.JoinGameRequest += OnJoinGameRequest;
     _hud.Message += (message, excludedPlayerName) => EmitSignal (SignalName.Message, message, excludedPlayerName);
     _hud.GamePaused += () => EmitSignal (SignalName.GamePaused);
     _hud.GameResumed += () => EmitSignal (SignalName.GameResumed);
     _hud.GameQuit += () => EmitSignal (SignalName.GameQuit);
-    _hostGameDialog.HostGameSuccess += (playerName, difficulty, maxPlayers) => EmitSignal (SignalName.HostGameSuccess, playerName, difficulty, maxPlayers);
-    _joinGameDialog.JoinGameSuccess += (playerName, difficulty) => EmitSignal (SignalName.JoinGameSuccess, playerName, difficulty);
+    _hostGameDialog.HostGameSuccess += (playerName, difficulty, maxPlayers, password) => EmitSignal (SignalName.HostGameSuccess, playerName, difficulty, maxPlayers, password);
+    _joinGameDialog.JoinGameSuccess += (playerName, difficulty, password) => EmitSignal (SignalName.JoinGameSuccess, playerName, difficulty, password);
+    // Animated joining screen (issue #91): covers connect through spawn; failures reopen the join dialog.
+    _joinGameDialog.ConnectStarted += _joiningScreen.Open;
+    _joinGameDialog.ConnectFailed += _joiningScreen.Close;
+    _joiningScreen.CancelPressed += OnJoinCanceled;
+  }
+
+  // Notify the world first so a post-connect cancel doesn't read as a server shutdown.
+  private void OnJoinCanceled()
+  {
+    EmitSignal (SignalName.JoinCanceled);
+    _joinGameDialog.Abort();
   }
 }

@@ -25,7 +25,10 @@ public partial class World : Node3D
   public const int MaxPlayers = 12;
   private NetworkManager _networkManager = null!;
   private int _maxPlayers = MaxPlayers;
+  // Required to join (issue #90); empty only on a dedicated server whose owner set no --password.
+  private string _serverPassword = string.Empty;
   private UI _ui = null!;
+  private Callable _onServerDisconnectedCallable;
   private PackedScene _playerScene = null!;
   private Player? _selfPlayer;
   private string _selfPlayerName = string.Empty;
@@ -44,12 +47,14 @@ public partial class World : Node3D
 
   public override void _Ready()
   {
+    _onServerDisconnectedCallable = Callable.From (OnServerDisconnected);
     _playerScene = ResourceLoader.Load <PackedScene> ("res://core/players/Player.tscn");
     _networkManager = GetNode <NetworkManager> ("NetworkManager");
     _ui = GetNode <UI> ("UI");
     _ui.Message += (message, excludedPlayerName) => _networkManager.NotifyMessage (message, FindPlayerId (excludedPlayerName));
     _ui.HostGameSuccess += OnHostGameSuccess;
     _ui.JoinGameSuccess += OnJoinGameSuccess;
+    _ui.JoinCanceled += OnJoinCanceled;
     _ui.GamePaused += OnGamePaused;
     _ui.GameResumed += OnGameResumed;
     _ui.GameQuit += OnGameQuit;
@@ -60,28 +65,29 @@ public partial class World : Node3D
     _networkManager.PlayerLeftGame += playerName => EmitSignal (SignalName.PlayerLeftGame, playerName);
     if (OS.GetCmdlineUserArgs().Contains ("--playtest")) CallDeferred (MethodName.StartPlaytest);
     if (IsDedicatedServer()) StartDedicatedServer();
+    StartCrownTicker();
   }
 
   private void StartPlaytest() => AddChild (new playtest.PlaytestDriver());
 
   // Session entry points for the automated playtest harness: same code paths the
   // host/join dialogs use, minus the UI & UPnP.
-  public void StartHostSession (string playerName, int difficulty, int port)
+  public void StartHostSession (string playerName, int difficulty, int port, string password)
   {
     var peer = new ENetMultiplayerPeer();
     var error = peer.CreateServer (port);
     if (error != Error.Ok) GD.PrintErr ($"Playtest host failed: {error}");
     Multiplayer.MultiplayerPeer = peer;
-    OnHostGameSuccess (playerName, difficulty, MaxPlayers);
+    OnHostGameSuccess (playerName, difficulty, MaxPlayers, password);
   }
 
-  public void StartClientSession (string playerName, int difficulty, string address, int port)
+  public void StartClientSession (string playerName, int difficulty, string address, int port, string password)
   {
     var peer = new ENetMultiplayerPeer();
     var error = peer.CreateClient (address, port);
     if (error != Error.Ok) GD.PrintErr ($"Playtest join failed: {error}");
     Multiplayer.MultiplayerPeer = peer;
-    Multiplayer.ConnectedToServer += () => OnJoinGameSuccess (playerName, difficulty);
+    Multiplayer.ConnectedToServer += () => OnJoinGameSuccess (playerName, difficulty, password);
   }
 
   // Dedicated-server exports carry the feature tag, so the server binary needs no flag;
@@ -95,6 +101,16 @@ public partial class World : Node3D
     if (index == -1 || index + 1 >= args.Length) return DefaultServerPort;
     if (!int.TryParse (args[index + 1], out var port) || port is <= 0 or > 65535) return DefaultServerPort;
     return port;
+  }
+
+  // Dedicated-server password (issue #90): --password <p>; empty means no password
+  // required, so the official server keeps working until its owner sets one.
+  private static string ParseServerPassword()
+  {
+    var args = OS.GetCmdlineUserArgs();
+    var index = System.Array.IndexOf (args, "--password");
+    if (index == -1 || index + 1 >= args.Length) return string.Empty;
+    return args[index + 1];
   }
 
   // Headless dedicated server (issue #27): no UI, no local player; clients join via the existing RequestPlayerSlot RPC flow.
@@ -115,15 +131,25 @@ public partial class World : Node3D
     Multiplayer.MultiplayerPeer = peer;
     Multiplayer.PeerConnected += OnClientConnectedToServer;
     Multiplayer.PeerDisconnected += OnClientDisconnectedFromServer;
-    GD.Print ($"Server: Dedicated server listening on port [{port}]");
+    _serverPassword = ParseServerPassword();
+    GD.Print ($"Server: Dedicated server listening on port [{port}], password {(_serverPassword.Length > 0 ? "required" : "not required")}");
   }
 
   [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
-  private void RequestPlayerSlot (string playerName, int difficulty)
+  private void RequestPlayerSlot (string playerName, int difficulty, string password)
   {
     if (!Multiplayer.IsServer()) return;
     var senderId = Multiplayer.GetRemoteSenderId();
     GD.Print ($"Server: {senderId} {playerName} is requesting to join the game (difficulty {difficulty})");
+
+    // Server-enforced game password (issue #90); empty server password = open server.
+    if (_serverPassword.Length > 0 && password != _serverPassword)
+    {
+      Kick (senderId, "Wrong password.");
+      GD.PrintErr ($"Server: Disconnected client ID [{senderId}], wrong password");
+      return;
+    }
+
     var duplicateId = FindPlayer (senderId);
     var duplicateName = FindPlayer (playerName);
 
@@ -161,20 +187,31 @@ public partial class World : Node3D
     Multiplayer.MultiplayerPeer.DisconnectPeer (peerId);
   }
 
-  private void OnHostGameSuccess (string playerName, int difficulty, int maxPlayers)
+  private void OnHostGameSuccess (string playerName, int difficulty, int maxPlayers, string password)
   {
     _maxPlayers = Mathf.Clamp (maxPlayers, 2, MaxPlayers);
+    _serverPassword = password;
     Multiplayer.PeerConnected += OnClientConnectedToServer;
     Multiplayer.PeerDisconnected += OnClientDisconnectedFromServer;
     AddPlayer (Multiplayer.GetUniqueId(), playerName, Player.MaxHealthFor (difficulty));
   }
 
-  private void OnJoinGameSuccess (string playerName, int difficulty)
+  private void OnJoinGameSuccess (string playerName, int difficulty, string password)
   {
     _selfPlayerName = playerName;
     _selfDifficulty = difficulty;
-    Multiplayer.ServerDisconnected += () => EmitSignal (SignalName.ServerShutDown);
-    RpcId (1, MethodName.RequestPlayerSlot, playerName, difficulty);
+    if (!Multiplayer.IsConnected (MultiplayerApi.SignalName.ServerDisconnected, _onServerDisconnectedCallable)) Multiplayer.Connect (MultiplayerApi.SignalName.ServerDisconnected, _onServerDisconnectedCallable);
+    RpcId (1, MethodName.RequestPlayerSlot, playerName, difficulty, password);
+  }
+
+  private void OnServerDisconnected() => EmitSignal (SignalName.ServerShutDown);
+
+  // A canceled join (issue #91) drops the connection on purpose; unhooking first
+  // keeps the resulting disconnect from reading as a server shutdown.
+  private void OnJoinCanceled()
+  {
+    if (!Multiplayer.IsConnected (MultiplayerApi.SignalName.ServerDisconnected, _onServerDisconnectedCallable)) return;
+    Multiplayer.Disconnect (MultiplayerApi.SignalName.ServerDisconnected, _onServerDisconnectedCallable);
   }
 
   private void OnClientDisconnectedFromServer (long id)
@@ -235,5 +272,22 @@ public partial class World : Node3D
     if (player == null) return;
     _networkManager.NotifyPlayerLeftGame (player.DisplayName);
     player.QueueFree();
+  }
+
+  // Golden crown (issue #89): every peer computes the score leader locally from the
+  // replicated Scores each second - no new networking; ties break by the
+  // leaderboard's sort order (highest score, then name).
+  private void StartCrownTicker()
+  {
+    var timer = new Timer { WaitTime = 1.0, Autostart = true };
+    timer.Timeout += UpdateCrownHolder;
+    AddChild (timer);
+  }
+
+  private void UpdateCrownHolder()
+  {
+    var players = GetPlayers().ToList();
+    var leader = players.OrderByDescending (player => player.Score).ThenBy (player => player.DisplayName).FirstOrDefault();
+    players.ForEach (player => player.SetCrowned (player == leader));
   }
 }
