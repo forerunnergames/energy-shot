@@ -108,6 +108,21 @@ public partial class Player : CharacterBody3D
     }
   }
 
+  // Current zap streak, replicated so every peer can render the "on fire" glow &
+  // the pulsing leaderboard entry at 3+ (see issue #77).
+  [Export]
+  public int ZapStreakCount
+  {
+    get => _zapStreakCount;
+    set
+    {
+      _zapStreakCount = value;
+      ApplyStreakGlow();
+    }
+  }
+
+  public bool IsOnStreak => ZapStreakCount >= 3;
+
   [Export] public float SpawnArmorSeconds = 5.0f;
   [Export] public float MouseSensitivity = 0.0025f;
   [Export] public float FullAutoDurationSeconds = 3.0f;
@@ -131,10 +146,11 @@ public partial class Player : CharacterBody3D
   [Export] public float SlideCooldownSeconds = 5.0f;
   [Export] public float SlideCameraHeight = 0.6f;
   [Export] public float CrouchHeightScale = 0.6f;
-  [Export] public float CrouchSpeedMultiplier = 0.5f;
+  [Export] public float CrouchSpeedMultiplier = 0.3f;
   [Export] public float RocketBoostMultiplier = 1.5f;
   [Export] public float RocketBoostRange = 3.0f;
-  [Export] public float KnockbackStrength = 10.0f;
+  [Export] public float KnockbackStrength = 16.0f;
+  [Export] public int KillHealAmount = 50;
   [Export] public float PunchKnockbackScale = 0.33f;
   [Export] public float JumpVelocity = 20.0f;
   [Export] public Vector3 Gravity = new(0.0f, -50.0f, 0.0f);
@@ -152,6 +168,8 @@ public partial class Player : CharacterBody3D
   private ulong _spawnArmorEndMs;
   private bool _sliding;
   private bool _crouching;
+  private int _zapStreakCount;
+  private OmniLight3D _streakLight = null!;
   private float _slideSecondsLeft;
   private float _slideCooldownLeft;
   private float _standingCameraHeight;
@@ -209,6 +227,7 @@ public partial class Player : CharacterBody3D
     _hitRedTimer = GetNode <Timer> ("HitRedTimer");
     _nameTag = GetNode <Label3D> ("NameTag");
     _healthTag = GetNode <Sprite3D> ("HealthTag");
+    _streakLight = GetNode <OmniLight3D> ("StreakLight");
     _healthBar = GetNode <ProgressBar> ("SubViewport/HealthBar");
     _punchSound = GetNode <AudioStreamPlayer> ("PunchSound");
     _hitmarkerSound = GetNode <AudioStreamPlayer> ("HitmarkerSound");

@@ -199,9 +199,13 @@ theme_override_font_sizes/font_size = 48
 text = "Leaderboard"
 horizontal_alignment = 1
 
-[node name="Entries" type="Label" parent="Leaderboard/MarginContainer/VBoxContainer"]
+[node name="Entries" type="RichTextLabel" parent="Leaderboard/MarginContainer/VBoxContainer"]
 layout_mode = 2
-theme_override_font_sizes/font_size = 38
+theme_override_font_sizes/normal_font_size = 38
+theme_override_font_sizes/bold_font_size = 40
+bbcode_enabled = true
+fit_content = true
+scroll_active = false
 text = ""
 
 [node name="LeaderboardTimer" type="Timer" parent="."]

@@ -82,13 +82,14 @@ size_flags_vertical = 3
 size_flags_stretch_ratio = 1.2
 mouse_filter = 2
 
-[node name="TextureButton" type="Button" parent="MarginContainer/VBoxContainer/Expand"]
-custom_minimum_size = Vector2(360, 48)
+[node name="Hint" type="Label" parent="MarginContainer/VBoxContainer/Expand"]
 layout_mode = 2
 size_flags_horizontal = 4
 size_flags_vertical = 3
-theme_override_font_sizes/font_size = 30
-text = "Messages  ▼"
+modulate = Color(1, 1, 1, 0.45)
+theme_override_font_sizes/font_size = 22
+text = "Tab — messages"
+horizontal_alignment = 1
 
 [node name="History" type="MarginContainer" parent="."]
 visible = false
@@ -179,10 +180,11 @@ size_flags_horizontal = 3
 size_flags_vertical = 9
 mouse_filter = 2
 
-[node name="TextureButton" type="Button" parent="History/VBoxContainer/Collapse"]
-custom_minimum_size = Vector2(360, 48)
+[node name="Hint" type="Label" parent="History/VBoxContainer/Collapse"]
 layout_mode = 2
 size_flags_horizontal = 4
 size_flags_vertical = 3
-theme_override_font_sizes/font_size = 30
-text = "Messages  ▲"
+modulate = Color(1, 1, 1, 0.45)
+theme_override_font_sizes/font_size = 22
+text = "Tab — close"
+horizontal_alignment = 1

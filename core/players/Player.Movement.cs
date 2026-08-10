@@ -146,6 +146,7 @@ public partial class Player
   // input lock, so respawns are no longer instant teleports into the fight.
   private async void Respawn()
   {
+    ZapStreakCount = 0; // Any respawn ends the streak.
     Health = MaxHealth;
     Velocity = Vector3.Zero;
     Position = CalculateRandomSpawnPosition();

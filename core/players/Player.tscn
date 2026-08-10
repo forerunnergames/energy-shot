@@ -87,6 +87,9 @@ properties/11/replication_mode = 2
 properties/12/path = NodePath(".:Crouching")
 properties/12/spawn = true
 properties/12/replication_mode = 2
+properties/13/path = NodePath(".:ZapStreakCount")
+properties/13/spawn = true
+properties/13/replication_mode = 2
 
 [node name="Player" type="CharacterBody3D"]
 collision_layer = 2
@@ -100,6 +103,13 @@ billboard = 1
 no_depth_test = true
 text = "PlayerName"
 outline_size = 20
+
+[node name="StreakLight" type="OmniLight3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, 0)
+visible = false
+light_color = Color(1, 0.6, 0.15, 1)
+light_energy = 4.0
+omni_range = 9.0
 
 [node name="HealthTag" type="Sprite3D" parent="."]
 transform = Transform3D(-0.18, 0, 6.34182e-08, 0, 0.1008, 0, -2.71793e-08, 0, -0.42, 0, 2.1, 0)

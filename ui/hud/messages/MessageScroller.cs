@@ -27,8 +27,6 @@ public partial class MessageScroller : Control
   private Label _messageLabel2 = null!;
   private Label _messageLabel3 = null!;
   private Label _messageLabel4 = null!;
-  private Button _expandMessagesButton = null!;
-  private Button _collapseMessagesButton = null!;
   private MarginContainer _messageContainer = null!;
   private MarginContainer _messageHistoryContainer = null!;
   private RichTextLabel _messageHistoryLabel = null!;
@@ -83,11 +81,7 @@ public partial class MessageScroller : Control
     _messageContainer = GetNode <MarginContainer> ("MarginContainer");
     _messageHistoryContainer = GetNode <MarginContainer> ("History");
     _messageHistoryLabel = GetNode <RichTextLabel> ("History/VBoxContainer/MarginContainer/RichTextLabel");
-    _expandMessagesButton = GetNode <Button> ("MarginContainer/VBoxContainer/Expand/TextureButton");
-    _collapseMessagesButton = GetNode <Button> ("History/VBoxContainer/Collapse/TextureButton");
     _messageTimer = GetNode <Timer> ("MessageTimer");
-    _expandMessagesButton.Pressed += _OnExpandMessagesButtonPressed;
-    _collapseMessagesButton.Pressed += _OnCollapseMessagesButtonPressed;
     _messageTimer.Timeout += _OnMessageTimerTimeout;
     Reset();
   }
@@ -115,16 +109,25 @@ public partial class MessageScroller : Control
     HideMessageHistory();
   }
 
-  private void _OnExpandMessagesButtonPressed()
+  // Tab toggles the full message history - a clickable button can't work while the
+  // mouse is captured for aiming (see issue #74).
+  public override void _UnhandledInput (InputEvent @event)
   {
-    ShowMessageHistory();
-    EmitSignal (SignalName.OnMessageScrollerExpanded);
+    if (!Input.IsActionJustPressed ("messages")) return;
+    ToggleMessageHistory();
   }
 
-  private void _OnCollapseMessagesButtonPressed()
+  private void ToggleMessageHistory()
   {
-    HideMessageHistory();
-    EmitSignal (SignalName.OnMessageScrollerCollapsed);
+    if (IsMessageHistoryVisible())
+    {
+      HideMessageHistory();
+      EmitSignal (SignalName.OnMessageScrollerCollapsed);
+      return;
+    }
+
+    ShowMessageHistory();
+    EmitSignal (SignalName.OnMessageScrollerExpanded);
   }
 
   private void DisplayNextMessage()

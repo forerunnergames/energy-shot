@@ -233,7 +233,11 @@ public partial class Player
   {
     if (!IsMultiplayerAuthority()) return;
     ++Score;
-    GD.Print ($"{DisplayName}: I scored!");
+    ++ZapStreakCount;
+    // Zapping someone out patches you up a bit (see issue #76).
+    Health = Mathf.Min (MaxHealth, Health + KillHealAmount);
+    EmitSignal (SignalName.HealthChanged, Health);
+    GD.Print ($"{DisplayName}: I scored! (streak {ZapStreakCount})");
     EmitSignal (SignalName.Scored, DisplayName, shotPlayerName);
   }
 }
