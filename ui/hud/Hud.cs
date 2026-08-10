@@ -148,6 +148,7 @@ public partial class Hud : Control
   private void OnPlayerRespawnedFell (string playerName)
   {
     if (!IsSelf (playerName)) return;
+    UpdateScoreLabel(); // Falling costs a point; show it immediately.
     NotifyMessage (MessageGenerator.OnPlayerRespawnedFell (isSelf: true, playerName, out var messageIndex), MessageGenerator.OnPlayerRespawnedFell (isSelf: false, playerName, messageIndex));
     ++_fallStreak;
     if (_fallStreak >= 3) NotifyMessage (MessageGenerator.OnFallStreak (playerName), MessageGenerator.OnFallStreak (playerName));

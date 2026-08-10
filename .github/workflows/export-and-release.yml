@@ -169,22 +169,35 @@ jobs:
       # Skipped gracefully if the deploy secrets are absent.
       - name: Deploy dedicated server
         continue-on-error: true
-        if: env.DROPLET_HOST != ''
+        if: ${{ secrets.DROPLET_HOST != '' }}
         env:
           DROPLET_HOST: ${{ secrets.DROPLET_HOST }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
         run: |
+          # Key is removed on every exit path; host key is pinned, not trusted-on-first-use.
+          trap 'rm -f droplet_key known_hosts' EXIT
           echo "${{ secrets.DROPLET_SSH_KEY }}" > droplet_key
           chmod 600 droplet_key
-          ssh -i droplet_key -o StrictHostKeyChecking=accept-new root@"$DROPLET_HOST" bash -s <<'DEPLOY'
+          echo "${{ secrets.DROPLET_HOST_KEY }}" > known_hosts
+          # TAG & REPO are passed as environment values (never interpolated into the
+          # remote script) so a hostile ref name can't inject shell commands.
+          ssh -i droplet_key -o UserKnownHostsFile=known_hosts -o StrictHostKeyChecking=yes \
+            root@"$DROPLET_HOST" "REPO='$REPO' TAG='$TAG' bash -s" <<'DEPLOY'
           set -e
-          cd /opt/energy-shot/build
-          rm -rf ./*
-          curl -sL -o server.zip "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/EnergyShot-Linux.Server-${{ github.ref_name }}.zip"
+          # Stage & validate the new build before touching the running server.
+          rm -rf /opt/energy-shot/staging
+          mkdir -p /opt/energy-shot/staging
+          cd /opt/energy-shot/staging
+          curl -sL -o server.zip "https://github.com/$REPO/releases/download/$TAG/EnergyShot-Linux.Server-$TAG.zip"
           unzip -oq server.zip && rm server.zip
+          test -f energy-shot-server.x86_64 || { echo "server binary missing from archive"; exit 1; }
           chmod +x energy-shot-server.x86_64
+          # Swap in the validated build & restart.
+          rm -rf /opt/energy-shot/build
+          mv /opt/energy-shot/staging /opt/energy-shot/build
           chown -R game:game /opt/energy-shot
           systemctl restart energy-shot
           sleep 3
           systemctl is-active energy-shot
           DEPLOY
-          rm droplet_key

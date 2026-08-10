@@ -26,7 +26,7 @@ A fast, friendly multiplayer laser-tag arena FPS built with Godot 4 (.NET/C#). N
 
 ## Multiplayer
 
-The easiest way to play: **Join Game** — the official dedicated server address is pre-filled, so just pick a name & difficulty and jump in. (Each release deploys to the official server automatically.)
+The easiest way to play: **Join Game** — the official dedicated server address is pre-filled, so just pick a name & difficulty and jump in. (Releases deploy to the official server automatically when deploy credentials are configured.)
 
 Prefer to host your own? Host from the main menu — UPnP discovers your address; enable UPnP on your router or forward UDP port **55556**.
 
