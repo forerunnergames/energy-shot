@@ -279,9 +279,10 @@ public partial class PlaytestDriver : Node
       {
         if (condition()) return true;
       }
-      catch (Exception)
+      catch (Exception e)
       {
-        // Treat as not-yet-true; the timeout will surface the failure.
+        // Treat as not-yet-true; the timeout surfaces the failure & the log says why.
+        GD.Print ($"PLAYTEST: wait condition threw: {e.Message}");
       }
 
       await Task.Delay (100);
