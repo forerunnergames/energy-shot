@@ -1,16 +1,21 @@
+using com.forerunnergames.energyshot.players;
 using Godot;
 
 namespace com.forerunnergames.energyshot.weapons;
 
-// A lobbed banana that arcs under gravity & explodes on impact with a big yellow
-// flash (issue #61). Only the shooter's own banana is "live" (reports the blast);
-// other peers spawn visual-only copies. Impacts are detected by sweeping a ray
-// along the path traveled each physics frame, same as LaserBolt.
+// A lobbed banana grenade (issues #61 & #70): launched fast on a proper gravity arc,
+// it bounces & slides off surfaces (dampened) with a short fuse lit by first contact,
+// explodes instantly on a direct player hit, & shakes every nearby camera. Only the
+// shooter's own banana is "live" (reports the blast); other peers spawn visual-only
+// copies. Impacts are detected by sweeping a ray along the path traveled each physics
+// frame, same as LaserBolt.
 public partial class BananaProjectile : Node3D
 {
-  [Export] public float Speed = 22.0f;
-  [Export] public float GravityAcceleration = 30.0f;
-  [Export] public float MaxLifetimeSeconds = 6.0f;
+  [Export] public float Speed = 40.0f;
+  [Export] public float GravityAcceleration = 24.0f;
+  [Export] public float MaxLifetimeSeconds = 8.0f;
+  [Export] public float FuseSeconds = 1.2f;
+  [Export] public float Restitution = 0.55f;
   [Export] public float SpinRadiansPerSecond = 10.0f;
   [Export] public float FlashRadius = 6.0f;
   [Export] public float FlashSeconds = 0.4f;
@@ -20,6 +25,8 @@ public partial class BananaProjectile : Node3D
   private Vector3 _velocity;
   private float _age;
   private bool _isLive;
+  private bool _fuseLit;
+  private float _fuseSecondsLeft;
   private Rid _shooterRid;
   private MeshInstance3D _mesh = null!;
 
@@ -42,8 +49,9 @@ public partial class BananaProjectile : Node3D
   {
     var dt = (float)delta;
     _age += dt;
+    if (_fuseLit) _fuseSecondsLeft -= dt;
 
-    if (_age > MaxLifetimeSeconds)
+    if (_age > MaxLifetimeSeconds || (_fuseLit && _fuseSecondsLeft <= 0.0f))
     {
       Explode (GlobalPosition);
       return;
@@ -57,19 +65,44 @@ public partial class BananaProjectile : Node3D
     query.HitFromInside = true;
     var hit = GetWorld3D().DirectSpaceState.IntersectRay (query);
 
-    if (hit.Count > 0)
+    if (hit.Count == 0)
+    {
+      GlobalPosition = to;
+      return;
+    }
+
+    // A direct player hit skips the bounce: instant boom (issue #70).
+    if (hit["collider"].AsGodotObject() is CharacterBody3D)
     {
       Explode ((Vector3)hit["position"]);
       return;
     }
 
-    GlobalPosition = to;
+    Bounce (hit);
+  }
+
+  // Surfaces don't stop the banana outright: it bounces & slides, dampened each
+  // contact, & the first contact lights the fuse (issue #70).
+  private void Bounce (Godot.Collections.Dictionary hit)
+  {
+    LightFuse();
+    var normal = (Vector3)hit["normal"];
+    _velocity = _velocity.Bounce (normal) * Restitution;
+    GlobalPosition = (Vector3)hit["position"] + normal * 0.05f;
+  }
+
+  private void LightFuse()
+  {
+    if (_fuseLit) return;
+    _fuseLit = true;
+    _fuseSecondsLeft = FuseSeconds;
   }
 
   private void Explode (Vector3 origin)
   {
     if (_isLive) EmitSignal (SignalName.Exploded, origin);
     SpawnFlash (origin);
+    Player.NotifyExplosionAt (origin); // Every peer's own camera shakes if nearby (issue #70).
     QueueFree();
   }
 

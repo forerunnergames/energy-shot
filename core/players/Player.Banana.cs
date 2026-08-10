@@ -21,11 +21,16 @@ public partial class Player
     }
   }
 
+  [Signal] public delegate void SplatteredEventHandler();
+  // 0..1 readiness for the HUD's Banana cooldown bar (1 = ready), see issue #70.
+  public float BananaReadyFraction => _bananaLauncher.CooldownFraction;
+
   private void UpdateWeaponVisibility()
   {
     if (_bananaLauncher == null) return;
     _bananaLauncher.Visible = _isBananaEquipped;
     _energyWeapon.Visible = !_isBananaEquipped;
+    UpdateHandRestPositions(); // Hands follow the visible weapon's grip (issue #71).
   }
 
   private void UpdateWeaponSelection()
@@ -100,6 +105,8 @@ public partial class Player
     if (!IsMultiplayerAuthority()) return;
     if (SpawnArmor) return;
     GD.Print ($"{DisplayName}: I was blasted by {firedByPlayerName}'s banana!");
+    ApplyBananaStun(); // Flat 5s stun synced with the splatter overlay (issue #70).
+    EmitSignal (SignalName.Splattered);
     ApplyBlastKnockback (blastOrigin);
     // Blast knockback is applied radially above; no directional knockback on top.
     ApplyDamage (energy, firedByPlayerName, knockbackScale: 0.0f, isSurvivableAtFullHealth: true);

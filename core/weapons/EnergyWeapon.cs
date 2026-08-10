@@ -64,6 +64,18 @@ public partial class EnergyWeapon : Node3D
     if (_cooldownLeft > 0.0f || _isFullAutoMode) return;
     SpinUp();
   }
+
+  // Cold-starts the weapon on respawn (issue #67): cancels the charge state, spin
+  // tween, charging sound, & charged color instantly, so dying mid-charge can't
+  // carry a max-energy shot into the next life.
+  public void ResetCharge()
+  {
+    IsSpinningUp = false;
+    _chargingSound.Stop();
+    _tween?.Kill();
+    _currentRotationSpeed = MinRotationSpeed;
+    WeaponColor = _isFullAutoMode ? FullAutoColor : _normalColor;
+  }
   private void Rotate (double delta) => _pivot.Rotate (Vector3.Right, _currentRotationSpeed * (float)delta);
   private bool IsRecoilRecovered() => _recoilOffset.Length() <= 0.01f;
   private float CalculateEnergy() => _currentRotationSpeed / MaxRotationSpeed;
