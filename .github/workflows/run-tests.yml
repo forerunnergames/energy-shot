@@ -14,9 +14,6 @@ on:
   pull_request:
     branches:
       - '**'
-    # Don't run again for report uploads during a pull request.
-    paths-ignore:
-      - '.github/workflows/*'
   workflow_call:
     inputs:
       github_ref:
