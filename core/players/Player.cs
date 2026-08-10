@@ -82,6 +82,32 @@ public partial class Player : CharacterBody3D
     }
   }
 
+  // Replicated like SpawnArmor so every peer renders (& can shoot at) the horizontal
+  // slide pose (see issue #41).
+  [Export]
+  public bool Sliding
+  {
+    get => _sliding;
+    set
+    {
+      _sliding = value;
+      ApplySlidePose();
+    }
+  }
+
+  // Replicated like Sliding so every peer renders (& can shoot at) the shorter
+  // crouched hitbox (see issue #51).
+  [Export]
+  public bool Crouching
+  {
+    get => _crouching;
+    set
+    {
+      _crouching = value;
+      ApplyCrouchScale();
+    }
+  }
+
   [Export] public float SpawnArmorSeconds = 5.0f;
   [Export] public float MouseSensitivity = 0.0025f;
   [Export] public float FullAutoDurationSeconds = 3.0f;
@@ -100,6 +126,16 @@ public partial class Player : CharacterBody3D
   [Export] public float CameraKickRadians = 0.06f;
   [Export] public float CameraKickRecoverySpeed = 0.4f;
   [Export] public float Speed = 7.0f;
+  [Export] public float SlideSpeedMultiplier = 2.0f;
+  [Export] public float SlideDurationSeconds = 5.0f;
+  [Export] public float SlideCooldownSeconds = 5.0f;
+  [Export] public float SlideCameraHeight = 0.6f;
+  [Export] public float CrouchHeightScale = 0.6f;
+  [Export] public float CrouchSpeedMultiplier = 0.5f;
+  [Export] public float RocketBoostMultiplier = 1.5f;
+  [Export] public float RocketBoostRange = 3.0f;
+  [Export] public float KnockbackStrength = 10.0f;
+  [Export] public float PunchKnockbackScale = 0.33f;
   [Export] public float JumpVelocity = 20.0f;
   [Export] public Vector3 Gravity = new(0.0f, -50.0f, 0.0f);
   [Export] public float MinNameTagScale = 1.0f;
@@ -114,6 +150,12 @@ public partial class Player : CharacterBody3D
   private readonly RandomNumberGenerator _rng = new();
   private bool _spawnArmor;
   private ulong _spawnArmorEndMs;
+  private bool _sliding;
+  private bool _crouching;
+  private float _slideSecondsLeft;
+  private float _slideCooldownLeft;
+  private float _standingCameraHeight;
+  private CollisionShape3D _collisionShape = null!;
   private NetworkManager _networkManager = null!;
   private Node3D _spawnRoom = null!;
   private MeshInstance3D _mesh = null!;
@@ -158,6 +200,7 @@ public partial class Player : CharacterBody3D
     _laserBoltScene = ResourceLoader.Load <PackedScene> ("res://core/weapons/LaserBolt.tscn");
     _bananaProjectileScene = ResourceLoader.Load <PackedScene> ("res://core/weapons/BananaProjectile.tscn");
     _mesh = GetNode <MeshInstance3D> ("MeshInstance3D");
+    _collisionShape = GetNode <CollisionShape3D> ("CollisionShape3D");
     _energyWeapon = GetNode <EnergyWeapon> ("Camera3D/EnergyWeapon");
     _bananaLauncher = GetNode <BananaLauncher> ("Camera3D/BananaLauncher");
     UpdateWeaponVisibility();
@@ -183,6 +226,7 @@ public partial class Player : CharacterBody3D
       _hitRedTimer.Timeout += RestoreBaseColor;
       _crossHairs.Hide();
       RestoreBaseColor();
+      ApplySlidePose();
       return;
     }
 
@@ -193,6 +237,7 @@ public partial class Player : CharacterBody3D
     _energyWeapon.ShotFired += OnWeaponShotFired;
     _camera = GetNode <Camera3D> ("Camera3D");
     _camera.Current = true;
+    _standingCameraHeight = _camera.Position.Y;
     _isInputEnabled = true;
     Input.MouseMode = Input.MouseModeEnum.Captured;
     Position = CalculateRandomSpawnPosition();
@@ -224,6 +269,8 @@ public partial class Player : CharacterBody3D
     UpdateFullAuto (delta);
     UpdatePunch (delta);
     UpdateCameraKick (delta);
+    UpdateSlide (delta);
+    UpdateCrouch();
     var velocity = Velocity;
     if (IsFalling()) Fall (ref velocity, delta);
     if (IsJumping()) Jump (ref velocity);
