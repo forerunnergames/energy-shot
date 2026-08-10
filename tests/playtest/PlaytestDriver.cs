@@ -126,6 +126,11 @@ public partial class PlaytestDriver : Node
     await WaitUntil (() => victim.ZapStreakCount == 3, 15, "victim's simulated 3-streak replicated to shooter");
 
     // Punch phase: walk up to the victim & punch them; verify melee damage lands.
+    // Fists are weapon slot 1 & punching requires them selected (issue #82); unarmed
+    // players already default to fists, so this press is just a defensive re-select.
+    PressAction ("weapon_1");
+    await Task.Delay (100);
+    ReleaseAction ("weapon_1");
     var healthBeforePunch = victim.Health;
     await WaitUntil (() => ApproachedVictim (victim), 30, "walked into punch range of victim");
 
@@ -146,6 +151,12 @@ public partial class PlaytestDriver : Node
     // laser pickup the WeaponSpawner keeps in the spawn room in --playtest mode.
     await WaitUntil (() => WalkedTo (WeaponSpawner.PlaytestLaserPosition), 45, "walked to the playtest laser pickup");
     await WaitUntil (() => Self.Holds (HeldWeapon.Laser), 15, "collected the laser pickup");
+
+    // The laser is weapon slot 2 (issue #82); the first pickup auto-equips, so this
+    // press is just a defensive re-select before the shooting phases.
+    PressAction ("weapon_2");
+    await Task.Delay (100);
+    ReleaseAction ("weapon_2");
 
     // Charged shots until the victim dies (shooter is told via NotifyScored -> Score).
     // Retry until a bolt actually spawns each attempt - under CI load, physics time

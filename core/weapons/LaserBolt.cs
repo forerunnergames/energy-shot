@@ -13,8 +13,9 @@ public partial class LaserBolt : Node3D
   [Export] public float MaxLifetimeSeconds = 4.0f;
   [Export] public float PierceEnergyThreshold = 0.95f;
   [Signal] public delegate void HitPlayerEventHandler (CharacterBody3D player, float energy);
-  private static readonly Color LowEnergyColor = new(0.2f, 0.6f, 3.0f);
-  private static readonly Color HighEnergyColor = new(3.0f, 0.2f, 0.2f);
+  // Baseline bright red at every charge level (issue #92); charge only makes it hotter.
+  private static readonly Color LowEnergyColor = new(3.0f, 0.12f, 0.1f);
+  private static readonly Color HighEnergyColor = new(6.0f, 0.3f, 0.15f);
   private Vector3 _velocity;
   private float _energy;
   private float _age;
@@ -93,6 +94,8 @@ public partial class LaserBolt : Node3D
     LookAt (GlobalPosition + direction, direction.Abs().IsEqualApprox (Vector3.Up) ? Vector3.Forward : Vector3.Up);
   }
 
+  // Thick, bright, & strongly emissive even at minimum charge (issue #92), with some
+  // charge scaling kept on top.
   private void ApplyEnergyVisuals()
   {
     var mesh = GetNode <MeshInstance3D> ("Mesh");
@@ -101,7 +104,8 @@ public partial class LaserBolt : Node3D
     var color = LowEnergyColor.Lerp (HighEnergyColor, _energy);
     material.AlbedoColor = color;
     material.Emission = color;
-    var thickness = 0.5f + _energy;
+    material.EmissionEnergyMultiplier = 3.0f + _energy * 2.0f;
+    var thickness = 1.5f + _energy * 1.5f;
     mesh.Scale = new Vector3 (thickness, thickness, 1.0f + _energy * 2.0f);
   }
 }
