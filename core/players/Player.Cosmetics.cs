@@ -27,6 +27,29 @@ public partial class Player
     _hitRedTimer.Start();
   }
 
+  // Golden crown for the current score leader (issue #89): each peer computes the
+  // leader locally in World from the replicated Scores & toggles this; the crown
+  // floats above the name tag & slowly spins while worn.
+  private Node3D? _crown;
+  private Tween? _crownSpin;
+
+  public void SetCrowned (bool isCrowned)
+  {
+    _crown ??= GetNodeOrNull <Node3D> ("Crown");
+    if (_crown == null || _crown.Visible == isCrowned) return;
+    _crown.Visible = isCrowned;
+    UpdateCrownSpin();
+  }
+
+  private void UpdateCrownSpin()
+  {
+    _crownSpin?.Kill();
+    _crownSpin = null;
+    if (_crown is not { Visible: true }) return;
+    _crownSpin = CreateTween().SetLoops();
+    _crownSpin.TweenProperty (_crown, "rotation:y", Mathf.Tau, 4.0).From (0.0f);
+  }
+
   private void UpdateNameTag()
   {
     if (_nameTag == null) return;

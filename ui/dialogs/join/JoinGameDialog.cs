@@ -5,12 +5,16 @@ namespace com.forerunnergames.energyshot.ui.dialogs;
 
 public partial class JoinGameDialog : Control
 {
-  [Signal] public delegate void JoinGameSuccessEventHandler (string playerName, int difficulty);
+  [Signal] public delegate void JoinGameSuccessEventHandler (string playerName, int difficulty, string password);
   [Signal] public delegate void ClosedEventHandler();
+  // Hands the join attempt off to the animated joining screen (issue #91).
+  [Signal] public delegate void ConnectStartedEventHandler (string address);
+  [Signal] public delegate void ConnectFailedEventHandler();
   private Button _closeButton = null!;
   private Button _joinGameButton = null!;
   private LineEdit _playerName = null!;
   private OptionButton _difficulty = null!;
+  private LineEdit _password = null!;
   private LineEdit _serverAddress = null!;
   private Label _middleText = null!;
   private Label _bottomText = null!;
@@ -39,6 +43,7 @@ public partial class JoinGameDialog : Control
     _difficulty = GetNode <OptionButton> ("PanelContainer/MarginContainer/VBoxContainer/Difficulty");
     // The dropdown's popup items don't inherit the button's font size override.
     _difficulty.GetPopup().AddThemeFontSizeOverride ("font_size", 90);
+    _password = GetNode <LineEdit> ("PanelContainer/MarginContainer/VBoxContainer/Password");
     _serverAddress = GetNode <LineEdit> ("PanelContainer/MarginContainer/VBoxContainer/ServerAddress");
     _middleText = GetNode <Label> ("PanelContainer/MarginContainer/VBoxContainer/MiddleText");
     _bottomText = GetNode <Label> ("PanelContainer/MarginContainer/VBoxContainer/BottomText");
@@ -58,6 +63,7 @@ public partial class JoinGameDialog : Control
     _serverPort = serverPort;
     _bottomText.Text = string.Empty;
     if (string.IsNullOrEmpty (_playerName.Text)) _playerName.Text = Settings.PlayerName;
+    if (string.IsNullOrEmpty (_password.Text)) _password.Text = Settings.LastJoinPassword;
     if (string.IsNullOrEmpty (_serverAddress.Text)) _serverAddress.Text = Settings.LastJoinAddress;
     _difficulty.Selected = Settings.Difficulty;
     UpdateJoinGameButtonState();
@@ -95,7 +101,14 @@ public partial class JoinGameDialog : Control
 
     // Only assign a working peer, so a failed attempt doesn't leave a dead peer active (see issue #24).
     Multiplayer.MultiplayerPeer = _peer;
+
+    // The animated joining screen takes over from here (issue #91).
+    Hide();
+    EmitSignal (SignalName.ConnectStarted, $"{_serverAddress.Text}:{_serverPort}");
   }
+
+  // Cancel from the joining screen (issue #91): stop the attempt & drop the peer.
+  public void Abort() => StopConnecting();
 
   private void OnCloseButtonPressed()
   {
@@ -111,15 +124,19 @@ public partial class JoinGameDialog : Control
     Settings.PlayerName = _playerName.Text;
     Settings.LastJoinAddress = _serverAddress.Text;
     Settings.Difficulty = _difficulty.Selected;
+    Settings.LastJoinPassword = _password.Text;
     GD.Print ($"Successfully connected to server at [{_serverAddress.Text}:{_serverPort}]");
-    EmitSignal (SignalName.JoinGameSuccess, _playerName.Text, _difficulty.Selected);
+    EmitSignal (SignalName.JoinGameSuccess, _playerName.Text, _difficulty.Selected, _password.Text);
   }
 
+  // Failures return here from the joining screen, showing the error in this dialog as before (issue #91).
   private void OnError (string error)
   {
     StopConnecting();
     _bottomText.Text = error;
     GD.Print (error);
+    Show();
+    EmitSignal (SignalName.ConnectFailed);
   }
 
   private void StopConnecting()
