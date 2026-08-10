@@ -1,0 +1,63 @@
+using com.forerunnergames.energyshot.weapons;
+using Godot;
+
+namespace com.forerunnergames.energyshot.players;
+
+// Weapon lifecycle (issue #72): players spawn unarmed & arm up from world pickups;
+// death drops everything held at the death spot. The server-side WeaponSpawner owns
+// pickup spawning, despawning, & the laser/banana caps.
+public partial class Player
+{
+  // Replicated like SpawnArmor so every peer knows what this player carries & renders
+  // the right weapon model (or none while unarmed).
+  [Export]
+  public HeldWeapon HeldWeapon
+  {
+    get => _heldWeapon;
+    set
+    {
+      _heldWeapon = value;
+      UpdateWeaponVisibility();
+    }
+  }
+
+  private HeldWeapon _heldWeapon = HeldWeapon.None;
+  private WeaponSpawner? _weaponSpawner;
+  public bool Holds (HeldWeapon type) => (_heldWeapon & type) != 0;
+  private bool HasLaser => Holds (HeldWeapon.Laser);
+  private bool HasBanana => Holds (HeldWeapon.Banana);
+  private WeaponSpawner Spawner => _weaponSpawner ??= GetNode <WeaponSpawner> ("/root/World/WeaponSpawner");
+  // Falling off the world: held weapons return to the spawn pool via the caps instead
+  // of dropping as unreachable pickups below the map.
+  private void ClearHeldWeapons() => HeldWeapon = HeldWeapon.None;
+
+  // Called back (via the WeaponSpawner's ConfirmPickup RPC) after the server despawns
+  // the claimed pickup for everyone.
+  public void GrantWeapon (HeldWeapon type)
+  {
+    var wasUnarmed = _heldWeapon == HeldWeapon.None;
+    HeldWeapon |= type;
+    if (wasUnarmed) IsBananaEquipped = type == HeldWeapon.Banana; // Auto-equip your first weapon.
+    GD.Print ($"{DisplayName}: I picked up a {type}!");
+  }
+
+  // Drops the currently equipped weapon as a world pickup; the punch branch calls
+  // this with a drop chance when a player gets punched.
+  public void DropHeldWeapon()
+  {
+    var type = IsBananaEquipped ? HeldWeapon.Banana : HeldWeapon.Laser;
+    if (!Holds (type)) type = IsBananaEquipped ? HeldWeapon.Laser : HeldWeapon.Banana;
+    if (!Holds (type)) return;
+    HeldWeapon &= ~type;
+    Spawner.SendDropRequest (GlobalPosition, type);
+    GD.Print ($"{DisplayName}: I dropped my {type}!");
+  }
+
+  // Death drops everything carried at the death spot (issue #72).
+  private void DropAllHeldWeapons()
+  {
+    if (_heldWeapon == HeldWeapon.None) return;
+    Spawner.SendDropRequest (GlobalPosition, _heldWeapon);
+    HeldWeapon = HeldWeapon.None;
+  }
+}

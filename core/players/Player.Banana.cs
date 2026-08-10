@@ -25,24 +25,26 @@ public partial class Player
   // 0..1 readiness for the HUD's Banana cooldown bar (1 = ready), see issue #70.
   public float BananaReadyFraction => _bananaLauncher.CooldownFraction;
 
+  // Unarmed players show neither model - fists only (issue #72).
   private void UpdateWeaponVisibility()
   {
     if (_bananaLauncher == null) return;
-    _bananaLauncher.Visible = _isBananaEquipped;
-    _energyWeapon.Visible = !_isBananaEquipped;
+    _bananaLauncher.Visible = HasBanana && _isBananaEquipped;
+    _energyWeapon.Visible = HasLaser && !_isBananaEquipped;
     UpdateHandRestPositions(); // Hands follow the visible weapon's grip (issue #71).
   }
 
+  // Only weapons actually held can be selected (issue #72).
   private void UpdateWeaponSelection()
   {
     if (!_isInputEnabled) return;
-    if (Input.IsActionJustPressed ("weapon_1")) IsBananaEquipped = false;
-    if (Input.IsActionJustPressed ("weapon_2") && _bananaLauncher.CanFire) IsBananaEquipped = true;
+    if (Input.IsActionJustPressed ("weapon_1") && HasLaser) IsBananaEquipped = false;
+    if (Input.IsActionJustPressed ("weapon_2") && HasBanana && _bananaLauncher.CanFire) IsBananaEquipped = true;
   }
 
   private void UpdateBananaLauncher()
   {
-    if (!IsBananaEquipped || !_isInputEnabled) return;
+    if (!IsBananaEquipped || !HasBanana || !_isInputEnabled) return;
     if (!Input.IsActionJustPressed ("shoot")) return;
     if (!_bananaLauncher.CanFire) return;
     FireBanana();

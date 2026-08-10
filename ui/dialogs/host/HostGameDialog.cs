@@ -5,12 +5,13 @@ namespace com.forerunnergames.energyshot.ui.dialogs;
 
 public partial class HostGameDialog : Control
 {
-  [Signal] public delegate void HostGameSuccessEventHandler (string playerName, int difficulty);
+  [Signal] public delegate void HostGameSuccessEventHandler (string playerName, int difficulty, int maxPlayers);
   [Signal] public delegate void ClosedEventHandler();
   private Button _closeButton = null!;
   private Button _hostGameButton = null!;
   private LineEdit _playerName = null!;
   private OptionButton _difficulty = null!;
+  private SpinBox _maxPlayers = null!;
   private LineEdit _serverAddress = null!;
   private Label _middleText = null!;
   private Label _bottomText = null!;
@@ -29,6 +30,7 @@ public partial class HostGameDialog : Control
     _difficulty = GetNode <OptionButton> ("PanelContainer/MarginContainer/VBoxContainer/Difficulty");
     // The dropdown's popup items don't inherit the button's font size override.
     _difficulty.GetPopup().AddThemeFontSizeOverride ("font_size", 90);
+    _maxPlayers = GetNode <SpinBox> ("PanelContainer/MarginContainer/VBoxContainer/MaxPlayers");
     _serverAddress = GetNode <LineEdit> ("PanelContainer/MarginContainer/VBoxContainer/ServerAddress");
     _middleText = GetNode <Label> ("PanelContainer/MarginContainer/VBoxContainer/MiddleText");
     _bottomText = GetNode <Label> ("PanelContainer/MarginContainer/VBoxContainer/BottomText");
@@ -48,6 +50,7 @@ public partial class HostGameDialog : Control
     _bottomText.Text = string.Empty;
     if (string.IsNullOrEmpty (_playerName.Text)) _playerName.Text = Settings.PlayerName;
     _difficulty.Selected = Settings.Difficulty;
+    _maxPlayers.Value = Settings.MaxPlayers;
     UpdateHostGameButtonState();
     Show();
     // UPnP discovery can take seconds; run it off the main thread so the UI stays responsive (see issue #25).
@@ -94,8 +97,9 @@ public partial class HostGameDialog : Control
     GD.Print ($"Successfully hosted server at [{_serverAddress.Text}:{_serverPort}]!");
     Settings.PlayerName = _playerName.Text;
     Settings.Difficulty = _difficulty.Selected;
+    Settings.MaxPlayers = (int)_maxPlayers.Value;
     Hide();
-    EmitSignal (SignalName.HostGameSuccess, _playerName.Text, _difficulty.Selected);
+    EmitSignal (SignalName.HostGameSuccess, _playerName.Text, _difficulty.Selected, (int)_maxPlayers.Value);
   }
 
   private void OnError (string error)

@@ -107,6 +107,7 @@ public partial class PlaytestDriver : Node
     Assert (victim.MaxHealth == 400, $"victim MaxHealth replicated as Beginner 400, got {victim.MaxHealth}");
     Assert (host.MaxHealth == 200, $"host MaxHealth replicated as Expert 200, got {host.MaxHealth}");
     Assert (Self.MaxHealth == 300, $"own MaxHealth is Intermediate 300, got {Self.MaxHealth}");
+    Assert (Self.HeldWeapon == HeldWeapon.None, "spawned unarmed (#72)");
 
     // Movement: hold forward briefly & verify we actually moved.
     var startPosition = Self.GlobalPosition;
@@ -132,6 +133,11 @@ public partial class PlaytestDriver : Node
     }
 
     Assert (victim.Health < healthBeforePunch, $"punch damaged the victim ({healthBeforePunch} -> {victim.Health})");
+
+    // Weapon lifecycle (#72): everyone spawns unarmed, so collect the deterministic
+    // laser pickup the WeaponSpawner keeps in the spawn room in --playtest mode.
+    await WaitUntil (() => WalkedTo (WeaponSpawner.PlaytestLaserPosition), 45, "walked to the playtest laser pickup");
+    await WaitUntil (() => Self.Holds (HeldWeapon.Laser), 15, "collected the laser pickup");
 
     // Charged shots until the victim dies (shooter is told via NotifyScored -> Score).
     // Retry until a bolt actually spawns each attempt - under CI load, physics time
@@ -223,6 +229,34 @@ public partial class PlaytestDriver : Node
     }
 
     AimAt (victim.GlobalPosition + Vector3.Up);
+    Input.ActionPress ("move_forward");
+    return false;
+  }
+
+  // One walk step per poll toward a world position, releasing forward once in reach.
+  private float _lastWalkDistance = float.MaxValue;
+  private int _stuckPolls;
+
+  private bool WalkedTo (Vector3 target)
+  {
+    var flatTarget = new Vector3 (target.X, Self.GlobalPosition.Y, target.Z);
+    var distance = Self.GlobalPosition.DistanceTo (flatTarget);
+
+    if (distance <= 0.8f)
+    {
+      Input.ActionRelease ("move_forward");
+      Input.ActionRelease ("move_left");
+      _lastWalkDistance = float.MaxValue;
+      _stuckPolls = 0;
+      return true;
+    }
+
+    // Unstick: when blocked (e.g. shoving against the other player), strafe around.
+    _stuckPolls = distance > _lastWalkDistance - 0.05f ? _stuckPolls + 1 : 0;
+    _lastWalkDistance = distance;
+    if (_stuckPolls > 8) Input.ActionPress ("move_left");
+    else Input.ActionRelease ("move_left");
+    AimAt (flatTarget);
     Input.ActionPress ("move_forward");
     return false;
   }

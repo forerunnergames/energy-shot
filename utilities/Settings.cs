@@ -34,6 +34,13 @@ public static class Settings
     set => Set ("difficulty", value);
   }
 
+  // Host-chosen player cap (issue #73), remembered like difficulty.
+  public static int MaxPlayers
+  {
+    get => Mathf.Clamp (GetInt ("max_players", core.world.World.MaxPlayers), 2, core.world.World.MaxPlayers);
+    set => Set ("max_players", value);
+  }
+
   private static string Get (string key)
   {
     var config = new ConfigFile();
@@ -41,11 +48,11 @@ public static class Settings
     return (string)config.GetValue (Section, key, string.Empty);
   }
 
-  private static int GetInt (string key)
+  private static int GetInt (string key, int defaultValue = 0)
   {
     var config = new ConfigFile();
     config.Load (FilePath);
-    return (int)config.GetValue (Section, key, 0);
+    return (int)config.GetValue (Section, key, defaultValue);
   }
 
   private static void Set (string key, Variant value)
