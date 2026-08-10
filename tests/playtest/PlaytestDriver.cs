@@ -22,11 +22,15 @@ public partial class PlaytestDriver : Node
   private string _role = string.Empty;
   private string _address = "127.0.0.1";
   private int _boltsSpawned;
-  private Player Self => _world.GetPlayers().First (player => player.IsMultiplayerAuthority());
+  private Player? _self;
+  private Player Self => _self ??= _world.GetPlayers().First (player => player.IsMultiplayerAuthority());
   private Player? FindPlayer (string name) => _world.GetPlayers().FirstOrDefault (player => player.DisplayName == name);
 
   public override void _Ready()
   {
+    // Three instances share the CI runner; uncapped frame loops starve physics &
+    // ENet, dilating in-game time far behind the wall clock this driver waits on.
+    Engine.MaxFps = 30;
     _world = GetNode <World> ("/root/World");
     _world.ChildEnteredTree += node => _boltsSpawned += node is LaserBolt ? 1 : 0;
     var args = OS.GetCmdlineUserArgs();
@@ -115,14 +119,18 @@ public partial class PlaytestDriver : Node
     await WaitUntil (() => !victim.SpawnArmor, 15, "victim's initial spawn armor expired");
 
     // Charged shots until the victim dies (shooter is told via NotifyScored -> Score).
+    // Retry until a bolt actually spawns each attempt - under CI load, physics time
+    // (which drives the weapon cooldown) can lag the wall clock these delays use.
     var kills = 0;
     Self.Scored += (_, _) => ++kills;
 
-    for (var shot = 0; shot < 12 && kills == 0; ++shot)
+    for (var attempt = 0; attempt < 25 && kills == 0; ++attempt)
     {
       AimAt (victim.GlobalPosition + Vector3.Up);
+      var boltsBeforeShot = _boltsSpawned;
       await ChargeAndFire (chargeSeconds: 2.3f);
-      await Task.Delay (700); // Bolt flight + cooldown before next charge.
+      await TryWaitUntil (() => _boltsSpawned > boltsBeforeShot, 3);
+      GD.Print ($"PLAYTEST: shot attempt {attempt}: bolts fired {_boltsSpawned}, victim health {victim.Health}");
     }
 
     Assert (kills == 1, "scored a kill with charged shots");
@@ -207,19 +215,35 @@ public partial class PlaytestDriver : Node
 
   private async Task WaitUntil (Func <bool> condition, float timeoutSeconds, string description)
   {
+    if (await TryWaitUntil (condition, timeoutSeconds))
+    {
+      GD.Print ($"PLAYTEST OK: {description}");
+      return;
+    }
+
+    throw new Exception ($"timed out after {timeoutSeconds}s waiting for: {description}");
+  }
+
+  // Non-throwing wait; a throwing condition (e.g. nodes vanishing mid-disconnect)
+  // counts as false so the caller gets a readable timeout instead of a raw exception.
+  private static async Task <bool> TryWaitUntil (Func <bool> condition, float timeoutSeconds)
+  {
     var deadline = Time.GetTicksMsec() + (ulong)(timeoutSeconds * 1000);
 
     while (Time.GetTicksMsec() < deadline)
     {
-      if (condition())
+      try
       {
-        GD.Print ($"PLAYTEST OK: {description}");
-        return;
+        if (condition()) return true;
+      }
+      catch (Exception)
+      {
+        // Treat as not-yet-true; the timeout will surface the failure.
       }
 
       await Task.Delay (100);
     }
 
-    throw new Exception ($"timed out after {timeoutSeconds}s waiting for: {description}");
+    return false;
   }
 }
