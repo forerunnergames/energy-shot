@@ -46,6 +46,9 @@ public partial class LaserBolt : Node3D
     _velocity.Y -= DropAcceleration * dt; // ponytail: simple laser drop, no drag
     var to = from + _velocity * dt;
     var query = PhysicsRayQueryParameters3D.Create (from, to, exclude: new Godot.Collections.Array <Rid> { _shooterRid });
+    // Point-blank bolts can spawn inside the target's collider; without this the
+    // sweep never registers & the bolt sails through (see issue #52).
+    query.HitFromInside = true;
     var hit = GetWorld3D().DirectSpaceState.IntersectRay (query);
 
     if (hit.Count > 0)
