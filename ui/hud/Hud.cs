@@ -45,7 +45,11 @@ public partial class Hud : Control
   {
     var players = _world.GetPlayers().OrderByDescending (player => player.Score).ThenBy (player => player.DisplayName);
     _leaderboardEntries.Text = string.Join ("\n", players.Select (player => $"{player.DisplayName}  {player.Score}"));
+    UpdateScoreLabel();
   }
+
+  // Score can also drop (fall penalty), so the label reads the replicated value.
+  private void UpdateScoreLabel() => _scoreLabel.Text = $"Score: {_world.SelfPlayer?.Score ?? 0}";
   private bool IsSelf (string playerName) => _selfPlayerName == playerName;
   private void OnKickedFromServer (string reason) => Hide();
   private void OnServerShutDown() => Hide();
@@ -152,7 +156,7 @@ public partial class Hud : Control
   private void OnPlayerScored (int score, string playerName, string shotPlayerName)
   {
     if (!IsSelf (playerName)) return;
-    _scoreLabel.Text = $"Score: {score}";
+    UpdateScoreLabel();
     _fallStreak = 0;
   }
 
