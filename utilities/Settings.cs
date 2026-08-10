@@ -15,9 +15,16 @@ public static class Settings
     set => Set ("name", value);
   }
 
+  // First-time players get the official dedicated server pre-filled.
+  public const string OfficialServerAddress = "137.184.43.105";
+
   public static string LastJoinAddress
   {
-    get => Get ("last_join_address");
+    get
+    {
+      var address = Get ("last_join_address");
+      return string.IsNullOrEmpty (address) ? OfficialServerAddress : address;
+    }
     set => Set ("last_join_address", value);
   }
 

@@ -88,7 +88,8 @@ public partial class Player : CharacterBody3D
   [Export] public float FullAutoCooldownSeconds = 15.0f;
   [Export] public float FullAutoShotIntervalSeconds = 0.15f;
   [Export] public float FullAutoEnergy = 0.12f;
-  [Export] public float RespawnInputLockSeconds = 2.0f;
+  // Brief - the spawn room & spawn armor already prevent instant re-engagement (#48).
+  [Export] public float RespawnInputLockSeconds = 0.3f;
   [Export] public float PunchCooldownSeconds = 0.6f;
   [Export] public float PunchRange = 2.5f;
   [Export] public float PunchEnergy = 0.2f;

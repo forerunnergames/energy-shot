@@ -53,6 +53,7 @@ public partial class Player
 
   private void RespawnFell()
   {
+    --Score; // Falling off the world costs a point.
     Respawn();
     EmitSignal (SignalName.RespawnedFell, DisplayName);
   }
