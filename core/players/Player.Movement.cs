@@ -12,7 +12,7 @@ public partial class Player
   private void Fall (ref Vector3 velocity, double delta) => velocity += Gravity * (float)delta;
   private bool WantsSlide() => _isInputEnabled && !IsStunned && Input.IsActionPressed ("slide");
   // Slide wins: crouch is ignored while sliding (see issue #51).
-  private bool WantsCrouch() => _isInputEnabled && !Sliding && Input.IsActionPressed ("crouch");
+  private bool ToggledCrouch() => _isInputEnabled && Input.IsActionJustPressed ("crouch");
   private float MoveSpeed() => (Sliding ? Speed * SlideSpeedMultiplier : _crouching ? Speed * CrouchSpeedMultiplier : Speed) * StunSpeedMultiplier();
 
   // Hold to slide: double speed & a horizontal pose, capped at SlideDurationSeconds,
@@ -49,12 +49,14 @@ public partial class Player
 
   // Hold C to crouch: shorter profile & half speed (see issue #51). Standing back up
   // requires overhead clearance so the head can't clip into geometry above.
+  // Press C to crouch, press again to stand (issue #85). Sliding cancels a crouch;
+  // standing needs overhead clearance.
   private void UpdateCrouch()
   {
-    var crouching = WantsCrouch();
-    if (crouching == _crouching) return;
-    if (!crouching && IsOverheadBlocked()) return;
-    Crouching = crouching;
+    if (Sliding && _crouching) { Crouching = false; ApplyCameraHeight(); return; }
+    if (!ToggledCrouch() || Sliding) return;
+    if (_crouching && IsOverheadBlocked()) return;
+    Crouching = !_crouching;
     ApplyCameraHeight();
   }
 
