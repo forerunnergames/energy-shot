@@ -23,6 +23,7 @@ public partial class World : Node3D
   private PackedScene _playerScene = null!;
   private Player? _selfPlayer;
   private string _selfPlayerName = string.Empty;
+  private int _selfDifficulty = 2;
   private int _score;
   [Rpc] private void OnKickedFromServer (string reason) => EmitSignal (SignalName.KickedFromServer, reason);
   private int FindPlayerId (string displayName) => FindPlayer (displayName)?.NetworkId ?? 0;
@@ -50,6 +51,29 @@ public partial class World : Node3D
     _networkManager.RemoteMessageReceived += message => EmitSignal (SignalName.RemoteMessageReceived, message);
     _networkManager.PlayerJoinGame += playerName => EmitSignal (SignalName.PlayerJoinedGame, playerName);
     _networkManager.PlayerLeftGame += playerName => EmitSignal (SignalName.PlayerLeftGame, playerName);
+    if (OS.GetCmdlineUserArgs().Contains ("--playtest")) CallDeferred (MethodName.StartPlaytest);
+  }
+
+  private void StartPlaytest() => AddChild (new playtest.PlaytestDriver());
+
+  // Session entry points for the automated playtest harness: same code paths the
+  // host/join dialogs use, minus the UI & UPnP.
+  public void StartHostSession (string playerName, int difficulty, int port)
+  {
+    var peer = new ENetMultiplayerPeer();
+    var error = peer.CreateServer (port);
+    if (error != Error.Ok) GD.PrintErr ($"Playtest host failed: {error}");
+    Multiplayer.MultiplayerPeer = peer;
+    OnHostGameSuccess (playerName, difficulty);
+  }
+
+  public void StartClientSession (string playerName, int difficulty, string address, int port)
+  {
+    var peer = new ENetMultiplayerPeer();
+    var error = peer.CreateClient (address, port);
+    if (error != Error.Ok) GD.PrintErr ($"Playtest join failed: {error}");
+    Multiplayer.MultiplayerPeer = peer;
+    Multiplayer.ConnectedToServer += () => OnJoinGameSuccess (playerName, difficulty);
   }
 
   [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
@@ -97,6 +121,7 @@ public partial class World : Node3D
   private void OnJoinGameSuccess (string playerName, int difficulty)
   {
     _selfPlayerName = playerName;
+    _selfDifficulty = difficulty;
     Multiplayer.ServerDisconnected += () => EmitSignal (SignalName.ServerShutDown);
     RpcId (1, MethodName.RequestPlayerSlot, playerName, difficulty);
   }
@@ -117,6 +142,10 @@ public partial class World : Node3D
   private void RegisterSpawnedSelfPlayerDeferred (Player spawnedPlayer)
   {
     spawnedPlayer.DisplayName = _selfPlayerName;
+    // This node is the replication authority, so the difficulty health pool must be
+    // set here (client-side) - values set on the server copy get overwritten by sync.
+    spawnedPlayer.MaxHealth = Player.MaxHealthFor (_selfDifficulty);
+    spawnedPlayer.Health = spawnedPlayer.MaxHealth;
     spawnedPlayer.RespawnedShot += (playerName, shotByPlayerName) => _networkManager.NotifyPlayerRespawnedShot (playerName, shotByPlayerName);
     spawnedPlayer.RespawnedFell += playerName => _networkManager.NotifyPlayerRespawnedFell (playerName);
     RegisterSelf (spawnedPlayer);
