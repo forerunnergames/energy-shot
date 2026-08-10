@@ -52,6 +52,8 @@ public partial class Player
     SpawnBanana (origin, direction, isLive: true);
     Rpc (MethodName.SpawnVisualBanana, origin, direction);
     IsBananaEquipped = false; // Single use: auto-switch back to the laser during cooldown.
+    // The same shoot press must not also fire a full-auto laser this frame.
+    _nextAutoShotIn = FullAutoShotIntervalSeconds;
   }
 
   // Visual-only copy of the shooter's banana on every other peer.

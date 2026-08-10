@@ -9,7 +9,7 @@ public partial class Player
 {
   private bool IsFullAutoActive() => _fullAutoSecondsLeft > 0.0f;
   private bool IsChargingWeapon() => _isInputEnabled && !IsBananaEquipped && !IsFullAutoActive() && Input.IsActionPressed ("shoot");
-  private bool IsDischargingWeapon() => _isInputEnabled && _energyWeapon.IsSpinningUp && Input.IsActionJustReleased ("shoot");
+  private bool IsDischargingWeapon() => _isInputEnabled && !IsBananaEquipped && _energyWeapon.IsSpinningUp && Input.IsActionJustReleased ("shoot");
   private void ChargeWeapon() => _energyWeapon.Charge();
   private void DischargeWeapon() => _energyWeapon.Discharge();
   private static int CalculateHealthDecrease (float energyShot) => Mathf.Min (100, Mathf.RoundToInt (energyShot * 100.0f));
