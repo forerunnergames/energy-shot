@@ -1,8 +1,14 @@
-[gd_scene load_steps=11 format=3 uid="uid://b1w1b7u4gtpbh"]
+[gd_scene load_steps=17 format=3 uid="uid://b1w1b7u4gtpbh"]
 
 [ext_resource type="Script" path="res://core/players/Player.cs" id="1_nipvj"]
 [ext_resource type="Texture2D" uid="uid://ddlk1r4wak13u" path="res://assets/crosshairs.png" id="2_37lxu"]
 [ext_resource type="PackedScene" uid="uid://bnnjmr0ke3v6d" path="res://core/weapons/EnergyWeapon.tscn" id="4_pk5hr"]
+[ext_resource type="AudioStream" path="res://assets/sounds/punch.mp3" id="5_punch"]
+[ext_resource type="AudioStream" path="res://assets/sounds/jump.mp3" id="10_jump"]
+[ext_resource type="AudioStream" path="res://assets/sounds/hitmarker.wav" id="6_hitmk"]
+[ext_resource type="AudioStream" path="res://assets/sounds/damage.wav" id="7_dmg"]
+[ext_resource type="AudioStream" path="res://assets/sounds/zap-out.mp3" id="8_zapout"]
+[ext_resource type="AudioStream" path="res://assets/sounds/respawn.wav" id="9_rspwn"]
 
 [sub_resource type="ViewportTexture" id="ViewportTexture_udl6m"]
 viewport_path = NodePath("SubViewport")
@@ -73,6 +79,9 @@ properties/9/spawn = true
 properties/9/replication_mode = 2
 
 [node name="Player" type="CharacterBody3D"]
+collision_layer = 2
+collision_mask = 3
+platform_floor_layers = 1
 script = ExtResource("1_nipvj")
 
 [node name="NameTag" type="Label3D" parent="."]
@@ -107,7 +116,7 @@ value = 100.0
 show_percentage = false
 
 [node name="JumpTimer" type="Timer" parent="."]
-wait_time = 3.0
+wait_time = 2.0
 one_shot = true
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="."]
@@ -138,6 +147,24 @@ transform = Transform3D(-4.37114e-09, 0, 0.1, 0, 0.1, 0, -0.1, 0, -4.37114e-09, 
 process_callback = 0
 wait_time = 0.25
 one_shot = true
+
+[node name="PunchSound" type="AudioStreamPlayer" parent="."]
+stream = ExtResource("5_punch")
+
+[node name="HitmarkerSound" type="AudioStreamPlayer" parent="."]
+stream = ExtResource("6_hitmk")
+
+[node name="DamageSound" type="AudioStreamPlayer" parent="."]
+stream = ExtResource("7_dmg")
+
+[node name="ZapOutSound" type="AudioStreamPlayer" parent="."]
+stream = ExtResource("8_zapout")
+
+[node name="RespawnSound" type="AudioStreamPlayer" parent="."]
+stream = ExtResource("9_rspwn")
+
+[node name="JumpSound" type="AudioStreamPlayer" parent="."]
+stream = ExtResource("10_jump")
 
 [node name="MultiplayerSynchronizer" type="MultiplayerSynchronizer" parent="."]
 replication_config = SubResource("SceneReplicationConfig_4q635")

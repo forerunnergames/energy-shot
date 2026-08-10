@@ -8,24 +8,42 @@ namespace com.forerunnergames.energyshot;
 public class MessageGeneratorTest
 {
   [TestCase]
-  public void ShotPlayerMessageUsesYouForSelf()
+  public void ZappedMessagesSubstituteRoles()
   {
-    AssertString (MessageGenerator.OnShotPlayer (isSelf: true, "Alice", "Bob")).IsEqual ("You shot Bob");
-    AssertString (MessageGenerator.OnShotPlayer (isSelf: false, "Alice", "Bob")).IsEqual ("Alice shot Bob");
+    var asVictim = MessageGenerator.OnZapped ("Alice", "Bob", selfIsVictim: true, selfIsZapper: false, fullCharge: false);
+    AssertBool (asVictim.ToLower().Contains ("you")).IsTrue();
+    AssertBool (asVictim.Contains ("Alice")).IsFalse();
+    AssertBool (asVictim.Contains ("Bob")).IsTrue();
+
+    var asZapper = MessageGenerator.OnZapped ("Alice", "Bob", selfIsVictim: false, selfIsZapper: true, fullCharge: false);
+    AssertBool (asZapper.ToLower().Contains ("you")).IsTrue();
+    AssertBool (asZapper.Contains ("Alice")).IsTrue();
+    AssertBool (asZapper.Contains ("Bob")).IsFalse();
+
+    var asBystander = MessageGenerator.OnZapped ("Alice", "Bob", selfIsVictim: false, selfIsZapper: false, fullCharge: false);
+    AssertBool (asBystander.Contains ("Alice")).IsTrue();
+    AssertBool (asBystander.Contains ("Bob")).IsTrue();
   }
 
   [TestCase]
-  public void RespawnedShotMessageUsesCorrectGrammar()
+  public void FullChargeMessagesMentionBothPlayers()
   {
-    AssertString (MessageGenerator.OnPlayerRespawnedShot (isSelf: true, "Alice", "Bob")).IsEqual ("You were shot by Bob");
-    AssertString (MessageGenerator.OnPlayerRespawnedShot (isSelf: false, "Alice", "Bob")).IsEqual ("Alice was shot by Bob");
+    var message = MessageGenerator.OnZapped ("Alice", "Bob", selfIsVictim: false, selfIsZapper: false, fullCharge: true);
+    AssertBool (message.Contains ("Alice")).IsTrue();
+    AssertBool (message.Contains ("Bob")).IsTrue();
+  }
+
+  [TestCase]
+  public void StreakMessagesMentionThePlayer()
+  {
+    AssertBool (MessageGenerator.OnZapStreak ("Alice").Contains ("Alice")).IsTrue();
+    AssertBool (MessageGenerator.OnZappedStreak ("Alice").Contains ("Alice")).IsTrue();
+    AssertBool (MessageGenerator.OnFallStreak ("Alice").Contains ("Alice")).IsTrue();
   }
 
   [TestCase]
   public void RespawnedFellMessagesAgreeAcrossPeers()
   {
-    // The random overload picks a message & returns its index; the indexed overload
-    // must produce the equivalent message for remote peers (modulo you/they wording).
     var selfMessage = MessageGenerator.OnPlayerRespawnedFell (isSelf: true, "Alice", out var index);
     var remoteMessage = MessageGenerator.OnPlayerRespawnedFell (isSelf: false, "Alice", index);
     AssertString (selfMessage).StartsWith ("You ");

@@ -20,6 +20,11 @@ public partial class Hud : Control
   private Label _scoreLabel = null!;
   private Label _leaderboardEntries = null!;
   private ShaderMaterial _vignette = null!;
+  private ShaderMaterial _blur = null!;
+  private float _blurIntensity;
+  private int _zapStreak;
+  private int _zappedStreak;
+  private int _fallStreak;
   private string _selfPlayerName = string.Empty;
   private void OnRemoteMessageReceived (string message) => _messageScroller.AddMessage (message);
 
@@ -55,6 +60,8 @@ public partial class Hud : Control
     _scoreLabel = GetNode <Label> ("VBoxContainer/Score/Label");
     _leaderboardEntries = GetNode <Label> ("Leaderboard/MarginContainer/VBoxContainer/Entries");
     _vignette = (ShaderMaterial)GetNode <ColorRect> ("Vignette").Material;
+    _blur = (ShaderMaterial)GetNode <ColorRect> ("Blur").Material;
+    _world.SelfPlayerPunched += OnSelfPlayerPunched;
     GetNode <Timer> ("LeaderboardTimer").Timeout += UpdateLeaderboard;
     _quitDialog = GetNode <ConfirmationDialog2> ("QuitDialog");
     _quitDialog.Confirmed += () => EmitSignal (SignalName.GameQuit);
@@ -76,6 +83,20 @@ public partial class Hud : Control
   {
     if (!Input.IsActionJustPressed ("quit")) return;
     ToggleQuitDialog();
+  }
+
+  // Punch blur stacks per hit & fades back to sharp.
+  public override void _Process (double delta)
+  {
+    if (_blurIntensity <= 0.0f) return;
+    _blurIntensity = Mathf.Max (0.0f, _blurIntensity - 0.25f * (float)delta);
+    _blur.SetShaderParameter ("intensity", _blurIntensity);
+  }
+
+  private void OnSelfPlayerPunched()
+  {
+    _blurIntensity = Mathf.Min (1.0f, _blurIntensity + 0.34f);
+    _blur.SetShaderParameter ("intensity", _blurIntensity);
   }
 
   private void OnNewGameStarted (string selfPlayerName, int selfMaxHealth)
@@ -102,26 +123,37 @@ public partial class Hud : Control
 
   private void OnPlayerRespawnedShot (string playerName, string shotByPlayerName)
   {
+    var fullCharge = _world.SelfPlayer?.LastZapEnergy >= 0.95f;
+
     if (IsSelf (shotByPlayerName))
     {
-      PrintMessage (MessageGenerator.OnShotPlayer (isSelf: true, shotByPlayerName, playerName));
+      PrintMessage (MessageGenerator.OnZapped (playerName, shotByPlayerName, selfIsVictim: false, selfIsZapper: true, fullCharge: false));
+      ++_zapStreak;
+      _zappedStreak = 0;
+      if (_zapStreak >= 3) NotifyMessage (MessageGenerator.OnZapStreak (shotByPlayerName), MessageGenerator.OnZapStreak (shotByPlayerName));
       return;
     }
 
     if (!IsSelf (playerName)) return;
-    NotifyMessage (MessageGenerator.OnPlayerRespawnedShot (isSelf: true, playerName, shotByPlayerName), MessageGenerator.OnPlayerRespawnedShot (isSelf: false, playerName, shotByPlayerName), excludedPlayerName: shotByPlayerName);
+    NotifyMessage (MessageGenerator.OnZapped (playerName, shotByPlayerName, selfIsVictim: true, selfIsZapper: false, fullCharge), MessageGenerator.OnZapped (playerName, shotByPlayerName, selfIsVictim: false, selfIsZapper: false, fullCharge), excludedPlayerName: shotByPlayerName);
+    ++_zappedStreak;
+    _zapStreak = 0;
+    if (_zappedStreak >= 3) NotifyMessage (MessageGenerator.OnZappedStreak (playerName), MessageGenerator.OnZappedStreak (playerName));
   }
 
   private void OnPlayerRespawnedFell (string playerName)
   {
     if (!IsSelf (playerName)) return;
     NotifyMessage (MessageGenerator.OnPlayerRespawnedFell (isSelf: true, playerName, out var messageIndex), MessageGenerator.OnPlayerRespawnedFell (isSelf: false, playerName, messageIndex));
+    ++_fallStreak;
+    if (_fallStreak >= 3) NotifyMessage (MessageGenerator.OnFallStreak (playerName), MessageGenerator.OnFallStreak (playerName));
   }
 
   private void OnPlayerScored (int score, string playerName, string shotPlayerName)
   {
     if (!IsSelf (playerName)) return;
     _scoreLabel.Text = $"Score: {score}";
+    _fallStreak = 0;
   }
 
   private void ToggleQuitDialog()

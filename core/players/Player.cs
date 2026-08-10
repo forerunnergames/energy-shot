@@ -36,6 +36,7 @@ public partial class Player : CharacterBody3D
   }
 
   [Signal] public delegate void HealthChangedEventHandler (int value);
+  [Signal] public delegate void PunchedEventHandler();
   [Signal] public delegate void ScoredEventHandler (string playerName, string shotPlayerName);
   [Signal] public delegate void RespawnedShotEventHandler (string playerName, string shotByPlayerName);
   [Signal] public delegate void RespawnedFellEventHandler (string playerName);
@@ -59,6 +60,10 @@ public partial class Player : CharacterBody3D
   // pool; anything unrecognized (including spoofed values) gets Expert health.
   public static int MaxHealthFor (int difficulty) => difficulty switch { 0 => 400, 1 => 300, _ => 200 };
 
+  // Recovers the difficulty tier (0=Beginner, 1=Intermediate, 2=Expert) from the
+  // replicated health pool, for the damage handicap.
+  private static int TierOf (int maxHealth) => maxHealth switch { 400 => 0, 300 => 1, _ => 2 };
+
   // 5s of invulnerability after every (re)spawn, canceled by firing. Replicated so
   // every peer renders the armored (white) player & the victim rejects damage.
   [Export]
@@ -79,6 +84,11 @@ public partial class Player : CharacterBody3D
   [Export] public float FullAutoShotIntervalSeconds = 0.15f;
   [Export] public float FullAutoEnergy = 0.12f;
   [Export] public float RespawnInputLockSeconds = 2.0f;
+  [Export] public float PunchCooldownSeconds = 0.6f;
+  [Export] public float PunchRange = 2.5f;
+  [Export] public float PunchEnergy = 0.2f;
+  [Export] public float CameraKickRadians = 0.06f;
+  [Export] public float CameraKickRecoverySpeed = 0.4f;
   [Export] public float Speed = 7.0f;
   [Export] public float JumpVelocity = 20.0f;
   [Export] public Vector3 Gravity = new(0.0f, -50.0f, 0.0f);
@@ -93,7 +103,8 @@ public partial class Player : CharacterBody3D
   private readonly RandomNumberGenerator _rng = new();
   private static readonly Color NormalColor = new("0027ff");
   private static readonly Color HitColor = Colors.DarkRed;
-  private static readonly Color SpawnArmorColor = Colors.White;
+  // White glow blended over the player's color, so armored players stay identifiable.
+  private static readonly Color SpawnArmorColor = NormalColor.Lerp (Colors.White, 0.65f);
   private bool _spawnArmor;
   private ulong _spawnArmorEndMs;
   private NetworkManager _networkManager = null!;
@@ -104,6 +115,15 @@ public partial class Player : CharacterBody3D
   private float _fullAutoSecondsLeft;
   private float _fullAutoCooldownLeft;
   private float _nextAutoShotIn;
+  private float _punchCooldownLeft;
+  private float _cameraKickRemaining;
+  private AudioStreamPlayer _punchSound = null!;
+  private AudioStreamPlayer _hitmarkerSound = null!;
+  private AudioStreamPlayer _damageSound = null!;
+  private AudioStreamPlayer _zapOutSound = null!;
+  private AudioStreamPlayer _respawnSound = null!;
+  private AudioStreamPlayer _jumpSound = null!;
+  public float LastZapEnergy { get; private set; }
   private Sprite3D _crossHairs = null!;
   private Timer _jumpTimer = null!;
   private Timer _hitRedTimer = null!;
@@ -120,6 +140,19 @@ public partial class Player : CharacterBody3D
   {
     if (!IsMultiplayerActive()) return;
     UpdatePuppetTags();
+    UpdateCrosshairTint();
+  }
+
+  // Crosshair stays white until it's actually over another player.
+  private void UpdateCrosshairTint()
+  {
+    if (!IsMultiplayerAuthority()) return;
+    var from = _camera.GlobalPosition;
+    var to = from + -_camera.GlobalTransform.Basis.Z * 200.0f;
+    var query = PhysicsRayQueryParameters3D.Create (from, to, exclude: new Godot.Collections.Array <Rid> { GetRid() });
+    var hit = GetWorld3D().DirectSpaceState.IntersectRay (query);
+    var aimingAtPlayer = hit.Count > 0 && hit["collider"].AsGodotObject() is Player;
+    _crossHairs.Modulate = aimingAtPlayer ? Colors.Red : Colors.White;
   }
 
   // Guards against "The multiplayer instance isn't currently active" error spam from
@@ -150,6 +183,12 @@ public partial class Player : CharacterBody3D
     _nameTag = GetNode <Label3D> ("NameTag");
     _healthTag = GetNode <Sprite3D> ("HealthTag");
     _healthBar = GetNode <ProgressBar> ("SubViewport/HealthBar");
+    _punchSound = GetNode <AudioStreamPlayer> ("PunchSound");
+    _hitmarkerSound = GetNode <AudioStreamPlayer> ("HitmarkerSound");
+    _damageSound = GetNode <AudioStreamPlayer> ("DamageSound");
+    _zapOutSound = GetNode <AudioStreamPlayer> ("ZapOutSound");
+    _respawnSound = GetNode <AudioStreamPlayer> ("RespawnSound");
+    _jumpSound = GetNode <AudioStreamPlayer> ("JumpSound");
     _healthBar.MaxValue = MaxHealth;
     _health = MaxHealth;
     _healthBar.Value = _health;
@@ -182,6 +221,8 @@ public partial class Player : CharacterBody3D
     if (!IsMultiplayerAuthority()) return;
     UpdateSpawnArmor();
     UpdateFullAuto (delta);
+    UpdatePunch (delta);
+    UpdateCameraKick (delta);
     var velocity = Velocity;
     if (IsFalling()) Fall (ref velocity, delta);
     if (IsJumping()) Jump (ref velocity);
@@ -253,6 +294,7 @@ public partial class Player : CharacterBody3D
   private void Jump (ref Vector3 velocity)
   {
     velocity.Y = JumpVelocity;
+    _jumpSound.Play();
     _jumpTimer.Start();
   }
 
@@ -275,7 +317,11 @@ public partial class Player : CharacterBody3D
   private void OnWeaponShotFired (float energy)
   {
     CancelSpawnArmorIfFired();
+    // Aim direction is captured before the camera kick so the kick is purely visual.
     var direction = -_camera.GlobalTransform.Basis.Z;
+    var kick = energy * CameraKickRadians;
+    _camera.RotateX (kick);
+    _cameraKickRemaining += kick;
     var origin = _camera.GlobalPosition + direction * 0.9f;
     SpawnBolt (origin, direction, energy, isLive: true);
     Rpc (MethodName.SpawnVisualLaser, origin, direction, energy);
@@ -305,7 +351,32 @@ public partial class Player : CharacterBody3D
   private void HitPuppet (Player playerPuppet, float energy)
   {
     GD.Print ($"{DisplayName}: I hit {playerPuppet.DisplayName}!");
+    _hitmarkerSound.Play();
     playerPuppet.RpcId (playerPuppet.NetworkId, MethodName.ReceiveHit, energy, DisplayName);
+  }
+
+  private void UpdatePunch (double delta)
+  {
+    _punchCooldownLeft = Mathf.Max (0.0f, _punchCooldownLeft - (float)delta);
+    if (!_isInputEnabled || _punchCooldownLeft > 0.0f || !Input.IsActionJustPressed ("punch")) return;
+    _punchCooldownLeft = PunchCooldownSeconds;
+    CancelSpawnArmorIfFired(); // Punching drops your spawn armor, same as firing.
+    _punchSound.Play();
+    var from = _camera.GlobalPosition;
+    var to = from + -_camera.GlobalTransform.Basis.Z * PunchRange;
+    var query = PhysicsRayQueryParameters3D.Create (from, to, exclude: new Godot.Collections.Array <Rid> { GetRid() });
+    var hit = GetWorld3D().DirectSpaceState.IntersectRay (query);
+    if (hit.Count == 0 || hit["collider"].AsGodotObject() is not Player victim) return;
+    GD.Print ($"{DisplayName}: I punched {victim.DisplayName}!");
+    victim.RpcId (victim.NetworkId, MethodName.ReceivePunch, DisplayName);
+  }
+
+  private void UpdateCameraKick (double delta)
+  {
+    if (_cameraKickRemaining <= 0.0f) return;
+    var recover = Mathf.Min (_cameraKickRemaining, CameraKickRecoverySpeed * (float)delta);
+    _camera.RotateX (-recover);
+    _cameraKickRemaining -= recover;
   }
 
   private void FlashHitColor()
@@ -319,14 +390,38 @@ public partial class Player : CharacterBody3D
   {
     if (!IsMultiplayerAuthority()) return;
     if (SpawnArmor) return;
-    var shooterId = Multiplayer.GetRemoteSenderId();
-    Health -= CalculateHealthDecrease (energy);
-    GD.Print ($"{DisplayName}: I was hit by {shotByPlayerName}! Health {Health}");
+    GD.Print ($"{DisplayName}: I was hit by {shotByPlayerName}!");
+    ApplyDamage (energy, shotByPlayerName);
+  }
+
+  [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
+  private void ReceivePunch (string punchedByPlayerName)
+  {
+    if (!IsMultiplayerAuthority()) return;
+    if (SpawnArmor) return;
+    GD.Print ($"{DisplayName}: I was punched by {punchedByPlayerName}!");
+    EmitSignal (SignalName.Punched);
+    ApplyDamage (PunchEnergy, punchedByPlayerName);
+  }
+
+  private void ApplyDamage (float energy, string attackerName)
+  {
+    var attackerId = Multiplayer.GetRemoteSenderId();
+    // Difficulty damage handicap: lower-skill attackers hit higher-skill targets harder
+    // (+50% per tier gap: Beginner->Intermediate 1.5x, Beginner->Expert 2x,
+    // Intermediate->Expert 1.5x). Attacking downward is unchanged - the bigger health
+    // pool already is the handicap.
+    var attacker = GetParent().GetNodeOrNull <Player> ($"{attackerId}");
+    var handicap = 1.0f + 0.5f * Mathf.Max (0, TierOf (MaxHealth) - TierOf (attacker?.MaxHealth ?? MaxHealth));
+    Health -= Mathf.RoundToInt (CalculateHealthDecrease (energy) * handicap);
+    LastZapEnergy = energy;
+    _damageSound.Play();
 
     if (Health <= 0)
     {
-      GetParent().GetNodeOrNull <Player> ($"{shooterId}")?.RpcId (shooterId, MethodName.NotifyScored, DisplayName);
-      RespawnShot (shotByPlayerName);
+      _zapOutSound.Play();
+      attacker?.RpcId (attackerId, MethodName.NotifyScored, DisplayName);
+      RespawnShot (attackerName);
     }
 
     EmitSignal (SignalName.HealthChanged, Health);
@@ -374,6 +469,7 @@ public partial class Player : CharacterBody3D
     Position = CalculateRandomSpawnPosition();
     ActivateSpawnArmor();
     SetInputEnabled (isEnabled: false);
+    _respawnSound.Play();
     GD.Print ($"{DisplayName}: I respawned!");
     await ToSignal (GetTree().CreateTimer (RespawnInputLockSeconds), SceneTreeTimer.SignalName.Timeout);
     SetInputEnabled (isEnabled: true);

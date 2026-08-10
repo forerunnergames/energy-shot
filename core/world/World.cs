@@ -15,6 +15,7 @@ public partial class World : Node3D
   [Signal] public delegate void PlayerRespawnedShotEventHandler (string playerName, string shotByPlayerName);
   [Signal] public delegate void PlayerRespawnedFellEventHandler (string playerName);
   [Signal] public delegate void SelfPlayerHealthChangedEventHandler (string playerName, int health);
+  [Signal] public delegate void SelfPlayerPunchedEventHandler();
   [Signal] public delegate void RemoteMessageReceivedEventHandler (string message);
   [Signal] public delegate void KickedFromServerEventHandler (string reason);
   [Signal] public delegate void ServerShutDownEventHandler();
@@ -31,6 +32,7 @@ public partial class World : Node3D
   private Player? FindPlayer (string displayName) => GetChildren().OfType <Player>().FirstOrDefault (player => player.DisplayName == displayName);
   private Player? FindPlayer (int peerId) => GetChildren().OfType <Player>().FirstOrDefault (player => player.NetworkId == peerId);
   public System.Collections.Generic.IEnumerable <Player> GetPlayers() => GetChildren().OfType <Player>();
+  public Player? SelfPlayer => _selfPlayer;
   private void OnGamePaused() => _selfPlayer?.SetInputEnabled (isEnabled: false);
   private void OnGameResumed() => _selfPlayer?.SetInputEnabled (isEnabled: true);
   private void OnGameQuit() => GetTree().Quit();
@@ -203,6 +205,7 @@ public partial class World : Node3D
     if (!selfPlayer.IsMultiplayerAuthority()) return;
     _selfPlayer = selfPlayer;
     selfPlayer.HealthChanged += value => EmitSignal (SignalName.SelfPlayerHealthChanged, selfPlayer.DisplayName, value);
+    selfPlayer.Punched += () => EmitSignal (SignalName.SelfPlayerPunched);
     selfPlayer.Scored += (playerName, shotPlayerName) => EmitSignal (SignalName.PlayerScored, ++_score, playerName, shotPlayerName);
     GD.Print ($"{_selfPlayer.NetworkId}: Registered my player {_selfPlayer.DisplayName}");
     EmitSignal (SignalName.NewGameStarted, _selfPlayer.DisplayName, _selfPlayer.MaxHealth);
