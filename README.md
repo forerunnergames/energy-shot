@@ -26,7 +26,9 @@ A fast, friendly multiplayer laser-tag arena FPS built with Godot 4 (.NET/C#). N
 
 ## Multiplayer
 
-Host or join from the main menu — your name, difficulty, & last server address are remembered. Hosting from home uses UPnP to discover your address; enable UPnP on your router or forward UDP port **55556**. (A hosted dedicated server is in the works.)
+The easiest way to play: **Join Game** — the official dedicated server address is pre-filled, so just pick a name & difficulty and jump in. (Releases deploy to the official server automatically when deploy credentials are configured.)
+
+Prefer to host your own? Host from the main menu — UPnP discovers your address; enable UPnP on your router or forward UDP port **55556**.
 
 Grab the latest build from [Releases](https://github.com/forerunnergames/energy-shot/releases) — macOS builds are signed & notarized.
 
