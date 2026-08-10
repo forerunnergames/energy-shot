@@ -13,6 +13,14 @@ public partial class Player
   // Restores the player's resting color: white glow while spawn armor holds, normal blue otherwise.
   private void RestoreBaseColor() => SetColor (SpawnArmor ? SpawnArmorColor : NormalColor);
 
+  // "On fire" glow visible from across the map while on a 3+ streak (see issue #77).
+  private void ApplyStreakGlow()
+  {
+    if (_streakLight == null) return;
+    _streakLight.Visible = IsOnStreak;
+    if (_nameTag != null) _nameTag.Modulate = IsOnStreak ? new Color (1.0f, 0.75f, 0.2f) : Colors.White;
+  }
+
   private void FlashHitColor()
   {
     SetColor (HitColor);

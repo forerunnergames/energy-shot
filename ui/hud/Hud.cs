@@ -18,7 +18,7 @@ public partial class Hud : Control
   private MessageScroller _messageScroller = null!;
   private ConfirmationDialog2 _quitDialog = null!;
   private Label _scoreLabel = null!;
-  private Label _leaderboardEntries = null!;
+  private RichTextLabel _leaderboardEntries = null!;
   private ShaderMaterial _vignette = null!;
   private ShaderMaterial _blur = null!;
   private ProgressBar _shotBar = null!;
@@ -47,9 +47,15 @@ public partial class Hud : Control
   private void UpdateLeaderboard()
   {
     var players = _world.GetPlayers().OrderByDescending (player => player.Score).ThenBy (player => player.DisplayName);
-    _leaderboardEntries.Text = string.Join ("\n", players.Select (player => $"{player.DisplayName}  {player.Score}"));
+    _leaderboardEntries.Text = string.Join ("\n", players.Select (LeaderboardEntry));
     UpdateScoreLabel();
   }
+
+  // 3+ streak entries glow & pulse so the hot player stands out (see issue #77).
+  private static string LeaderboardEntry (players.Player player) =>
+    player.IsOnStreak
+      ? $"[pulse freq=1.5 color=#ffd24d ease=-2.0][wave amp=18.0 freq=4.0][b]{player.DisplayName}  {player.Score}[/b][/wave][/pulse]"
+      : $"{player.DisplayName}  {player.Score}";
 
   // Score can also drop (fall penalty), so the label reads the replicated value.
   private void UpdateScoreLabel() => _scoreLabel.Text = $"Score: {_world.SelfPlayer?.Score ?? 0}";
@@ -65,7 +71,7 @@ public partial class Hud : Control
     _healthBar = GetNode <ProgressBar> ("VBoxContainer/Health/ProgressBar");
     _messageScroller = GetNode <MessageScroller> ("MessageScroller");
     _scoreLabel = GetNode <Label> ("VBoxContainer/Score/Label");
-    _leaderboardEntries = GetNode <Label> ("Leaderboard/MarginContainer/VBoxContainer/Entries");
+    _leaderboardEntries = GetNode <RichTextLabel> ("Leaderboard/MarginContainer/VBoxContainer/Entries");
     _vignette = (ShaderMaterial)GetNode <ColorRect> ("Vignette").Material;
     _blur = (ShaderMaterial)GetNode <ColorRect> ("Blur").Material;
     _shotBar = GetNode <ProgressBar> ("VBoxContainer/Cooldowns/Shot/Bar");
