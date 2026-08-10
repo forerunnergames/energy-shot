@@ -18,12 +18,13 @@ public partial class EnergyWeapon : Node3D
   [Export] public float MaxRotationSpeed = 15.0f;
   // Caps fire rate: after a shot, the weapon can't begin a new charge until the
   // cooldown elapses, so fast clicks & auto-clickers can't spam shots.
-  [Export] public float ShotCooldownSeconds = 1.0f;
+  [Export] public float ShotCooldownSeconds = 0.5f;
   [Export] public float RecoilStrength = 5.0f;
   [Export] public float RecoilRecoverySpeed = 5.0f;
   [Signal] public delegate void ShotFiredEventHandler (float energy);
   public bool IsSpinningUp { get; private set; }
   private AudioStreamPlayer3D _shootingSound = null!;
+  private AudioStreamPlayer3D _chargingSound = null!;
   private MeshInstance3D _muzzleMeshInstance = null!;
   private Node3D _pivot = null!;
   private StandardMaterial3D _muzzleMaterial = null!;
@@ -51,6 +52,7 @@ public partial class EnergyWeapon : Node3D
   {
     _pivot = GetNode <Node3D> ("Pivot");
     _shootingSound = GetNode <AudioStreamPlayer3D> ("ShootingSound");
+    _chargingSound = GetNode <AudioStreamPlayer3D> ("ChargingSound");
     _muzzleMeshInstance = GetNode <Node3D> ("Pivot/Muzzle").GetNode <MeshInstance3D> ("Cube_001");
     _muzzleMaterial = CreateCopy ((_muzzleMeshInstance.Mesh.SurfaceGetMaterial (0) as StandardMaterial3D)!);
     _muzzleMeshInstance.MaterialOverride = _muzzleMaterial;
@@ -99,6 +101,7 @@ public partial class EnergyWeapon : Node3D
   {
     if (IsSpinningUp) return;
     IsSpinningUp = true;
+    _chargingSound.Play();
     _tween?.Kill();
     _tween = CreateTween().SetParallel();
     _tween.TweenProperty (this, "_currentRotationSpeed", MaxRotationSpeed, 2.0f).SetTrans (Tween.TransitionType.Quad).SetEase (Tween.EaseType.Out);
@@ -108,6 +111,7 @@ public partial class EnergyWeapon : Node3D
   private void SpinDown()
   {
     IsSpinningUp = false;
+    _chargingSound.Stop();
     _tween?.Kill();
     _tween = CreateTween().SetParallel();
     _tween.TweenProperty (this, "_currentRotationSpeed", MinRotationSpeed, 2.0f).SetTrans (Tween.TransitionType.Quad).SetEase (Tween.EaseType.Out);
