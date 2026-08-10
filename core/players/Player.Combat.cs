@@ -8,6 +8,10 @@ namespace com.forerunnergames.energyshot.players;
 public partial class Player
 {
   private bool IsFullAutoActive() => _fullAutoSecondsLeft > 0.0f;
+  // 0..1 readiness fractions for the HUD cooldown bars (1 = ready).
+  public float ShotReadyFraction => _energyWeapon.CooldownFraction;
+  public float PunchReadyFraction => 1.0f - _punchCooldownLeft / PunchCooldownSeconds;
+  public float FullAutoReadyFraction => 1.0f - _fullAutoCooldownLeft / FullAutoCooldownSeconds;
   private bool IsChargingWeapon() => _isInputEnabled && !IsBananaEquipped && !IsFullAutoActive() && Input.IsActionPressed ("shoot");
   private bool IsDischargingWeapon() => _isInputEnabled && !IsBananaEquipped && _energyWeapon.IsSpinningUp && Input.IsActionJustReleased ("shoot");
   private void ChargeWeapon() => _energyWeapon.Charge();
@@ -56,17 +60,21 @@ public partial class Player
   private void UpdateFullAuto (double delta)
   {
     var dt = (float)delta;
+    var wasRecharging = _fullAutoCooldownLeft > 0.0f;
     _fullAutoCooldownLeft = Mathf.Max (0.0f, _fullAutoCooldownLeft - dt);
+    if (wasRecharging && _fullAutoCooldownLeft <= 0.0f) _energyWeapon.PlayFullAutoReadySound();
 
     if (_isInputEnabled && Input.IsActionJustPressed ("ability") && _fullAutoCooldownLeft <= 0.0f)
     {
       _fullAutoSecondsLeft = FullAutoDurationSeconds;
       _fullAutoCooldownLeft = FullAutoCooldownSeconds;
       _nextAutoShotIn = 0.0f;
+      _energyWeapon.SetFullAutoMode (true); // Red gun + switch sound (#58).
     }
 
     if (!IsFullAutoActive()) return;
     _fullAutoSecondsLeft -= dt;
+    if (_fullAutoSecondsLeft <= 0.0f) _energyWeapon.SetFullAutoMode (false);
     _nextAutoShotIn -= dt;
     if (!_isInputEnabled || IsBananaEquipped || !Input.IsActionPressed ("shoot") || _nextAutoShotIn > 0.0f) return;
     _nextAutoShotIn = FullAutoShotIntervalSeconds;

@@ -27,8 +27,8 @@ public partial class MessageScroller : Control
   private Label _messageLabel2 = null!;
   private Label _messageLabel3 = null!;
   private Label _messageLabel4 = null!;
-  private TextureButton _expandMessagesButton = null!;
-  private TextureButton _collapseMessagesButton = null!;
+  private Button _expandMessagesButton = null!;
+  private Button _collapseMessagesButton = null!;
   private MarginContainer _messageContainer = null!;
   private MarginContainer _messageHistoryContainer = null!;
   private RichTextLabel _messageHistoryLabel = null!;
@@ -83,8 +83,8 @@ public partial class MessageScroller : Control
     _messageContainer = GetNode <MarginContainer> ("MarginContainer");
     _messageHistoryContainer = GetNode <MarginContainer> ("History");
     _messageHistoryLabel = GetNode <RichTextLabel> ("History/VBoxContainer/MarginContainer/RichTextLabel");
-    _expandMessagesButton = GetNode <TextureButton> ("MarginContainer/VBoxContainer/Expand/TextureButton");
-    _collapseMessagesButton = GetNode <TextureButton> ("History/VBoxContainer/Collapse/TextureButton");
+    _expandMessagesButton = GetNode <Button> ("MarginContainer/VBoxContainer/Expand/TextureButton");
+    _collapseMessagesButton = GetNode <Button> ("History/VBoxContainer/Collapse/TextureButton");
     _messageTimer = GetNode <Timer> ("MessageTimer");
     _expandMessagesButton.Pressed += _OnExpandMessagesButtonPressed;
     _collapseMessagesButton.Pressed += _OnCollapseMessagesButtonPressed;

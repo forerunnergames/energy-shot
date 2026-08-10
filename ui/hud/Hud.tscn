@@ -79,18 +79,17 @@ mouse_filter = 2
 
 [node name="VBoxContainer" type="VBoxContainer" parent="."]
 layout_mode = 0
-offset_right = 1336.0
-offset_bottom = 176.0
+offset_right = 820.0
+offset_bottom = 320.0
 
 [node name="Health" type="MarginContainer" parent="VBoxContainer"]
 layout_mode = 2
-size_flags_vertical = 3
 theme_override_constants/margin_left = 10
 theme_override_constants/margin_top = 10
 
 [node name="ProgressBar" type="ProgressBar" parent="VBoxContainer/Health"]
+custom_minimum_size = Vector2(0, 56)
 layout_mode = 2
-size_flags_vertical = 1
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
 theme_override_font_sizes/font_size = 20
@@ -99,6 +98,67 @@ theme_override_styles/fill = SubResource("StyleBoxFlat_uacqx")
 step = 1.0
 max_value = 200.0
 value = 200.0
+show_percentage = false
+
+[node name="Cooldowns" type="VBoxContainer" parent="VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="Shot" type="HBoxContainer" parent="VBoxContainer/Cooldowns"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="VBoxContainer/Cooldowns/Shot"]
+custom_minimum_size = Vector2(220, 0)
+layout_mode = 2
+theme_override_font_sizes/font_size = 28
+text = "Shot"
+
+[node name="Bar" type="ProgressBar" parent="VBoxContainer/Cooldowns/Shot"]
+custom_minimum_size = Vector2(0, 22)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+max_value = 1.0
+step = 0.01
+value = 1.0
+show_percentage = false
+
+[node name="Punch" type="HBoxContainer" parent="VBoxContainer/Cooldowns"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="VBoxContainer/Cooldowns/Punch"]
+custom_minimum_size = Vector2(220, 0)
+layout_mode = 2
+theme_override_font_sizes/font_size = 28
+text = "Punch"
+
+[node name="Bar" type="ProgressBar" parent="VBoxContainer/Cooldowns/Punch"]
+custom_minimum_size = Vector2(0, 22)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+max_value = 1.0
+step = 0.01
+value = 1.0
+show_percentage = false
+
+[node name="FullAuto" type="HBoxContainer" parent="VBoxContainer/Cooldowns"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="VBoxContainer/Cooldowns/FullAuto"]
+custom_minimum_size = Vector2(220, 0)
+layout_mode = 2
+theme_override_font_sizes/font_size = 28
+text = "Full-Auto"
+
+[node name="Bar" type="ProgressBar" parent="VBoxContainer/Cooldowns/FullAuto"]
+custom_minimum_size = Vector2(0, 22)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+max_value = 1.0
+step = 0.01
+value = 1.0
 show_percentage = false
 
 [node name="Score" type="MarginContainer" parent="VBoxContainer"]
@@ -116,7 +176,7 @@ layout_mode = 1
 anchors_preset = 1
 anchor_left = 1.0
 anchor_right = 1.0
-offset_left = -340.0
+offset_left = -520.0
 offset_top = 20.0
 offset_right = -20.0
 grow_horizontal = 0
@@ -135,13 +195,13 @@ layout_mode = 2
 
 [node name="Title" type="Label" parent="Leaderboard/MarginContainer/VBoxContainer"]
 layout_mode = 2
-theme_override_font_sizes/font_size = 32
+theme_override_font_sizes/font_size = 48
 text = "Leaderboard"
 horizontal_alignment = 1
 
 [node name="Entries" type="Label" parent="Leaderboard/MarginContainer/VBoxContainer"]
 layout_mode = 2
-theme_override_font_sizes/font_size = 26
+theme_override_font_sizes/font_size = 38
 text = ""
 
 [node name="LeaderboardTimer" type="Timer" parent="."]

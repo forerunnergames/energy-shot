@@ -1,10 +1,6 @@
-[gd_scene load_steps=6 format=3 uid="uid://huun2vjv0k1v"]
+[gd_scene load_steps=2 format=3 uid="uid://huun2vjv0k1v"]
 
 [ext_resource type="Script" path="res://ui/hud/messages/MessageScroller.cs" id="1"]
-[ext_resource type="Texture2D" uid="uid://dvl3eujgwcakd" path="res://assets/hud/arrow-down-pressed.png" id="2_1o4l3"]
-[ext_resource type="Texture2D" uid="uid://bixfciwpmce27" path="res://assets/hud/arrow-down.png" id="3_p6hta"]
-[ext_resource type="Texture2D" uid="uid://bku7sc2pyjqdi" path="res://assets/hud/arrow-up-pressed.png" id="4_y5g5t"]
-[ext_resource type="Texture2D" uid="uid://bs3be3qfy60ef" path="res://assets/hud/arrow-up.png" id="5_pf14i"]
 
 [node name="MessageScroller" type="Control"]
 layout_mode = 3
@@ -25,6 +21,8 @@ one_shot = true
 layout_mode = 1
 anchors_preset = 10
 anchor_right = 1.0
+offset_left = 900.0
+offset_right = -560.0
 offset_bottom = 108.0
 grow_horizontal = 2
 size_flags_horizontal = 3
@@ -84,13 +82,13 @@ size_flags_vertical = 3
 size_flags_stretch_ratio = 1.2
 mouse_filter = 2
 
-[node name="TextureButton" type="TextureButton" parent="MarginContainer/VBoxContainer/Expand"]
+[node name="TextureButton" type="Button" parent="MarginContainer/VBoxContainer/Expand"]
+custom_minimum_size = Vector2(360, 48)
 layout_mode = 2
-size_flags_horizontal = 3
+size_flags_horizontal = 4
 size_flags_vertical = 3
-texture_pressed = ExtResource("2_1o4l3")
-texture_hover = ExtResource("3_p6hta")
-stretch_mode = 3
+theme_override_font_sizes/font_size = 30
+text = "Messages  ▼"
 
 [node name="History" type="MarginContainer" parent="."]
 visible = false
@@ -181,10 +179,10 @@ size_flags_horizontal = 3
 size_flags_vertical = 9
 mouse_filter = 2
 
-[node name="TextureButton" type="TextureButton" parent="History/VBoxContainer/Collapse"]
+[node name="TextureButton" type="Button" parent="History/VBoxContainer/Collapse"]
+custom_minimum_size = Vector2(360, 48)
 layout_mode = 2
-size_flags_horizontal = 3
+size_flags_horizontal = 4
 size_flags_vertical = 3
-texture_pressed = ExtResource("4_y5g5t")
-texture_hover = ExtResource("5_pf14i")
-stretch_mode = 3
+theme_override_font_sizes/font_size = 30
+text = "Messages  ▲"

@@ -90,7 +90,7 @@ max_length = 16
 
 [node name="Difficulty" type="OptionButton" parent="PanelContainer/MarginContainer/VBoxContainer"]
 layout_mode = 2
-theme_override_font_sizes/font_size = 60
+theme_override_font_sizes/font_size = 90
 alignment = 1
 item_count = 3
 selected = 0
