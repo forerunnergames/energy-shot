@@ -106,7 +106,7 @@ public partial class Player
     _cameraKickRemaining -= recover;
   }
 
-  private void OnWeaponShotFired (float energy)
+  private void OnWeaponShotFired (float energy, bool isFullAuto)
   {
     CancelSpawnArmorIfFired();
     // Aim direction is captured before the camera kick so the kick is purely visual.
@@ -116,7 +116,7 @@ public partial class Player
     _cameraKickRemaining += kick;
     TryRocketBoost (direction, energy);
     var origin = _camera.GlobalPosition + direction * 0.9f;
-    SpawnBolt (origin, direction, energy, isLive: true);
+    SpawnBolt (origin, direction, energy, isLive: true, isFullAuto);
     Rpc (MethodName.SpawnVisualLaser, origin, direction, energy);
   }
 
@@ -136,39 +136,41 @@ public partial class Player
 
   // Visual-only copy of the shooter's bolt on every other peer.
   [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
-  private void SpawnVisualLaser (Vector3 origin, Vector3 direction, float energy) => SpawnBolt (origin, direction, energy, isLive: false);
+  private void SpawnVisualLaser (Vector3 origin, Vector3 direction, float energy) => SpawnBolt (origin, direction, energy, isLive: false, isFullAuto: false);
 
-  private void SpawnBolt (Vector3 origin, Vector3 direction, float energy, bool isLive)
+  private void SpawnBolt (Vector3 origin, Vector3 direction, float energy, bool isLive, bool isFullAuto)
   {
     var bolt = _laserBoltScene.Instantiate <LaserBolt>();
     GetParent().AddChild (bolt);
     bolt.Launch (origin, direction, energy, isLive, this);
-    if (isLive) bolt.HitPlayer += OnLaserHitPlayer;
+    if (isLive) bolt.HitPlayer += (body, hitEnergy) => OnLaserHitPlayer (body, hitEnergy, isFullAuto);
   }
 
-  private void OnLaserHitPlayer (CharacterBody3D body, float energy)
+  private void OnLaserHitPlayer (CharacterBody3D body, float energy, bool isFullAuto)
   {
     if (body is not Player victim || victim.NetworkId == NetworkId) return;
-    HitPuppet (victim, energy);
+    HitPuppet (victim, energy, isFullAuto);
   }
 
   // The victim is the single owner of its health: the shooter only reports the hit,
   // the victim applies damage & replicates Health to everyone, & tells the shooter
   // when it scored a kill (see issue #20).
-  private void HitPuppet (Player playerPuppet, float energy)
+  private void HitPuppet (Player playerPuppet, float energy, bool isFullAuto)
   {
     GD.Print ($"{DisplayName}: I hit {playerPuppet.DisplayName}!");
     _hitmarkerSound.Play();
-    playerPuppet.RpcId (playerPuppet.NetworkId, MethodName.ReceiveHit, energy, DisplayName);
+    playerPuppet.RpcId (playerPuppet.NetworkId, MethodName.ReceiveHit, energy, DisplayName, isFullAuto);
   }
 
   [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
-  private void ReceiveHit (float energy, string shotByPlayerName)
+  private void ReceiveHit (float energy, string shotByPlayerName, bool isFullAuto)
   {
     if (!IsMultiplayerAuthority()) return;
     if (SpawnArmor) return;
     GD.Print ($"{DisplayName}: I was hit by {shotByPlayerName}!");
-    LastDamageKind = energy <= FullAutoEnergy + 0.01f ? DamageKind.FullAuto : DamageKind.Laser; // Message context (issue #84).
+    // The fire mode travels with the hit (CodeRabbit on #96): a weak quick-tap
+    // discharge must not be misread as full-auto by an energy threshold.
+    LastDamageKind = isFullAuto ? DamageKind.FullAuto : DamageKind.Laser; // Message context (issue #84).
     ApplyDamage (energy, shotByPlayerName, knockbackScale: 1.0f);
   }
 

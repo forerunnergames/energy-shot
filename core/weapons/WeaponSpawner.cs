@@ -72,15 +72,15 @@ public partial class WeaponSpawner : Node3D
   }
 
   // Client -> server entry point; when this peer already is the server, skip the RPC.
-  public void SendDropRequest (Vector3 position, HeldWeapon dropped, string dropperName)
+  public void SendDropRequest (Vector3 position, HeldWeapon dropped)
   {
     if (Multiplayer.IsServer())
     {
-      RequestDrop (position, (int)dropped, dropperName);
+      RequestDrop (position, (int)dropped);
       return;
     }
 
-    RpcId (1, MethodName.RequestDrop, position, (int)dropped, dropperName);
+    RpcId (1, MethodName.RequestDrop, position, (int)dropped);
   }
 
   // The level restocks lazily: whenever a weapon leaves it (an expired drop or a
@@ -164,10 +164,15 @@ public partial class WeaponSpawner : Node3D
   }
 
   // Dropped weapons become expiring pickups at the drop spot (side by side when both drop at once).
+  // The dropper's identity comes from the RPC sender, never from client-supplied data
+  // (CodeRabbit on #96): a forged name could plant false theft-revenge attribution.
   [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
-  private void RequestDrop (Vector3 position, int droppedMask, string dropperName)
+  private void RequestDrop (Vector3 position, int droppedMask)
   {
     if (!Multiplayer.IsServer()) return;
+    var senderId = Multiplayer.GetRemoteSenderId();
+    if (senderId == 0) senderId = Multiplayer.GetUniqueId(); // Direct local call: the host player itself.
+    var dropperName = Players().FirstOrDefault (player => player.NetworkId == senderId)?.DisplayName ?? string.Empty;
     var dropped = (HeldWeapon)droppedMask;
     var spot = position + Vector3.Up * PickupHoverHeight;
     if (dropped.HasFlag (HeldWeapon.Laser)) Spawn (HeldWeapon.Laser, spot, expires: true, dropperName);

@@ -33,7 +33,20 @@ public partial class Player
   private WeaponSpawner Spawner => _weaponSpawner ??= GetNode <WeaponSpawner> ("/root/World/WeaponSpawner");
   // Falling off the world: held weapons return to the spawn pool via the caps instead
   // of dropping as unreachable pickups below the map.
-  private void ClearHeldWeapons() => HeldWeapon = HeldWeapon.None;
+  private void ClearHeldWeapons()
+  {
+    ForgetTheft (_heldWeapon);
+    HeldWeapon = HeldWeapon.None;
+  }
+
+  // Losing the stolen weapon ends the revenge window (CodeRabbit on #96): a fresh
+  // pickup of the same type must not trigger a stale gloat.
+  private void ForgetTheft (HeldWeapon lostTypes)
+  {
+    if ((_stolenWeapon & lostTypes) == 0) return;
+    _stolenWeapon = HeldWeapon.None;
+    _stolenFrom = string.Empty;
+  }
 
   // Called back (via the WeaponSpawner's ConfirmPickup RPC) after the server despawns
   // the claimed pickup for everyone.
@@ -71,7 +84,8 @@ public partial class Player
     if (!Holds (type)) type = IsBananaEquipped ? HeldWeapon.Laser : HeldWeapon.Banana;
     if (!Holds (type)) return;
     HeldWeapon &= ~type;
-    Spawner.SendDropRequest (GlobalPosition, type, DisplayName);
+    ForgetTheft (type);
+    Spawner.SendDropRequest (GlobalPosition, type);
     GD.Print ($"{DisplayName}: I dropped my {type}!");
   }
 
@@ -79,7 +93,8 @@ public partial class Player
   private void DropAllHeldWeapons()
   {
     if (_heldWeapon == HeldWeapon.None) return;
-    Spawner.SendDropRequest (GlobalPosition, _heldWeapon, DisplayName);
+    Spawner.SendDropRequest (GlobalPosition, _heldWeapon);
+    ForgetTheft (_heldWeapon);
     HeldWeapon = HeldWeapon.None;
   }
 }
