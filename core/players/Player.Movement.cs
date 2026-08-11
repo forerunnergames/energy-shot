@@ -159,6 +159,8 @@ public partial class Player
     _energyWeapon.ResetCharge(); // Every life starts with a cold weapon (issue #67).
     ClearStun(); // Death shakes off any punch/banana stun.
     ActivateSpawnArmor();
+    Crouching = false; // Fresh lives start standing (crouch is a toggle now).
+    ApplyCameraHeight();
     SetInputEnabled (isEnabled: false);
     _respawnSound.Play();
     GD.Print ($"{DisplayName}: I respawned!");
