@@ -102,6 +102,7 @@ public partial class Player
 
     GD.Print ($"{DisplayName}: My banana blasted {victim.DisplayName}!");
     _hitmarkerSound.Play();
+    ReportToServer ($"blast: {DisplayName} banana-blasted {victim.DisplayName} (energy {energy:0.00})");
     victim.RpcId (victim.NetworkId, MethodName.ReceiveBlast, blastOrigin, energy, DisplayName);
   }
 

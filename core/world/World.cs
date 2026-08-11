@@ -34,7 +34,6 @@ public partial class World : Node3D
   private string _selfPlayerName = string.Empty;
   private int _selfDifficulty = 2;
   private int _score;
-  [Rpc] private void OnKickedFromServer (string reason) => EmitSignal (SignalName.KickedFromServer, reason);
   private int FindPlayerId (string displayName) => FindPlayer (displayName)?.NetworkId ?? 0;
   private Player? FindPlayer (string displayName) => GetChildren().OfType <Player>().FirstOrDefault (player => player.DisplayName == displayName);
   private Player? FindPlayer (int peerId) => GetChildren().OfType <Player>().FirstOrDefault (player => player.NetworkId == peerId);
@@ -43,7 +42,20 @@ public partial class World : Node3D
   private void OnGamePaused() => _selfPlayer?.SetInputEnabled (isEnabled: false);
   private void OnGameResumed() => _selfPlayer?.SetInputEnabled (isEnabled: true);
   private void OnGameQuit() => GetTree().Quit();
-  private static void OnClientConnectedToServer (long peerId) => GD.Print ($"Server: Client ID [{peerId}] connected");
+  private static void OnClientConnectedToServer (long peerId) => ServerLog.Event (peerId, "connected");
+  // Only a live ENet server session logs (issue #111): the engine's default
+  // OfflineMultiplayerPeer also reports IsServer, which would spam clients in menus.
+  private bool IsActiveServer() => Multiplayer.MultiplayerPeer is ENetMultiplayerPeer && Multiplayer.IsServer();
+
+  // Being kicked already explains the follow-up disconnect: unhooking first keeps the
+  // kick reason (e.g. "Wrong password.") from being overwritten by a bogus
+  // "server was shut down" moments later (issue #109).
+  [Rpc]
+  private void OnKickedFromServer (string reason)
+  {
+    OnJoinCanceled();
+    EmitSignal (SignalName.KickedFromServer, reason);
+  }
 
   public override void _Ready()
   {
@@ -60,6 +72,9 @@ public partial class World : Node3D
     _ui.GameQuit += OnGameQuit;
     _networkManager.PlayerRespawnedShot += (playerName, shotByPlayerName) => OnPlayerRespawned (playerName, SignalName.PlayerRespawnedShot, shotByPlayerName);
     _networkManager.PlayerRespawnedFell += playerName => OnPlayerRespawned (playerName, SignalName.PlayerRespawnedFell);
+    // Deaths reach the server through these notifications on every path (issue #111).
+    _networkManager.PlayerRespawnedShot += (playerName, shotByPlayerName) => { if (IsActiveServer()) ServerLog.Event (FindPlayerId (playerName), $"death: {playerName} zapped out by {shotByPlayerName}"); };
+    _networkManager.PlayerRespawnedFell += playerName => { if (IsActiveServer()) ServerLog.Event (FindPlayerId (playerName), $"death: {playerName} fell off the world"); };
     _networkManager.RemoteMessageReceived += message => EmitSignal (SignalName.RemoteMessageReceived, message);
     _networkManager.PlayerJoinGame += playerName => EmitSignal (SignalName.PlayerJoinedGame, playerName);
     _networkManager.PlayerLeftGame += playerName => EmitSignal (SignalName.PlayerLeftGame, playerName);
@@ -97,7 +112,9 @@ public partial class World : Node3D
     var error = peer.CreateClient (address, port);
     if (error != Error.Ok) GD.PrintErr ($"Playtest join failed: {error}");
     Multiplayer.MultiplayerPeer = peer;
-    Multiplayer.ConnectedToServer += () => OnJoinGameSuccess (playerName, difficulty, password);
+    // One-shot: a retried session (e.g. the playtest's wrong-password probe, issue
+    // #109) must not replay stale credentials from an earlier attempt's handler.
+    Multiplayer.Connect (MultiplayerApi.SignalName.ConnectedToServer, Callable.From (() => OnJoinGameSuccess (playerName, difficulty, password)), (uint)ConnectFlags.OneShot);
   }
 
   // Dedicated-server exports carry the feature tag, so the server binary needs no flag;
@@ -150,38 +167,39 @@ public partial class World : Node3D
   {
     if (!Multiplayer.IsServer()) return;
     var senderId = Multiplayer.GetRemoteSenderId();
-    GD.Print ($"Server: {senderId} {playerName} is requesting to join the game (difficulty {difficulty})");
+    ServerLog.Event (senderId, $"join request: [{playerName}] (difficulty {difficulty})");
 
     // Server-enforced game password (issue #90); empty server password = open server.
     if (_serverPassword.Length > 0 && password != _serverPassword)
     {
+      ServerLog.Event (senderId, $"join denied: [{playerName}] wrong password");
       Kick (senderId, "Wrong password.");
-      GD.PrintErr ($"Server: Disconnected client ID [{senderId}], wrong password");
       return;
     }
 
+    ServerLog.Event (senderId, $"password {(_serverPassword.Length > 0 ? "accepted" : "not required")} for [{playerName}]");
     var duplicateId = FindPlayer (senderId);
     var duplicateName = FindPlayer (playerName);
 
     if (duplicateId != null)
     {
+      ServerLog.Event (senderId, $"join denied: duplicate ID, [{duplicateId.DisplayName} (ID: {duplicateId.NetworkId})] is already in game");
       Kick (senderId, "You're already in the game.");
-      GD.PrintErr ($"Server: Disconnected client ID [{senderId}], duplicate ID, [{duplicateId.DisplayName} (ID: {duplicateId.NetworkId})] is already in game");
       return;
     }
 
     if (duplicateName != null)
     {
+      ServerLog.Event (senderId, $"join denied: duplicate display name, [{duplicateName.DisplayName} (ID: {duplicateName.NetworkId})] is already in game");
       Kick (senderId, "Your name is already in use by another player.");
-      GD.PrintErr ($"Server: Disconnected client ID [{senderId}], duplicate display name, [{duplicateName.DisplayName} (ID: {duplicateName.NetworkId})] is already in game");
       return;
     }
 
     // Host-chosen player cap (issue #73).
     if (GetPlayers().Count() >= _maxPlayers)
     {
+      ServerLog.Event (senderId, $"join denied: game is full ({_maxPlayers} players)");
       Kick (senderId, "Game is full.");
-      GD.PrintErr ($"Server: Disconnected client ID [{senderId}], game is full ({_maxPlayers} players)");
       return;
     }
 
@@ -191,6 +209,7 @@ public partial class World : Node3D
   // Delay the disconnect so the kick-reason RPC isn't dropped by an immediate peer disconnect (see issue #23).
   private async void Kick (int peerId, string reason)
   {
+    ServerLog.Event (peerId, $"kicked: {reason}");
     RpcId (peerId, MethodName.OnKickedFromServer, reason);
     await ToSignal (GetTree().CreateTimer (0.5), SceneTreeTimer.SignalName.Timeout);
     if (!Multiplayer.GetPeers().Contains (peerId)) return;
@@ -227,7 +246,7 @@ public partial class World : Node3D
   private void OnClientDisconnectedFromServer (long id)
   {
     RemovePlayer (id);
-    GD.Print ($"Server: Player [{id}] disconnected");
+    ServerLog.Event (id, "disconnected");
   }
 
   private void _OnMultiplayerSpawnerSpawned (Node node)
@@ -258,7 +277,7 @@ public partial class World : Node3D
     player.RespawnedFell += respawnedPlayerName => _networkManager.NotifyPlayerRespawnedFell (respawnedPlayerName);
     AddChild (player);
     player.DisplayName = playerName;
-    GD.Print ($"Server: [{player.DisplayName} {player.NetworkId}] joined the game");
+    ServerLog.Event (player.NetworkId, $"spawn: [{player.DisplayName}] joined the game (max health {maxHealth})");
     _networkManager.NotifyPlayerJoinGame (player.DisplayName);
     if (!player.IsMultiplayerAuthority()) return;
     RegisterSelf (player);
@@ -286,11 +305,13 @@ public partial class World : Node3D
 
   // Golden crown (issue #89): every peer computes the score leader locally from the
   // replicated Scores each second - no new networking; ties break by the
-  // leaderboard's sort order (highest score, then name).
+  // leaderboard's sort order (highest score, then name). The same tick samples pings
+  // server-side (issue #100).
   private void StartCrownTicker()
   {
     var timer = new Timer { WaitTime = 1.0, Autostart = true };
     timer.Timeout += UpdateCrownHolder;
+    timer.Timeout += UpdatePings;
     AddChild (timer);
   }
 
@@ -299,5 +320,27 @@ public partial class World : Node3D
     var players = GetPlayers().ToList();
     var leader = players.OrderByDescending (player => player.Score).ThenBy (player => player.DisplayName).FirstOrDefault();
     players.ForEach (player => player.SetCrowned (player == leader));
+  }
+
+  // Per-player ping (issue #100): the server samples each peer's ENet round-trip time
+  // once a second & tells the owning client, which writes the replicated PingMs that
+  // every peer renders on the leaderboard.
+  private void UpdatePings()
+  {
+    if (Multiplayer.MultiplayerPeer is not ENetMultiplayerPeer peer || !Multiplayer.IsServer()) return;
+    foreach (var player in GetPlayers()) UpdatePing (peer, player);
+  }
+
+  private void UpdatePing (ENetMultiplayerPeer peer, Player player)
+  {
+    if (player.NetworkId == Multiplayer.GetUniqueId())
+    {
+      player.PingMs = 0; // The host is the server: its own ping is always 0.
+      return;
+    }
+
+    if (!Multiplayer.GetPeers().Contains (player.NetworkId)) return; // Mid-disconnect.
+    var pingMs = (int)peer.GetPeer (player.NetworkId).GetStatistic (ENetPacketPeer.PeerStatistic.RoundTripTime);
+    player.RpcId (player.NetworkId, Player.MethodName.ReceivePingMeasurement, pingMs);
   }
 }

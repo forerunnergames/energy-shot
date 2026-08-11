@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using com.forerunnergames.energyshot.core.world;
 using com.forerunnergames.energyshot.players;
+using com.forerunnergames.energyshot.utilities;
 using Godot;
 
 namespace com.forerunnergames.energyshot.weapons;
@@ -139,20 +140,28 @@ public partial class WeaponSpawner : Node3D
     pickup.Expires = expires;
     pickup.PreviousOwner = previousOwner; // For theft-revenge messages (issue #84).
     GetParent().AddChild (pickup); // The MultiplayerSpawner replicates the spawn to every peer.
-    GD.Print ($"Server: Spawned {type} pickup at {position}");
+    ServerLog.Event ($"weapon spawn: {type} pickup [{pickup.Name}] at {position}{(expires ? " (expiring drop)" : "")}");
   }
 
   // First request wins: a pickup that's already claimed or expired is simply gone.
+  // Every claim/award/deny decision is logged server-side (issues #110 & #111).
   [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
   private void RequestPickup (string pickupName, int collectorId)
   {
     if (!Multiplayer.IsServer()) return;
     var pickup = GetParent().GetNodeOrNull <WeaponPickup> (pickupName);
-    if (pickup == null || pickup.IsQueuedForDeletion()) return;
+    ServerLog.Event (collectorId, $"weapon claim: pickup [{pickupName}]");
+
+    if (pickup == null || pickup.IsQueuedForDeletion())
+    {
+      ServerLog.Event (collectorId, $"weapon deny: pickup [{pickupName}] {(pickup == null ? "no longer exists" : "is already claimed")}");
+      return;
+    }
+
     var type = pickup.Weapon;
     var previousOwner = pickup.PreviousOwner;
     pickup.QueueFree(); // Despawns on every peer via the MultiplayerSpawner.
-    GD.Print ($"Server: Player [{collectorId}] picked up the {type}");
+    ServerLog.Event (collectorId, $"weapon award: {type} from pickup [{pickupName}]");
 
     if (collectorId == Multiplayer.GetUniqueId())
     {
@@ -170,10 +179,12 @@ public partial class WeaponSpawner : Node3D
   private void RequestDrop (Vector3 position, int droppedMask)
   {
     if (!Multiplayer.IsServer()) return;
+    // A direct (non-RPC) call means the host itself dropped, so there's no remote sender.
     var senderId = Multiplayer.GetRemoteSenderId();
-    if (senderId == 0) senderId = Multiplayer.GetUniqueId(); // Direct local call: the host player itself.
+    if (senderId == 0) senderId = Multiplayer.GetUniqueId();
     var dropperName = Players().FirstOrDefault (player => player.NetworkId == senderId)?.DisplayName ?? string.Empty;
     var dropped = (HeldWeapon)droppedMask;
+    ServerLog.Event (senderId, $"weapon drop: {dropped} at {position}");
     var spot = position + Vector3.Up * PickupHoverHeight;
     if (dropped.HasFlag (HeldWeapon.Laser)) Spawn (HeldWeapon.Laser, spot, expires: true, dropperName);
     if (dropped.HasFlag (HeldWeapon.Banana)) Spawn (HeldWeapon.Banana, spot + Vector3.Right * 0.8f, expires: true, dropperName);

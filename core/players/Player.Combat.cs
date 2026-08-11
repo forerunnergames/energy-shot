@@ -1,3 +1,4 @@
+using com.forerunnergames.energyshot.utilities;
 using com.forerunnergames.energyshot.weapons;
 using Godot;
 
@@ -10,6 +11,28 @@ public partial class Player
   // Bolts spawn this far ahead of the camera; the first sweep still starts at the
   // camera so nearer geometry isn't skipped (issue #112).
   private const float MuzzleOffsetMeters = 0.9f;
+
+  // Combat reports for the server log (issue #111): the attacker->victim damage RPCs
+  // never execute on the server, so the attacker also files a tiny report the server
+  // just prints - one small reliable RPC per landed hit, cheap & always on.
+  private void ReportToServer (string message)
+  {
+    if (Multiplayer.IsServer())
+    {
+      ServerLog.Event (NetworkId, message);
+      return;
+    }
+
+    RpcId (1, MethodName.LogOnServer, message);
+  }
+
+  [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
+  private void LogOnServer (string message)
+  {
+    if (!Multiplayer.IsServer()) return;
+    ServerLog.Event (Multiplayer.GetRemoteSenderId(), message);
+  }
+
   private bool IsFullAutoActive() => _fullAutoSecondsLeft > 0.0f;
   // 0..1 readiness fractions for the HUD cooldown bars (1 = ready).
   public float ShotReadyFraction => _energyWeapon.CooldownFraction;
@@ -113,6 +136,7 @@ public partial class Player
     Rpc (MethodName.PlayRemotePunch, hand); // ...but peers only ever see real connects (issue #82).
     _punchSound.Play(); // Puncher-only, connect-only (issue #82): the victim hears the damage sound instead.
     GD.Print ($"{DisplayName}: I punched {victim.DisplayName}!");
+    ReportToServer ($"punch: {DisplayName} punched {victim.DisplayName}");
     victim.RpcId (victim.NetworkId, MethodName.ReceivePunch, DisplayName);
   }
 
@@ -194,6 +218,7 @@ public partial class Player
   {
     GD.Print ($"{DisplayName}: I hit {playerPuppet.DisplayName}!");
     _hitmarkerSound.Play();
+    ReportToServer ($"hit: {DisplayName} zapped {playerPuppet.DisplayName} (energy {energy:0.00})");
     playerPuppet.RpcId (playerPuppet.NetworkId, MethodName.ReceiveHit, energy, DisplayName, throughBarrier, isFullAuto);
   }
 

@@ -150,7 +150,7 @@ public partial class MessageScroller : Control
     ShiftMessagesUp();
     UpdateBottomMessage (_messageImportanceToColors[importance], singleLineMessage);
     ModulateMessages();
-    AddMessageToHistory (singleLineMessage);
+    AddMessageToHistory (_messageImportanceToColors[importance], singleLineMessage);
     StartMessageTimer (importance, isInstant);
     return true;
   }
@@ -181,10 +181,12 @@ public partial class MessageScroller : Control
     tween.TweenProperty (_messageLabel3, "modulate:a", 0.8f, 0.5f).From (1.0f);
   }
 
-  private void AddMessageToHistory (string singleLineMessage)
+  // The history keeps each message's scroller color (issue #101), e.g. your own
+  // deaths stay red there too.
+  private void AddMessageToHistory (Color color, string singleLineMessage)
   {
     if (_messageHistory.Count >= MaxMessageHistoryLines) _messageHistory.RemoveRange (0, _messageHistoryLineRemovalAmount);
-    _messageHistory.Add (singleLineMessage);
+    _messageHistory.Add ($"[color=#{color.ToHtml (false)}]{singleLineMessage}[/color]");
     if (!IsMessageHistoryVisible()) return;
     UpdateMessageHistory();
   }

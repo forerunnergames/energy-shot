@@ -55,22 +55,25 @@ public partial class Hud : Control
   private void UpdateLeaderboard()
   {
     var players = _world.GetPlayers().OrderByDescending (player => player.Score).ThenBy (player => player.DisplayName);
-    _leaderboardEntries.Text = string.Join ("\n", players.Select (LeaderboardEntry));
+    _leaderboardEntries.Text = string.Join ("\n", players.Select ((player, index) => LeaderboardEntry (player, isLeader: index == 0)));
     UpdateScoreLabel();
   }
 
-  // 3+ streak entries glow & pulse so the hot player stands out (see issue #77).
-  private static string LeaderboardEntry (players.Player player) =>
-    player.IsOnStreak
-      ? $"[pulse freq=1.5 color=#ffd24d ease=-2.0][wave amp=18.0 freq=4.0][b]{player.DisplayName}  {player.Score}[/b][/wave][/pulse]"
-      : $"{player.DisplayName}  {player.Score}";
+  // 3+ streak entries glow & pulse so the hot player stands out (see issue #77); the
+  // current leader wears the crown (issue #107) & every entry shows its ping (issue #100).
+  private static string LeaderboardEntry (players.Player player, bool isLeader)
+  {
+    var entry = $"{player.DisplayName}  {player.Score}  ({Mathf.Max (0, player.PingMs)}ms)";
+    if (player.IsOnStreak) entry = $"[pulse freq=1.5 color=#ffd24d ease=-2.0][wave amp=18.0 freq=4.0][b]{entry}[/b][/wave][/pulse]";
+    return isLeader ? $"\U0001F451 {entry}" : entry;
+  }
 
   // Score can also drop (fall penalty), so the label reads the replicated value.
   private void UpdateScoreLabel() => _scoreLabel.Text = $"Score: {_world.SelfPlayer?.Score ?? 0}";
   private bool IsSelf (string playerName) => _selfPlayerName == playerName;
   private void OnKickedFromServer (string reason) => Hide();
   private void OnServerShutDown() => Hide();
-  private void PrintMessage (string message) => _messageScroller.AddMessage (message);
+  private void PrintMessage (string message, MessageScroller.MessageImportance importance = MessageScroller.MessageImportance.Medium) => _messageScroller.AddMessage (message, importance);
   // @formatter:on
 
   public override void _Ready()
@@ -201,7 +204,8 @@ public partial class Hud : Control
     }
 
     if (!IsSelf (playerName)) return;
-    Announce (MessageGenerator.OnZapped (playerName, shotByPlayerName, BuildDeathContext (shotByPlayerName)));
+    // Your own death renders red locally (issue #101); everyone else gets the same text in white.
+    Announce (MessageGenerator.OnZapped (playerName, shotByPlayerName, BuildDeathContext (shotByPlayerName)), MessageScroller.MessageImportance.Critical);
     ++_zappedStreak;
     _zapStreak = 0;
     if (_zappedStreak >= 3) Announce (MessageGenerator.OnZappedStreak (playerName));
@@ -228,13 +232,14 @@ public partial class Hud : Control
       self?.LastZapThroughBarrier ?? false);
   }
 
-  private void Announce (string message) => NotifyMessage (message, message);
+  private void Announce (string message, MessageScroller.MessageImportance importance = MessageScroller.MessageImportance.Medium) => NotifyMessage (message, message, importance);
 
   private void OnPlayerRespawnedFell (string playerName)
   {
     if (!IsSelf (playerName)) return;
     UpdateScoreLabel(); // Falling costs a point; show it immediately.
-    Announce (MessageGenerator.OnPlayerRespawnedFell (isSelf: false, playerName, out _)); // Same text for every peer (#53).
+    // Same text for every peer (#53); red locally because it's your own death (issue #101).
+    Announce (MessageGenerator.OnPlayerRespawnedFell (isSelf: false, playerName, out _), MessageScroller.MessageImportance.Critical);
     ++_fallStreak;
     if (_fallStreak >= 3) Announce (MessageGenerator.OnFallStreak (playerName));
   }
@@ -266,9 +271,9 @@ public partial class Hud : Control
     EmitSignal (SignalName.GameResumed);
   }
 
-  private void NotifyMessage (string localMessage, string remoteMessage, string excludedPlayerName = "")
+  private void NotifyMessage (string localMessage, string remoteMessage, MessageScroller.MessageImportance importance = MessageScroller.MessageImportance.Medium, string excludedPlayerName = "")
   {
-    PrintMessage (localMessage);
+    PrintMessage (localMessage, importance);
     EmitSignal (SignalName.Message, remoteMessage, excludedPlayerName);
   }
 }

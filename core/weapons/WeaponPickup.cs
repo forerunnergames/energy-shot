@@ -1,5 +1,6 @@
 using System.Linq;
 using com.forerunnergames.energyshot.players;
+using com.forerunnergames.energyshot.utilities;
 using Godot;
 
 namespace com.forerunnergames.energyshot.weapons;
@@ -78,7 +79,7 @@ public partial class WeaponPickup : Area3D
     if (!Multiplayer.IsServer() || !Expires) return;
     _expiryLeft -= (float)delta;
     if (_expiryLeft > 0.0f) return;
-    GD.Print ($"Server: Unclaimed dropped {Weapon} pickup expired");
+    ServerLog.Event ($"weapon despawn: unclaimed dropped {Weapon} pickup [{Name}] expired");
     QueueFree(); // The MultiplayerSpawner despawns it on every peer; the WeaponSpawner respawns the weapon at a free spawn point.
   }
 
@@ -93,8 +94,22 @@ public partial class WeaponPickup : Area3D
     _spawner.SendPickupRequest (Name, collector.NetworkId);
   }
 
-  // Can't pick up a weapon type you already hold.
-  private Player? FindLocalCollector() => GetOverlappingBodies().OfType <Player>().FirstOrDefault (player => player.IsMultiplayerAuthority() && !player.Holds (Weapon));
+  // Sphere radius (1.2) + the player capsule's reach, against the player's center.
+  private const float ClaimRangeMeters = 1.7f;
+
+  // Can't pick up a weapon type you already hold. Area3D overlap alone can miss a
+  // player who's inside the area but hasn't generated fresh contacts (issue #110), so
+  // a plain distance check on the local player backs it up.
+  private Player? FindLocalCollector()
+  {
+    var collector = GetOverlappingBodies().OfType <Player>().FirstOrDefault (IsEligibleCollector);
+    if (collector != null) return collector;
+    var local = Player.Local;
+    if (local == null || !IsEligibleCollector (local)) return null;
+    return (local.GlobalPosition + Vector3.Up).DistanceTo (GlobalPosition) <= ClaimRangeMeters ? local : null;
+  }
+
+  private bool IsEligibleCollector (Player player) => player.IsMultiplayerAuthority() && !player.Holds (Weapon);
 
   private void UpdateVisuals()
   {

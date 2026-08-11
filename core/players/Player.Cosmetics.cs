@@ -100,9 +100,11 @@ public partial class Player
 
   // Golden crown for the current score leader (issue #89): each peer computes the
   // leader locally in World from the replicated Scores & toggles this; the crown
-  // floats above the name tag & slowly spins while worn.
+  // floats clearly above the name tag & slowly spins while worn (issue #107).
+  private const float CrownNameTagSpacing = 0.6f;
   private Node3D? _crown;
   private Tween? _crownSpin;
+  public bool IsCrowned => _crown is { Visible: true };
 
   public void SetCrowned (bool isCrowned)
   {
@@ -143,6 +145,16 @@ public partial class Player
     _nameTag.Position = new Vector3 (_nameTag.Position.X, NameTagBaseHeight + verticalOffset, _nameTag.Position.Z);
     _healthTag.Scale = originalHealthTagScale * healthTagScaleFactor;
     _healthTag.Position = new Vector3 (_healthTag.Position.X, NameTagBaseHeight + verticalOffset - tagSpacing, _healthTag.Position.Z);
+    UpdateCrownPlacement (scaleFactor, verticalOffset);
+  }
+
+  // The crown rides clearly above the name tag & scales with it, so the leader is
+  // obvious at any distance instead of hiding behind/inside the tag (issue #107).
+  private void UpdateCrownPlacement (float scaleFactor, float verticalOffset)
+  {
+    if (_crown == null) return;
+    _crown.Scale = Vector3.One * scaleFactor;
+    _crown.Position = new Vector3 (_crown.Position.X, NameTagBaseHeight + verticalOffset + CrownNameTagSpacing * scaleFactor, _crown.Position.Z);
   }
 
   private float CalculateTagScaleFactor (float distance)
