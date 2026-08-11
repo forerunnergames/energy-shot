@@ -41,6 +41,14 @@ public static class MessagePools
     "{v} has been recalled to the respawn factory, sincerely {z}"
   };
 
+  // Full-charge zap-outs that pierced a wall or floor on the way (issue #94).
+  public static readonly List <string> ThroughWall = new()
+  {
+    "{z} zapped {v} right through the wall. Rude",
+    "{v} thought the wall would stop {z}. The wall had other plans",
+    "{z} doesn't believe in walls. {v} believes in respawning now"
+  };
+
   public static readonly List <string> FullCharge = new()
   {
     "{v} caught the full brunt of {z}'s science project",
@@ -201,10 +209,10 @@ public static class MessagePools
     "return to sender: {z} gave {v}'s weapon back the fun way"
   };
 
-  // Registry so the unit test can verify exactly 100 unique templates (issue #84).
+  // Registry so the unit test can verify all templates stay unique (issue #84).
   public static readonly IReadOnlyList <List <string>> All = new List <List <string>>
   {
-    Fall, FallStreak, Zapped, FullCharge, FullAuto, Punch, PunchedOutArmed, FistsVsFists,
+    Fall, FallStreak, Zapped, ThroughWall, FullCharge, FullAuto, Punch, PunchedOutArmed, FistsVsFists,
     BananaBlast, BananaDirect, HoldingBananaGun, ComboSplatterPunch, JumpShot, SlideShotKiller,
     SlideShotVictim, ZapStreakTier3, ZapStreakTier5, ZapStreakTier7, StreakEnded, StreakLost,
     ZappedStreak, TheftRevenge

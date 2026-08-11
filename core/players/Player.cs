@@ -71,6 +71,8 @@ public partial class Player : CharacterBody3D
 
   // 5s of invulnerability after every (re)spawn, canceled by firing. Replicated so
   // every peer renders the armored (white) player & the victim rejects damage.
+  // Puppets also track a local display deadline: if the armor-off delta is missed
+  // (ON_CHANGE can drop), the white glow still clears on time (issue #114).
   [Export]
   public bool SpawnArmor
   {
@@ -78,6 +80,7 @@ public partial class Player : CharacterBody3D
     set
     {
       _spawnArmor = value;
+      if (value) _armorDisplayEndMs = Time.GetTicksMsec() + (ulong)((SpawnArmorSeconds + ArmorDisplaySlackSeconds) * 1000.0f);
       if (_mesh != null) RestoreBaseColor();
     }
   }
@@ -124,6 +127,8 @@ public partial class Player : CharacterBody3D
   public bool IsOnStreak => ZapStreakCount >= 3;
 
   [Export] public float SpawnArmorSeconds = 5.0f;
+  // Matches LaserBolt.PierceEnergyThreshold: a shot this hot pierces & one-hit-kills (#93).
+  [Export] public float FullChargeEnergyThreshold = 0.95f;
   [Export] public float MouseSensitivity = 0.0025f;
   [Export] public float FullAutoDurationSeconds = 3.0f;
   [Export] public float FullAutoCooldownSeconds = 15.0f;
@@ -178,9 +183,18 @@ public partial class Player : CharacterBody3D
   [Export] public float NameTagBaseHeight = 2.3f;
   public int NetworkId => Name.ToString().ToInt();
   public float LastZapEnergy { get; private set; }
+  // Whether the last zap this player took came through a pierced barrier (issue #94).
+  public bool LastZapThroughBarrier { get; private set; }
+  private const float ArmorDisplaySlackSeconds = 1.0f;
+  private const float CrosshairPulseSeconds = 0.4f;
+  private const float CrosshairPulseScale = 1.8f;
+  private static readonly Color FullChargeCrosshairColor = new(1.0f, 0.2f, 0.1f);
   private readonly RandomNumberGenerator _rng = new();
   private bool _spawnArmor;
   private ulong _spawnArmorEndMs;
+  private ulong _armorDisplayEndMs;
+  private ulong _crosshairPulseEndMs;
+  private Vector3 _crosshairBaseScale;
   private bool _sliding;
   private bool _crouching;
   private int _zapStreakCount;
@@ -204,6 +218,7 @@ public partial class Player : CharacterBody3D
   private float _punchCooldownLeft;
   private float _cameraKickRemaining;
   private AudioStreamPlayer _punchSound = null!;
+  private AudioStreamPlayer _throughWallZapSound = null!;
   private AudioStreamPlayer _hitmarkerSound = null!;
   private AudioStreamPlayer _damageSound = null!;
   private AudioStreamPlayer _zapOutSound = null!;
@@ -247,6 +262,7 @@ public partial class Player : CharacterBody3D
     _streakLight = GetNode <OmniLight3D> ("StreakLight");
     _healthBar = GetNode <ProgressBar> ("SubViewport/HealthBar");
     _punchSound = GetNode <AudioStreamPlayer> ("PunchSound");
+    _throughWallZapSound = GetNode <AudioStreamPlayer> ("ThroughWallZapSound");
     _hitmarkerSound = GetNode <AudioStreamPlayer> ("HitmarkerSound");
     _damageSound = GetNode <AudioStreamPlayer> ("DamageSound");
     _zapOutSound = GetNode <AudioStreamPlayer> ("ZapOutSound");
@@ -274,6 +290,8 @@ public partial class Player : CharacterBody3D
     _healthBar.Hide();
     _nameTag.Hide();
     _energyWeapon.ShotFired += OnWeaponShotFired;
+    _energyWeapon.FullChargeReached += OnFullChargeReached;
+    _crosshairBaseScale = _crossHairs.Scale;
     _camera = GetNode <Camera3D> ("Camera3D");
     _camera.Current = true;
     _standingCameraHeight = _camera.Position.Y;
@@ -295,6 +313,7 @@ public partial class Player : CharacterBody3D
     if (!IsMultiplayerActive()) return;
     UpdatePuppetTags();
     UpdateCrosshairTint();
+    ClearStaleArmorDisplay();
   }
 
   public override void _PhysicsProcess (double delta)
@@ -302,6 +321,7 @@ public partial class Player : CharacterBody3D
     if (!IsMultiplayerActive()) return;
     if (!IsMultiplayerAuthority()) return;
     UpdateSpawnArmor();
+    UpdateXrayReveal();
     UpdateWeaponSelection();
     UpdateBananaLauncher();
     UpdateBread();

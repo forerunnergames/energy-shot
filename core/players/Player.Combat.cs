@@ -7,6 +7,9 @@ namespace com.forerunnergames.energyshot.players;
 // camera kick, crosshair tint, & the hit/damage/score RPCs.
 public partial class Player
 {
+  // Bolts spawn this far ahead of the camera; the first sweep still starts at the
+  // camera so nearer geometry isn't skipped (issue #112).
+  private const float MuzzleOffsetMeters = 0.9f;
   private bool IsFullAutoActive() => _fullAutoSecondsLeft > 0.0f;
   // 0..1 readiness fractions for the HUD cooldown bars (1 = ready).
   public float ShotReadyFraction => _energyWeapon.CooldownFraction;
@@ -33,11 +36,23 @@ public partial class Player
     return hit["collider"].AsGodotObject() as Player;
   }
 
-  // Crosshair stays white until it's actually over another player.
+  // Crosshair stays white until it's actually over another player; the full-charge
+  // pulse (issue #113) briefly owns the tint.
   private void UpdateCrosshairTint()
   {
     if (!IsMultiplayerAuthority()) return;
+    if (Time.GetTicksMsec() < _crosshairPulseEndMs) return;
     _crossHairs.Modulate = FindAimedPlayer (200.0f) != null ? Colors.Red : Colors.White;
+  }
+
+  // Full-charge lock-in cue (issue #113): the crosshair flashes hot & pops in size
+  // alongside the weapon's click, so max charge is unmistakable.
+  private void OnFullChargeReached()
+  {
+    _crosshairPulseEndMs = Time.GetTicksMsec() + (ulong)(CrosshairPulseSeconds * 1000.0f);
+    _crossHairs.Modulate = FullChargeCrosshairColor;
+    _crossHairs.Scale = _crosshairBaseScale * CrosshairPulseScale;
+    CreateTween().TweenProperty (_crossHairs, "scale", _crosshairBaseScale, CrosshairPulseSeconds);
   }
 
   private void ActivateSpawnArmor()
@@ -118,9 +133,10 @@ public partial class Player
     _camera.RotateX (kick);
     _cameraKickRemaining += kick;
     TryRocketBoost (direction, energy);
-    var origin = _camera.GlobalPosition + direction * 0.9f;
-    SpawnBolt (origin, direction, energy, isLive: true, isFullAuto);
-    Rpc (MethodName.SpawnVisualLaser, origin, direction, energy);
+    var sweepStart = _camera.GlobalPosition;
+    var origin = sweepStart + direction * MuzzleOffsetMeters;
+    SpawnBolt (origin, sweepStart, direction, energy, isLive: true, isFullAuto);
+    Rpc (MethodName.SpawnVisualLaser, origin, sweepStart, direction, energy);
   }
 
   // Firing at the ground close beneath you rocket-boosts you upward, scaling with
@@ -148,44 +164,51 @@ public partial class Player
     if (IsOnFloor()) _airBoostUsed = false;
   }
 
-  // Visual-only copy of the shooter's bolt on every other peer.
+  // Visual-only copy of the shooter's bolt on every other peer. Firing also proves
+  // the shooter's spawn armor is gone, so stale armor whitewash clears here (issue #114).
   [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
-  private void SpawnVisualLaser (Vector3 origin, Vector3 direction, float energy) => SpawnBolt (origin, direction, energy, isLive: false, isFullAuto: false);
+  private void SpawnVisualLaser (Vector3 origin, Vector3 sweepStart, Vector3 direction, float energy)
+  {
+    ClearArmorDisplayOnRemoteAttack();
+    SpawnBolt (origin, sweepStart, direction, energy, isLive: false, isFullAuto: false);
+  }
 
-  private void SpawnBolt (Vector3 origin, Vector3 direction, float energy, bool isLive, bool isFullAuto)
+  private void SpawnBolt (Vector3 origin, Vector3 sweepStart, Vector3 direction, float energy, bool isLive, bool isFullAuto)
   {
     var bolt = _laserBoltScene.Instantiate <LaserBolt>();
     GetParent().AddChild (bolt);
-    bolt.Launch (origin, direction, energy, isLive, this);
-    if (isLive) bolt.HitPlayer += (body, hitEnergy) => OnLaserHitPlayer (body, hitEnergy, isFullAuto);
+    bolt.Launch (origin, sweepStart, direction, energy, isLive, this);
+    if (isLive) bolt.HitPlayer += (body, hitEnergy, throughBarrier) => OnLaserHitPlayer (body, hitEnergy, throughBarrier, isFullAuto);
   }
 
-  private void OnLaserHitPlayer (CharacterBody3D body, float energy, bool isFullAuto)
+  private void OnLaserHitPlayer (CharacterBody3D body, float energy, bool throughBarrier, bool isFullAuto)
   {
     if (body is not Player victim || victim.NetworkId == NetworkId) return;
-    HitPuppet (victim, energy, isFullAuto);
+    HitPuppet (victim, energy, throughBarrier, isFullAuto);
   }
 
   // The victim is the single owner of its health: the shooter only reports the hit,
   // the victim applies damage & replicates Health to everyone, & tells the shooter
   // when it scored a kill (see issue #20).
-  private void HitPuppet (Player playerPuppet, float energy, bool isFullAuto)
+  private void HitPuppet (Player playerPuppet, float energy, bool throughBarrier, bool isFullAuto)
   {
     GD.Print ($"{DisplayName}: I hit {playerPuppet.DisplayName}!");
     _hitmarkerSound.Play();
-    playerPuppet.RpcId (playerPuppet.NetworkId, MethodName.ReceiveHit, energy, DisplayName, isFullAuto);
+    playerPuppet.RpcId (playerPuppet.NetworkId, MethodName.ReceiveHit, energy, DisplayName, throughBarrier, isFullAuto);
   }
 
   [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
-  private void ReceiveHit (float energy, string shotByPlayerName, bool isFullAuto)
+  private void ReceiveHit (float energy, string shotByPlayerName, bool throughBarrier, bool isFullAuto)
   {
     if (!IsMultiplayerAuthority()) return;
     if (SpawnArmor) return;
-    GD.Print ($"{DisplayName}: I was hit by {shotByPlayerName}!");
+    GD.Print ($"{DisplayName}: I was hit by {shotByPlayerName}{(throughBarrier ? " through a barrier" : "")}!");
     // The fire mode travels with the hit (CodeRabbit on #96): a weak quick-tap
     // discharge must not be misread as full-auto by an energy threshold.
     LastDamageKind = isFullAuto ? DamageKind.FullAuto : DamageKind.Laser; // Message context (issue #84).
-    ApplyDamage (energy, shotByPlayerName, knockbackScale: 1.0f);
+    // Distinct victim feedback for a through-barrier zap (issue #94).
+    if (throughBarrier) _throughWallZapSound.Play();
+    ApplyDamage (energy, shotByPlayerName, knockbackScale: 1.0f, throughBarrier: throughBarrier);
   }
 
   [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
@@ -229,12 +252,12 @@ public partial class Player
     EmitSignal (SignalName.HealthChanged, Health);
   }
 
-  private void ApplyDamage (float energy, string attackerName, float knockbackScale, bool isSurvivableAtFullHealth = false)
-    => ApplyDamageFrom (Multiplayer.GetRemoteSenderId(), energy, attackerName, knockbackScale, isSurvivableAtFullHealth);
+  private void ApplyDamage (float energy, string attackerName, float knockbackScale, bool isSurvivableAtFullHealth = false, bool throughBarrier = false)
+    => ApplyDamageFrom (Multiplayer.GetRemoteSenderId(), energy, attackerName, knockbackScale, isSurvivableAtFullHealth, throughBarrier);
 
   // Split from ApplyDamage so delayed damage (the sticky banana fuse) can carry the
   // attacker id captured while the RPC context still existed (issue #83).
-  private void ApplyDamageFrom (int attackerId, float energy, string attackerName, float knockbackScale, bool isSurvivableAtFullHealth = false)
+  private void ApplyDamageFrom (int attackerId, float energy, string attackerName, float knockbackScale, bool isSurvivableAtFullHealth = false, bool throughBarrier = false)
   {
     // Difficulty damage handicap: lower-skill attackers hit higher-skill targets harder
     // (+50% per tier gap: Beginner->Intermediate 1.5x, Beginner->Expert 2x,
@@ -243,10 +266,14 @@ public partial class Player
     var attacker = GetParent().GetNodeOrNull <Player> ($"{attackerId}");
     var handicap = 1.0f + 0.5f * Mathf.Max (0, TierOf (MaxHealth) - TierOf (attacker?.MaxHealth ?? MaxHealth));
     var decrease = Mathf.RoundToInt (CalculateHealthDecrease (energy) * handicap);
+    // A full-charge shot is lethal on ANY target (issue #93): the 100-damage cap &
+    // tier handicap don't apply - only the survivable banana blast is exempt.
+    if (energy >= FullChargeEnergyThreshold && !isSurvivableAtFullHealth) decrease = Health;
     // A banana blast never one-shots a full-health player (issue #61): leave ≥1 HP.
     if (isSurvivableAtFullHealth && Health >= MaxHealth) decrease = Mathf.Min (decrease, Health - 1);
     Health -= decrease;
     LastZapEnergy = energy;
+    LastZapThroughBarrier = throughBarrier;
     ApplyKnockback (attacker, energy, knockbackScale);
     _damageSound.Play();
 

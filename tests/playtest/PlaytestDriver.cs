@@ -158,7 +158,8 @@ public partial class PlaytestDriver : Node
     await Task.Delay (100);
     ReleaseAction ("weapon_2");
 
-    // Charged shots until the victim dies (shooter is told via NotifyScored -> Score).
+    // Full-charge shots until one lands: a full-charge hit is a one-hit kill (#93),
+    // so the first bolt that connects scores (shooter is told via NotifyScored -> Score).
     // Retry until a bolt actually spawns each attempt - under CI load, physics time
     // (which drives the weapon cooldown) can lag the wall clock these delays use.
     var kills = 0;
@@ -234,7 +235,14 @@ public partial class PlaytestDriver : Node
     Self.ZapStreakCount = 3;
     // The shooter opens fire once armor drops; verify damage & then a full respawn.
     await WaitUntil (() => Self.Health < Self.MaxHealth, 120, "took damage from shooter");
+    // One-hit-kill (#93): after the punch phase, the shooter only fires full-charge
+    // shots, & a full-charge shot is lethal on any target - so no partial-damage
+    // health value may ever appear between the punch & the respawn reset.
+    var partialLaserHits = 0;
+    var healthAfterPunch = Self.Health;
+    Self.HealthChanged += value => partialLaserHits += value > 0 && value < healthAfterPunch ? 1 : 0;
     await WaitUntil (() => Self.SpawnArmor && Self.Health == Self.MaxHealth, 120, "died & respawned with armor & full health");
+    Assert (partialLaserHits == 0, $"full-charge kill took exactly one hit (#93), saw {partialLaserHits} partial-damage hits");
     Assert (Self.GlobalPosition.Y > 20.0f, $"respawned up in the spawn room, y={Self.GlobalPosition.Y}");
     await WaitUntil (() => FindPlayer (ShooterName)?.Score == 1, 30, "shooter's score replicated to victim");
     // Streak glow (#77/#88): the shooter's kill streak must replicate to the victim's

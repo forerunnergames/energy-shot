@@ -224,7 +224,8 @@ public partial class Hud : Control
       killer?.IsLikelyAirborne() ?? false,
       killer?.HeldWeapon == HeldWeapon.None,
       _splatterSecondsLeft > 0.0f,
-      _blurIntensity > 0.0f);
+      _blurIntensity > 0.0f,
+      self?.LastZapThroughBarrier ?? false);
   }
 
   private void Announce (string message) => NotifyMessage (message, message);

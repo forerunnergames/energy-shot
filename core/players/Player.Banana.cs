@@ -61,9 +61,14 @@ public partial class Player
   }
 
   // Visual-only copy of the shooter's banana on every other peer, with the launcher
-  // thump heard positionally from the shooter's location.
+  // thump heard positionally from the shooter's location. Firing proves the shooter's
+  // spawn armor is gone, so stale armor whitewash clears here too (issue #114).
   [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
-  private void SpawnVisualBanana (Vector3 origin, Vector3 direction) => SpawnBanana (origin, direction, isLive: false);
+  private void SpawnVisualBanana (Vector3 origin, Vector3 direction)
+  {
+    ClearArmorDisplayOnRemoteAttack();
+    SpawnBanana (origin, direction, isLive: false);
+  }
 
   private void SpawnBanana (Vector3 origin, Vector3 direction, bool isLive)
   {
