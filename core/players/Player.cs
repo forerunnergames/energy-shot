@@ -45,8 +45,41 @@ public partial class Player : CharacterBody3D
   [Signal] public delegate void ScoredEventHandler (string playerName, string shotPlayerName);
   [Signal] public delegate void RespawnedShotEventHandler (string playerName, string shotByPlayerName);
   [Signal] public delegate void RespawnedFellEventHandler (string playerName);
-  // Replicated like Health so every peer can render the leaderboard.
-  [Export] public int Score { get; set; }
+  // Replicated like Health so every peer can render the leaderboard. Never clamped:
+  // fall penalties can take it negative (issue #108).
+  [Export]
+  public int Score
+  {
+    get => _score;
+    set
+    {
+      if (_score != value) LogReplicatedChangeOnServer ($"score: {DisplayName} {_score} -> {value}");
+      _score = value;
+    }
+  }
+
+  // Round-trip time to the server in ms, measured server-side once a second &
+  // replicated like Score so every peer can render it on the leaderboard (issue
+  // #100); -1 = not measured yet.
+  [Export] public int PingMs { get; set; } = -1;
+
+  // Only the server measures pings; it tells the owning client, which writes the
+  // replicated property (issue #100).
+  [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
+  private void ReceivePingMeasurement (int pingMs)
+  {
+    if (Multiplayer.GetRemoteSenderId() != 1) return;
+    if (!IsMultiplayerAuthority()) return;
+    PingMs = pingMs;
+  }
+
+  // Server-side score & streak logging (issue #111): the replicated property setters
+  // run on the server whenever a peer's value syncs there, covering every code path.
+  private void LogReplicatedChangeOnServer (string message)
+  {
+    if (!IsInsideTree() || Multiplayer.MultiplayerPeer is not ENetMultiplayerPeer || !Multiplayer.IsServer()) return;
+    ServerLog.Event (NetworkId, message);
+  }
 
   // Difficulty handicap: beginners get a bigger health pool. Replicated so every
   // peer scales this player's health bar correctly.
@@ -119,6 +152,7 @@ public partial class Player : CharacterBody3D
     get => _zapStreakCount;
     set
     {
+      if (_zapStreakCount != value) LogReplicatedChangeOnServer ($"streak: {DisplayName} {_zapStreakCount} -> {value}");
       _zapStreakCount = value;
       ApplyStreakGlow();
     }
@@ -231,9 +265,12 @@ public partial class Player : CharacterBody3D
   private ProgressBar _healthBar = null!;
   private string _displayName = string.Empty;
   private int _health;
+  private int _score;
   private int _maxHealth = 200;
   private bool _isInputEnabled;
   private static Player? _localPlayer;
+  // The pickup claim fallback needs the local player without a scene search (issue #110).
+  public static Player? Local => _localPlayer;
   public override void _EnterTree() => SetMultiplayerAuthority (NetworkId);
   public void SetInputEnabled (bool isEnabled) => _isInputEnabled = isEnabled;
   // Guards against "The multiplayer instance isn't currently active" error spam from
@@ -256,6 +293,7 @@ public partial class Player : CharacterBody3D
     _jumpTimer = GetNode <Timer> ("JumpTimer");
     _hitRedTimer = GetNode <Timer> ("HitRedTimer");
     _nameTag = GetNode <Label3D> ("NameTag");
+    _crown = GetNodeOrNull <Node3D> ("Crown");
     _healthTag = GetNode <Sprite3D> ("HealthTag");
     _streakLight = GetNode <OmniLight3D> ("StreakLight");
     _healthBar = GetNode <ProgressBar> ("SubViewport/HealthBar");

@@ -92,11 +92,17 @@ public partial class PlaytestDriver : Node
   {
     _world.StartHostSession (HostName, difficulty: 2, Port, Password);
     await WaitUntil (() => _world.GetPlayers().Count() == 3, 60, "all 3 players joined");
+    // Exactly one player wears the crown even at 0-0 (issue #107).
+    await WaitUntil (() => _world.GetPlayers().Count (player => player.IsCrowned) == 1, 10, "exactly one player crowned at 0-0");
+    // Server-measured pings replicate back to every peer (issue #100).
+    await WaitUntil (() => FindPlayer (ShooterName)?.PingMs >= 0, 15, "shooter's ping measured & replicated to host");
     // Shooter kills victim once (plus possibly the host itself in the line of
     // fire); wait to observe the replicated score.
     await WaitUntil (() => FindPlayer (ShooterName)?.Score >= 1, 120, "shooter's kill replicated to host");
     // Victim respawns with armor visible to the host too.
     await WaitUntil (() => FindPlayer (VictimName)?.SpawnArmor == true, 30, "victim respawn armor replicated to host");
+    // The victim's fall at score 0 goes negative & replicates (issue #108).
+    await WaitUntil (() => FindPlayer (VictimName)?.Score == -1, 60, "victim's fall penalty (-1) replicated to host");
     // Stay up until both clients have finished & disconnected.
     await WaitUntil (() => _world.GetPlayers().Count() == 1, 120, "clients disconnected");
   }
@@ -111,6 +117,8 @@ public partial class PlaytestDriver : Node
     Assert (host.MaxHealth == 200, $"host MaxHealth replicated as Expert 200, got {host.MaxHealth}");
     Assert (Self.MaxHealth == 300, $"own MaxHealth is Intermediate 300, got {Self.MaxHealth}");
     Assert (Self.HeldWeapon == HeldWeapon.None, "spawned unarmed (#72)");
+    // The server measures our ping & tells us within a tick or two (issue #100).
+    await WaitUntil (() => Self.PingMs >= 0, 15, "own ping measured by the server");
 
     // Movement: hold forward briefly & verify we actually moved.
     var startPosition = Self.GlobalPosition;
@@ -230,6 +238,9 @@ public partial class PlaytestDriver : Node
 
   private async Task RunVictim()
   {
+    // Password enforcement (issue #109): a wrong password must get kicked with
+    // "Wrong password." before the real join succeeds.
+    await AssertWrongPasswordIsKicked();
     _world.StartClientSession (VictimName, difficulty: 0, _address, Port, Password);
     await WaitUntil (() => _world.GetPlayers().Count() == 3, 60, "all 3 players visible");
     Assert (Self.MaxHealth == 400, $"own MaxHealth is Beginner 400, got {Self.MaxHealth}");
@@ -254,8 +265,26 @@ public partial class PlaytestDriver : Node
     // Streak glow (#77/#88): the shooter's kill streak must replicate to the victim's
     // copy of the shooter node, since that drives the glow & leaderboard pulsing here.
     await WaitUntil (() => FindPlayer (ShooterName)?.ZapStreakCount >= 1, 15, "shooter's streak replicated to victim");
+    // Fall penalty goes negative (issue #108): step off the world at score 0 & verify -1.
+    Assert (Self.Score == 0, $"own score is 0 before the fall, got {Self.Score}");
+    Self.Position = new Vector3 (120.0f, 5.0f, 120.0f); // Beyond the arena: nothing below but the kill boundary.
+    await WaitUntil (() => Self.Score == -1, 60, "fall at score 0 dropped own score to -1");
     // Give the shooter time to finish its solo phases (fire-rate & full-auto) before we vanish.
     await Task.Delay (8000);
+  }
+
+  // Negative password check (issue #109): join with a bogus password, expect the
+  // server to kick us with exactly "Wrong password.", then wait out the disconnect
+  // so the real join starts clean.
+  private async Task AssertWrongPasswordIsKicked()
+  {
+    var kickReason = string.Empty;
+    _world.KickedFromServer += reason => kickReason = reason;
+    _world.StartClientSession (VictimName, difficulty: 0, _address, Port, "wrong-" + Password);
+    await WaitUntil (() => kickReason.Length > 0, 30, "wrong-password join was kicked");
+    Assert (kickReason == "Wrong password.", $"kick reason is \"Wrong password.\", got \"{kickReason}\"");
+    await WaitUntil (() => Multiplayer.MultiplayerPeer.GetConnectionStatus() != MultiplayerPeer.ConnectionStatus.Connected, 15, "kicked connection fully closed");
+    await Task.Delay (500); // Let the peer teardown settle before reconnecting.
   }
 
   // ---------------------------------------------------------------- helpers

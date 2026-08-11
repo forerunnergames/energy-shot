@@ -98,6 +98,9 @@ properties/14/replication_mode = 2
 properties/15/path = NodePath(".:HeldWeapon")
 properties/15/spawn = true
 properties/15/replication_mode = 2
+properties/16/path = NodePath(".:PingMs")
+properties/16/spawn = true
+properties/16/replication_mode = 2
 
 [node name="Player" type="CharacterBody3D"]
 collision_layer = 2
@@ -113,11 +116,11 @@ text = "PlayerName"
 outline_size = 20
 
 [node name="Crown" type="Node3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.6, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.1, 0)
 visible = false
 
 [node name="CrownMesh" type="MeshInstance3D" parent="Crown"]
-transform = Transform3D(0.03, 0, 0, 0, 0, 0.03, 0, -0.03, 0, 0, 0, 0)
+transform = Transform3D(0.05, 0, 0, 0, 0, 0.05, 0, -0.05, 0, 0, 0, 0)
 mesh = ExtResource("11_crown")
 
 [node name="StreakLight" type="OmniLight3D" parent="."]
