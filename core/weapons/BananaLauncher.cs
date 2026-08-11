@@ -2,19 +2,28 @@ using Godot;
 
 namespace com.forerunnergames.energyshot.weapons;
 
-// Single-use banana launcher (issue #61): selected with the weapon_2 action, it
-// replaces the energy weapon visually & fires one lobbed banana, then reloads
-// quickly (issue #70) while the player auto-switches back to the laser.
+// Banana launcher (issues #61 & #83): selected with the weapon_3 action, it replaces
+// the energy weapon visually & fires one lobbed banana per quick reload (issue #70),
+// staying selected through the cooldown.
 public partial class BananaLauncher : Node3D
 {
   [Export] public float CooldownSeconds = 1.5f;
   private static readonly Color BananaYellow = new(0.92f, 0.78f, 0.12f);
   private float _cooldownLeft;
+  private AudioStreamPlayer3D _fireSound = null!;
   public bool CanFire => _cooldownLeft <= 0.0f;
   // 0..1 readiness (1 = ready) for the HUD cooldown bar (issue #70).
   public float CooldownFraction => 1.0f - _cooldownLeft / CooldownSeconds;
   public void StartCooldown() => _cooldownLeft = CooldownSeconds;
-  public override void _Ready() => ApplyRifleVisuals();
+  // Real grenade-launcher thump (issue #83): positional, so every peer hears it from
+  // the shooter's location via the visual-banana path.
+  public void PlayFireSound() => _fireSound.Play();
+
+  public override void _Ready()
+  {
+    _fireSound = GetNode <AudioStreamPlayer3D> ("FireSound");
+    ApplyRifleVisuals();
+  }
   public override void _PhysicsProcess (double delta) => _cooldownLeft = Mathf.Max (0.0f, _cooldownLeft - (float)delta);
 
   private void ApplyRifleVisuals()

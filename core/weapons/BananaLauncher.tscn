@@ -1,8 +1,12 @@
-[gd_scene load_steps=2 format=3 uid="uid://c1bananarifle0"]
+[gd_scene load_steps=3 format=3 uid="uid://c1bananarifle0"]
 
 [ext_resource type="Script" path="res://core/weapons/BananaLauncher.cs" id="1_bnrfl"]
+[ext_resource type="AudioStream" path="res://assets/sounds/banana-fire.mp3" id="2_bfire"]
 
 [node name="BananaLauncher" type="Node3D"]
 script = ExtResource("1_bnrfl")
 
 [node name="Mesh" type="MeshInstance3D" parent="."]
+
+[node name="FireSound" type="AudioStreamPlayer3D" parent="."]
+stream = ExtResource("2_bfire")

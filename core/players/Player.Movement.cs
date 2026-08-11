@@ -116,6 +116,7 @@ public partial class Player
 
   private void Move (ref Vector3 velocity)
   {
+    if (_stickyFlightSecondsLeft > 0.0f) return; // Banana-launched (issue #83): momentum owns the ride.
     var speed = MoveSpeed();
     var inputDir = Input.GetVector ("move_left", "move_right", "move_forward", "move_back");
     var inputDirection = (Transform.Basis * new Vector3 (inputDir.X, 0, inputDir.Y)).Normalized();
@@ -200,6 +201,7 @@ public partial class Player
     _bread.Restock(); // Fresh bread every life (issue #62).
     _energyWeapon.ResetCharge(); // Every life starts with a cold weapon (issue #67).
     ClearStun(); // Death shakes off any punch/banana stun.
+    _stickyFlightSecondsLeft = 0.0f; // A new life isn't still banana-launched (issue #83).
     ActivateSpawnArmor();
     // Fresh lives start standing & slide-ready: no lingering pose, no cooldown carryover (#104).
     Sliding = false;

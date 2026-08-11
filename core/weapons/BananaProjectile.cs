@@ -3,12 +3,12 @@ using Godot;
 
 namespace com.forerunnergames.energyshot.weapons;
 
-// A lobbed banana grenade (issues #61 & #70): launched fast on a proper gravity arc,
-// it bounces & slides off surfaces (dampened) with a short fuse lit by first contact,
-// explodes instantly on a direct player hit, & shakes every nearby camera. Only the
-// shooter's own banana is "live" (reports the blast); other peers spawn visual-only
-// copies. Impacts are detected by sweeping a ray along the path traveled each physics
-// frame, same as LaserBolt.
+// A lobbed banana grenade (issues #61, #70, & #83): launched fast on a proper gravity
+// arc, it bounces & slides off surfaces (dampened) with a short fuse lit by first
+// contact, sticks to players it directly hits, & shakes every nearby camera when it
+// blows. Only the shooter's own banana is "live" (reports blasts & sticks); other
+// peers spawn visual-only copies. Impacts are detected by sweeping a ray along the
+// path traveled each physics frame, same as LaserBolt.
 public partial class BananaProjectile : Node3D
 {
   [Export] public float Speed = 40.0f;
@@ -17,9 +17,10 @@ public partial class BananaProjectile : Node3D
   [Export] public float FuseSeconds = 1.2f;
   [Export] public float Restitution = 0.55f;
   [Export] public float SpinRadiansPerSecond = 10.0f;
-  [Export] public float FlashRadius = 6.0f;
-  [Export] public float FlashSeconds = 0.4f;
+  private const float FlashRadius = 6.0f;
+  private const float FlashSeconds = 0.4f;
   [Signal] public delegate void ExplodedEventHandler (Vector3 origin);
+  [Signal] public delegate void StuckToPlayerEventHandler (Player victim, Vector3 hitPosition);
   private static readonly Color BananaYellow = new(0.92f, 0.78f, 0.12f);
   private static readonly Color FlashColor = new(4.0f, 3.6f, 0.4f);
   private Vector3 _velocity;
@@ -71,10 +72,12 @@ public partial class BananaProjectile : Node3D
       return;
     }
 
-    // A direct player hit skips the bounce: instant boom (issue #70).
-    if (hit["collider"].AsGodotObject() is CharacterBody3D)
+    // A direct player hit doesn't explode - it sticks (issue #83): the live banana
+    // reports the victim & every peer swaps to the replicated stuck banana.
+    if (hit["collider"].AsGodotObject() is CharacterBody3D body)
     {
-      Explode ((Vector3)hit["position"]);
+      if (_isLive && body is Player victim) EmitSignal (SignalName.StuckToPlayer, victim, (Vector3)hit["position"]);
+      QueueFree();
       return;
     }
 
@@ -101,13 +104,33 @@ public partial class BananaProjectile : Node3D
   private void Explode (Vector3 origin)
   {
     if (_isLive) EmitSignal (SignalName.Exploded, origin);
-    SpawnFlash (origin);
-    Player.NotifyExplosionAt (origin); // Every peer's own camera shakes if nearby (issue #70).
+    SpawnExplosionEffects (GetParent(), origin);
     QueueFree();
   }
 
+  // Flash + squelch + debris + nearby-camera shake on whichever peer calls it; shared
+  // with the sticky-banana detonation in Player.Banana.cs (issue #83).
+  public static void SpawnExplosionEffects (Node parent, Vector3 origin)
+  {
+    SpawnFlash (parent, origin);
+    PlayExplosionSound (parent, origin);
+    BananaDebris.Scatter (parent, origin); // Chunks everywhere (issue #83).
+    Player.NotifyExplosionAt (origin); // Every peer's own camera shakes if nearby (issue #70).
+  }
+
+  // Wet-squelch detonation (issue #83): a transient positional player at the blast
+  // point, so every nearby peer hears it from the right direction & frees itself.
+  private static void PlayExplosionSound (Node parent, Vector3 origin)
+  {
+    var sound = new AudioStreamPlayer3D { Stream = ResourceLoader.Load <AudioStream> ("res://assets/sounds/banana-explode.mp3") };
+    parent.AddChild (sound);
+    sound.GlobalPosition = origin;
+    sound.Finished += sound.QueueFree;
+    sound.Play();
+  }
+
   // Big yellow flash: an emissive sphere that swells to the blast radius & fades out.
-  private void SpawnFlash (Vector3 origin)
+  private static void SpawnFlash (Node parent, Vector3 origin)
   {
     var material = new StandardMaterial3D
     {
@@ -117,7 +140,7 @@ public partial class BananaProjectile : Node3D
       Transparency = BaseMaterial3D.TransparencyEnum.Alpha
     };
     var flash = new MeshInstance3D { Mesh = new SphereMesh { Radius = 0.5f, Height = 1.0f }, MaterialOverride = material };
-    GetParent().AddChild (flash);
+    parent.AddChild (flash);
     flash.GlobalPosition = origin;
     var tween = flash.CreateTween().SetParallel();
     tween.TweenProperty (flash, "scale", Vector3.One * FlashRadius * 2.0f, FlashSeconds);

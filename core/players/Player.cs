@@ -131,15 +131,25 @@ public partial class Player : CharacterBody3D
   [Export] public float FullAutoEnergy = 0.12f;
   // Brief - the spawn room & spawn armor already prevent instant re-engagement (#48).
   [Export] public float RespawnInputLockSeconds = 0.3f;
-  [Export] public float PunchCooldownSeconds = 0.6f;
+  // Halved from 0.6 (issue #82): fast enough for combos, not autoclicker-spam fast.
+  [Export] public float PunchCooldownSeconds = 0.3f;
   // Longer than physically normal - close-range fights were too hard to land (issue #71).
   [Export] public float PunchRange = 4.0f;
   [Export] public float PunchEnergy = 0.2f;
   [Export] public float PunchDropChance = 0.2f;
   [Export] public float BananaBlastRadius = 6.0f;
   [Export] public float BananaDirectRadius = 1.5f;
-  [Export] public float BananaBlastEnergy = 0.9f;
+  // Doubled from 0.9 (issue #83); the survivable-at-full-health clamp still prevents
+  // one-shots from full, except for sticky direct hits.
+  [Export] public float BananaBlastEnergy = 1.8f;
   [Export] public float BananaKnockbackSpeed = 18.0f;
+  [Export] public float BananaShooterKnockbackSpeed = 12.0f;
+  // INSANE on purpose (issue #83): launching a banana should feel like it.
+  [Export] public float BananaRecoilRadians = 0.35f;
+  [Export] public float StickyBananaSeconds = 1.0f;
+  [Export] public float StickyLaunchSpeed = 60.0f;
+  // 200 damage: one-hit-kills an Expert, bypassing the survivable clamp (issue #83).
+  [Export] public float StickyBananaEnergy = 2.0f;
   [Export] public float CameraKickRadians = 0.06f;
   [Export] public float CameraKickRecoverySpeed = 0.4f;
   [Export] public float Speed = 7.0f;
@@ -151,6 +161,9 @@ public partial class Player : CharacterBody3D
   [Export] public float CrouchSpeedMultiplier = 0.3f;
   [Export] public float RocketBoostMultiplier = 1.5f;
   [Export] public float RocketBoostRange = 3.0f;
+  // Longer reach for the single airborne boost, so shooting the ground below a jump
+  // still connects (issue #86).
+  [Export] public float AirRocketBoostRange = 8.0f;
   [Export] public float KnockbackStrength = 16.0f;
   [Export] public int KillHealAmount = 50;
   [Export] public float PunchKnockbackScale = 0.33f;
@@ -184,7 +197,7 @@ public partial class Player : CharacterBody3D
   private EnergyWeapon _energyWeapon = null!;
   private BananaLauncher _bananaLauncher = null!;
   private readonly Bread _bread = new();
-  private bool _isBananaEquipped;
+  private bool _airBoostUsed;
   private float _fullAutoSecondsLeft;
   private float _fullAutoCooldownLeft;
   private float _nextAutoShotIn;
@@ -223,6 +236,7 @@ public partial class Player : CharacterBody3D
     _collisionShape = GetNode <CollisionShape3D> ("CollisionShape3D");
     _energyWeapon = GetNode <EnergyWeapon> ("Camera3D/EnergyWeapon");
     _bananaLauncher = GetNode <BananaLauncher> ("Camera3D/BananaLauncher");
+    _launcherRestPosition = _bananaLauncher.Position;
     UpdateWeaponVisibility();
     CreateHands();
     _crossHairs = GetNode <Sprite3D> ("Camera3D/Crosshairs");
@@ -293,6 +307,9 @@ public partial class Player : CharacterBody3D
     UpdateBread();
     UpdateFullAuto (delta);
     UpdatePunch (delta);
+    UpdateHandBob (delta);
+    UpdateAirBoost();
+    UpdateStickyFlight (delta);
     UpdateCameraKick (delta);
     UpdateCameraShake (delta);
     UpdateStun (delta);

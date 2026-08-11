@@ -12,12 +12,14 @@ public partial class Player
   public float ShotReadyFraction => _energyWeapon.CooldownFraction;
   public float PunchReadyFraction => 1.0f - _punchCooldownLeft / PunchCooldownSeconds;
   public float FullAutoReadyFraction => 1.0f - _fullAutoCooldownLeft / FullAutoCooldownSeconds;
-  // Unarmed players can't charge or fire the laser (issue #72).
-  private bool IsChargingWeapon() => _isInputEnabled && HasLaser && !IsBananaEquipped && !IsFullAutoActive() && Input.IsActionPressed ("shoot");
-  private bool IsDischargingWeapon() => _isInputEnabled && HasLaser && !IsBananaEquipped && _energyWeapon.IsSpinningUp && Input.IsActionJustReleased ("shoot");
+  // The laser only charges & fires while it's the selected weapon (issues #72 & #82).
+  private bool IsChargingWeapon() => _isInputEnabled && IsLaserSelected && HasLaser && !IsFullAutoActive() && Input.IsActionPressed ("shoot");
+  private bool IsDischargingWeapon() => _isInputEnabled && IsLaserSelected && HasLaser && _energyWeapon.IsSpinningUp && Input.IsActionJustReleased ("shoot");
   private void ChargeWeapon() => _energyWeapon.Charge();
   private void DischargeWeapon() => _energyWeapon.Discharge();
-  private static int CalculateHealthDecrease (float energyShot) => Mathf.Min (100, Mathf.RoundToInt (energyShot * 100.0f));
+  // Capped at 200: only banana energies exceed 1.0, & the sticky one-hit kill needs
+  // the full 200 to zap out an Expert (issue #83).
+  private static int CalculateHealthDecrease (float energyShot) => Mathf.Min (200, Mathf.RoundToInt (energyShot * 100.0f));
 
   // Casts a ray from the camera along the aim direction, ignoring ourselves, &
   // returns the player it hits (or null).
@@ -77,23 +79,24 @@ public partial class Player
     _fullAutoSecondsLeft -= dt;
     if (_fullAutoSecondsLeft <= 0.0f) _energyWeapon.SetFullAutoMode (false);
     _nextAutoShotIn -= dt;
-    if (!_isInputEnabled || !HasLaser || IsBananaEquipped || !Input.IsActionPressed ("shoot") || _nextAutoShotIn > 0.0f) return;
+    if (!_isInputEnabled || !IsLaserSelected || !Input.IsActionPressed ("shoot") || _nextAutoShotIn > 0.0f) return;
     _nextAutoShotIn = FullAutoShotIntervalSeconds;
     _energyWeapon.FireLowPower (FullAutoEnergy);
   }
 
+  // Punching requires fists as the selected weapon (issue #82).
   private void UpdatePunch (double delta)
   {
     _punchCooldownLeft = Mathf.Max (0.0f, _punchCooldownLeft - (float)delta);
-    if (!_isInputEnabled || _punchCooldownLeft > 0.0f || !Input.IsActionJustPressed ("punch")) return;
+    if (!_isInputEnabled || !IsFistsSelected || _punchCooldownLeft > 0.0f || !Input.IsActionJustPressed ("punch")) return;
     _punchCooldownLeft = PunchCooldownSeconds;
     CancelSpawnArmorIfFired(); // Punching drops your spawn armor, same as firing.
     var hand = ChooseRandomPunchHand();
-    AnimatePunch (hand);
-    Rpc (MethodName.PlayRemotePunch, hand);
+    AnimatePunch (hand); // Local whiff feedback for the puncher...
     var victim = FindAimedPlayer (PunchRange);
     if (victim == null) return;
-    _punchSound.Play(); // Connect-only (issue #71): no sound on a whiffed swing.
+    Rpc (MethodName.PlayRemotePunch, hand); // ...but peers only ever see real connects (issue #82).
+    _punchSound.Play(); // Puncher-only, connect-only (issue #82): the victim hears the damage sound instead.
     GD.Print ($"{DisplayName}: I punched {victim.DisplayName}!");
     victim.RpcId (victim.NetworkId, MethodName.ReceivePunch, DisplayName);
   }
@@ -121,17 +124,28 @@ public partial class Player
   }
 
   // Firing at the ground close beneath you rocket-boosts you upward, scaling with
-  // charge (see issue #56).
+  // charge (see issue #56). Works mid-air too, with a longer reach for shooting the
+  // ground below a jump, but only once per airtime (issue #86).
   private void TryRocketBoost (Vector3 direction, float energy)
   {
     if (direction.Y >= 0.0f) return;
+    var isGrounded = IsOnFloor();
+    if (!isGrounded && _airBoostUsed) return; // Max one airborne boost until next touching the floor.
     var from = _camera.GlobalPosition;
-    var query = PhysicsRayQueryParameters3D.Create (from, from + direction * RocketBoostRange, exclude: new Godot.Collections.Array <Rid> { GetRid() });
+    var range = isGrounded ? RocketBoostRange : AirRocketBoostRange;
+    var query = PhysicsRayQueryParameters3D.Create (from, from + direction * range, exclude: new Godot.Collections.Array <Rid> { GetRid() });
     var hit = GetWorld3D().DirectSpaceState.IntersectRay (query);
     if (hit.Count == 0) return;
     if (hit["collider"].AsGodotObject() is CharacterBody3D) return; // Ground only, not players.
     if (hit["normal"].AsVector3().Y < 0.5f) return; // Floors only - walls don't launch you.
+    _airBoostUsed = !isGrounded;
     Velocity = new Vector3 (Velocity.X, JumpVelocity * RocketBoostMultiplier * energy, Velocity.Z);
+  }
+
+  // Touching the floor re-arms the single airborne rocket boost (issue #86).
+  private void UpdateAirBoost()
+  {
+    if (IsOnFloor()) _airBoostUsed = false;
   }
 
   // Visual-only copy of the shooter's bolt on every other peer.
@@ -181,7 +195,7 @@ public partial class Player
     if (SpawnArmor) return;
     GD.Print ($"{DisplayName}: I was punched by {punchedByPlayerName}!");
     LastDamageKind = DamageKind.Punch; // Message context (issue #84).
-    _punchSound.Play(); // The victim hears the connect too (issue #71).
+    // No punch sfx here (issue #82): the victim hears the damage sound via ApplyDamage.
     ApplyPunchStun(); // Stacking slow; the blur stacks HUD-side via Punched (issues #68 & #71).
     TryDropWeaponFromPunch();
     EmitSignal (SignalName.Punched);
@@ -216,8 +230,12 @@ public partial class Player
   }
 
   private void ApplyDamage (float energy, string attackerName, float knockbackScale, bool isSurvivableAtFullHealth = false)
+    => ApplyDamageFrom (Multiplayer.GetRemoteSenderId(), energy, attackerName, knockbackScale, isSurvivableAtFullHealth);
+
+  // Split from ApplyDamage so delayed damage (the sticky banana fuse) can carry the
+  // attacker id captured while the RPC context still existed (issue #83).
+  private void ApplyDamageFrom (int attackerId, float energy, string attackerName, float knockbackScale, bool isSurvivableAtFullHealth = false)
   {
-    var attackerId = Multiplayer.GetRemoteSenderId();
     // Difficulty damage handicap: lower-skill attackers hit higher-skill targets harder
     // (+50% per tier gap: Beginner->Intermediate 1.5x, Beginner->Expert 2x,
     // Intermediate->Expert 1.5x). Attacking downward is unchanged - the bigger health
