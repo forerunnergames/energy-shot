@@ -44,6 +44,7 @@ public partial class Player
   {
     _slideCooldownLeft = SlideCooldownSeconds;
     Sliding = false;
+    if (IsOverheadBlocked()) Crouching = true; // Slid under something low: come up into a crouch, not the ceiling.
     ApplyCameraHeight();
   }
 
@@ -159,7 +160,11 @@ public partial class Player
     _energyWeapon.ResetCharge(); // Every life starts with a cold weapon (issue #67).
     ClearStun(); // Death shakes off any punch/banana stun.
     ActivateSpawnArmor();
-    Crouching = false; // Fresh lives start standing (crouch is a toggle now).
+    // Fresh lives start standing & slide-ready: no lingering pose, no cooldown carryover (#104).
+    Sliding = false;
+    _slideSecondsLeft = 0.0f;
+    _slideCooldownLeft = 0.0f;
+    Crouching = false;
     ApplyCameraHeight();
     SetInputEnabled (isEnabled: false);
     _respawnSound.Play();
