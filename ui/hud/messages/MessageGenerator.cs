@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using com.forerunnergames.energyshot.players;
+using com.forerunnergames.energyshot.weapons;
 using Godot;
 
 namespace com.forerunnergames.energyshot.ui.hud;
@@ -9,7 +10,7 @@ namespace com.forerunnergames.energyshot.ui.hud;
 // the names, so it stays unit-testable.
 public static class MessageGenerator
 {
-  public const float FullChargeThreshold = 0.95f;
+  public const float FullChargeThreshold = EnergyWeapon.FullChargeEnergyThreshold;
   public const float BananaDirectThreshold = 0.85f;
 
   // @formatter:off
@@ -51,6 +52,7 @@ public static class MessageGenerator
     if (context.Kind == DamageKind.Punch && context.KillerUnarmed) return MessagePools.FistsVsFists;
     if (context.Kind == DamageKind.Punch) return MessagePools.Punch;
     if (context.VictimHeldBananaGun) return MessagePools.HoldingBananaGun;
+    if (context.Kind == DamageKind.Laser && context.ThroughBarrier) return MessagePools.ThroughWall; // Pierced a wall/floor first (issue #94).
     if (context.KillerSliding) return MessagePools.SlideShotKiller;
     if (context.VictimSliding) return MessagePools.SlideShotVictim;
     if (context.KillerAirborne) return MessagePools.JumpShot;

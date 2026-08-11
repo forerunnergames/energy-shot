@@ -16,4 +16,5 @@ public readonly record struct DeathContext (
   bool KillerAirborne,
   bool KillerUnarmed,
   bool SplatterActive,
-  bool BlurActive);
+  bool BlurActive,
+  bool ThroughBarrier);

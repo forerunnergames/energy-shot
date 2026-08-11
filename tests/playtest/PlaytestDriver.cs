@@ -92,8 +92,9 @@ public partial class PlaytestDriver : Node
   {
     _world.StartHostSession (HostName, difficulty: 2, Port, Password);
     await WaitUntil (() => _world.GetPlayers().Count() == 3, 60, "all 3 players joined");
-    // Shooter kills victim once; wait to observe the replicated score.
-    await WaitUntil (() => FindPlayer (ShooterName)?.Score == 1, 120, "shooter's kill replicated to host");
+    // Shooter kills victim once (plus possibly the host itself in the line of
+    // fire); wait to observe the replicated score.
+    await WaitUntil (() => FindPlayer (ShooterName)?.Score >= 1, 120, "shooter's kill replicated to host");
     // Victim respawns with armor visible to the host too.
     await WaitUntil (() => FindPlayer (VictimName)?.SpawnArmor == true, 30, "victim respawn armor replicated to host");
     // Stay up until both clients have finished & disconnected.
@@ -158,11 +159,15 @@ public partial class PlaytestDriver : Node
     await Task.Delay (100);
     ReleaseAction ("weapon_2");
 
-    // Charged shots until the victim dies (shooter is told via NotifyScored -> Score).
+    // Full-charge shots until one lands: a full-charge hit is a one-hit kill (#93),
+    // so the first bolt that connects scores (shooter is told via NotifyScored -> Score).
     // Retry until a bolt actually spawns each attempt - under CI load, physics time
     // (which drives the weapon cooldown) can lag the wall clock these delays use.
+    // Count only kills of the designated victim: a full-charge bolt one-hit kills
+    // ANY player (#93), so the host wandering into the line of fire must not end
+    // the loop early & leave the victim alive.
     var kills = 0;
-    Self.Scored += (_, _) => ++kills;
+    Self.Scored += (_, shotPlayerName) => { if (shotPlayerName == victim.DisplayName) ++kills; };
     // The 5s respawn-armor window can elapse during the shot loop's waits, so watch
     // for it continuously instead of only checking after the loop.
     var respawnArmorSeen = false;
@@ -187,7 +192,8 @@ public partial class PlaytestDriver : Node
     }
 
     Assert (kills == 1, "scored a kill with charged shots");
-    Assert (Self.Score == 1, $"own replicated Score is 1, got {Self.Score}");
+    // >= 1: an incidental one-hit kill on the host in the line of fire also scores.
+    Assert (Self.Score >= 1, $"own replicated Score is >= 1, got {Self.Score}");
 
     // Victim must come back armored in the spawn room.
     await WaitUntil (() => respawnArmorSeen, 15, "victim respawned with spawn armor");
@@ -234,12 +240,20 @@ public partial class PlaytestDriver : Node
     Self.ZapStreakCount = 3;
     // The shooter opens fire once armor drops; verify damage & then a full respawn.
     await WaitUntil (() => Self.Health < Self.MaxHealth, 120, "took damage from shooter");
+    // One-hit-kill (#93): after the punch phase, the shooter only fires full-charge
+    // shots, & a full-charge shot is lethal on any target - so no partial-damage
+    // health value may ever appear between the punch & the respawn reset.
+    var partialLaserHits = 0;
+    var healthAfterPunch = Self.Health;
+    Self.HealthChanged += value => partialLaserHits += value > 0 && value < healthAfterPunch ? 1 : 0;
     await WaitUntil (() => Self.SpawnArmor && Self.Health == Self.MaxHealth, 120, "died & respawned with armor & full health");
+    Assert (partialLaserHits == 0, $"full-charge kill took exactly one hit (#93), saw {partialLaserHits} partial-damage hits");
     Assert (Self.GlobalPosition.Y > 20.0f, $"respawned up in the spawn room, y={Self.GlobalPosition.Y}");
-    await WaitUntil (() => FindPlayer (ShooterName)?.Score == 1, 30, "shooter's score replicated to victim");
+    // >= 1: an incidental one-hit kill on the host in the line of fire also counts.
+    await WaitUntil (() => FindPlayer (ShooterName)?.Score >= 1, 30, "shooter's score replicated to victim");
     // Streak glow (#77/#88): the shooter's kill streak must replicate to the victim's
     // copy of the shooter node, since that drives the glow & leaderboard pulsing here.
-    await WaitUntil (() => FindPlayer (ShooterName)?.ZapStreakCount == 1, 15, "shooter's streak replicated to victim");
+    await WaitUntil (() => FindPlayer (ShooterName)?.ZapStreakCount >= 1, 15, "shooter's streak replicated to victim");
     // Give the shooter time to finish its solo phases (fire-rate & full-auto) before we vanish.
     await Task.Delay (8000);
   }

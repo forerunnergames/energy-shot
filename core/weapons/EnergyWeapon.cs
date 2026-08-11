@@ -21,14 +21,23 @@ public partial class EnergyWeapon : Node3D
   [Export] public float ShotCooldownSeconds = 0.5f;
   [Export] public float RecoilStrength = 5.0f;
   [Export] public float RecoilRecoverySpeed = 5.0f;
+  // Single source for the full-charge threshold (#93, #94, #105, #113): at this
+  // energy the shot pierces, one-hit-kills, x-rays, & gets its own message pool.
+  public const float FullChargeEnergyThreshold = 0.95f;
   [Signal] public delegate void ShotFiredEventHandler (float energy, bool isFullAuto);
+  // Fired once per charge when the spin-up crosses the full-charge threshold (issue #113).
+  [Signal] public delegate void FullChargeReachedEventHandler();
   public bool IsSpinningUp { get; private set; }
+  // True while holding a charge hot enough to pierce & one-hit-kill (issues #93, #105).
+  public bool IsFullyCharged => IsSpinningUp && CalculateEnergy() >= FullChargeEnergyThreshold;
   private static readonly Color FullAutoColor = new(3.0f, 0.1f, 0.1f);
   private AudioStreamPlayer3D _shootingSound = null!;
   private AudioStreamPlayer3D _chargingSound = null!;
   private AudioStreamPlayer3D _fullAutoSwitchSound = null!;
   private AudioStreamPlayer3D _fullAutoReadySound = null!;
+  private AudioStreamPlayer3D _fullChargeClickSound = null!;
   private bool _isFullAutoMode;
+  private bool _fullChargeAnnounced;
   private MeshInstance3D _muzzleMeshInstance = null!;
   private Node3D _pivot = null!;
   private StandardMaterial3D _muzzleMaterial = null!;
@@ -53,6 +62,7 @@ public partial class EnergyWeapon : Node3D
     _isFullAutoMode = active;
     if (active) _fullAutoSwitchSound.Play();
     IsSpinningUp = false;
+    _fullChargeAnnounced = false;
     _chargingSound.Stop();
     _tween?.Kill();
     _currentRotationSpeed = MinRotationSpeed;
@@ -71,6 +81,7 @@ public partial class EnergyWeapon : Node3D
   public void ResetCharge()
   {
     IsSpinningUp = false;
+    _fullChargeAnnounced = false;
     _chargingSound.Stop();
     _tween?.Kill();
     _currentRotationSpeed = MinRotationSpeed;
@@ -87,6 +98,7 @@ public partial class EnergyWeapon : Node3D
     _chargingSound = GetNode <AudioStreamPlayer3D> ("ChargingSound");
     _fullAutoSwitchSound = GetNode <AudioStreamPlayer3D> ("FullAutoSwitchSound");
     _fullAutoReadySound = GetNode <AudioStreamPlayer3D> ("FullAutoReadySound");
+    _fullChargeClickSound = GetNode <AudioStreamPlayer3D> ("FullChargeClickSound");
     _muzzleMeshInstance = GetNode <Node3D> ("Pivot/Muzzle").GetNode <MeshInstance3D> ("Cube_001");
     _muzzleMaterial = CreateCopy ((_muzzleMeshInstance.Mesh.SurfaceGetMaterial (0) as StandardMaterial3D)!);
     _muzzleMeshInstance.MaterialOverride = _muzzleMaterial;
@@ -102,6 +114,16 @@ public partial class EnergyWeapon : Node3D
     _cooldownLeft = Mathf.Max (0.0f, _cooldownLeft - (float)delta);
     Rotate (delta);
     Recoil (delta);
+    AnnounceFullCharge();
+  }
+
+  // Crisp lock-in click the moment the charge maxes out, once per charge (issue #113).
+  private void AnnounceFullCharge()
+  {
+    if (_fullChargeAnnounced || !IsFullyCharged) return;
+    _fullChargeAnnounced = true;
+    _fullChargeClickSound.Play();
+    EmitSignal (SignalName.FullChargeReached);
   }
 
   private void Recoil (double delta)
@@ -135,6 +157,7 @@ public partial class EnergyWeapon : Node3D
   {
     if (IsSpinningUp) return;
     IsSpinningUp = true;
+    _fullChargeAnnounced = false;
     _chargingSound.Play();
     _tween?.Kill();
     _tween = CreateTween().SetParallel();
@@ -145,6 +168,7 @@ public partial class EnergyWeapon : Node3D
   private void SpinDown()
   {
     IsSpinningUp = false;
+    _fullChargeAnnounced = false;
     _chargingSound.Stop();
     _tween?.Kill();
     _tween = CreateTween().SetParallel();

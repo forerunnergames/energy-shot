@@ -12,11 +12,12 @@ public class MessageGeneratorTest
   private static DeathContext Laser (float energy = 0.5f) => new() { Kind = DamageKind.Laser, Energy = energy };
 
   [TestCase]
-  public void ExactlyOneHundredUniqueMessageTemplates()
+  public void ExactlyOneHundredThreeUniqueMessageTemplates()
   {
+    // 100 from the content wave (issue #84) + 3 through-wall zaps (issue #94).
     var templates = MessagePools.All.SelectMany (pool => pool).ToList();
-    AssertInt (templates.Count).IsEqual (100);
-    AssertInt (templates.Distinct().Count()).IsEqual (100);
+    AssertInt (templates.Count).IsEqual (103);
+    AssertInt (templates.Distinct().Count()).IsEqual (103);
   }
 
   [TestCase]
@@ -31,8 +32,8 @@ public class MessageGeneratorTest
   [TestCase]
   public void EveryPoolIsInTheRegistry()
   {
-    // 22 scenario pools registered, none empty.
-    AssertInt (MessagePools.All.Count).IsEqual (22);
+    // 23 scenario pools registered, none empty.
+    AssertInt (MessagePools.All.Count).IsEqual (23);
     foreach (var pool in MessagePools.All) AssertBool (pool.Count > 0).IsTrue();
   }
 
@@ -104,6 +105,16 @@ public class MessageGeneratorTest
     AssertBool (message.Contains ("Alice")).IsTrue();
     AssertBool (message.Contains ("Bob")).IsTrue();
     AssertBool (char.IsUpper (message[0])).IsTrue();
+  }
+
+  [TestCase]
+  public void ThroughWallMessagesMentionBothPlayers()
+  {
+    var context = new DeathContext { Kind = DamageKind.Laser, Energy = 1.0f, ThroughBarrier = true };
+    AssertBool (MessageGenerator.SelectZappedPool (context) == MessagePools.ThroughWall).IsTrue();
+    var message = MessageGenerator.OnZapped ("Alice", "Bob", context);
+    AssertBool (message.Contains ("Alice")).IsTrue();
+    AssertBool (message.Contains ("Bob")).IsTrue();
   }
 
   [TestCase]

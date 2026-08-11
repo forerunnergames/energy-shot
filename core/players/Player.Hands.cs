@@ -78,7 +78,12 @@ public partial class Player
   }
 
   // Peers replay this player's punch on their copy of this node - sent only on a
-  // connect, so a visible remote swing is always a real hit (issue #82).
+  // connect, so a visible remote swing is always a real hit (issue #82). Punching
+  // also drops spawn armor, so stale armor whitewash clears here too (issue #114).
   [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
-  private void PlayRemotePunch (int hand) => AnimatePunch (hand);
+  private void PlayRemotePunch (int hand)
+  {
+    ClearArmorDisplayOnRemoteAttack();
+    AnimatePunch (hand);
+  }
 }

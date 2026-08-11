@@ -6,25 +6,41 @@ namespace com.forerunnergames.energyshot.weapons;
 // energy it was fired with. Only the shooter's own bolt is "live" (deals damage);
 // other peers spawn visual-only copies. Hits are detected by sweeping a ray along the
 // path traveled each physics frame, so fast bolts can't tunnel through thin geometry.
+// The first frame sweeps from the camera, so geometry closer than the muzzle offset
+// still stops sub-threshold shots (issue #112).
 public partial class LaserBolt : Node3D
 {
   [Export] public float Speed = 90.0f;
-  [Export] public float DropAcceleration = 12.0f;
+  // Drop at zero charge; the curve scales it down as charge rises (issue #106).
+  [Export] public float DropAcceleration = 24.0f;
+  // Drop multiplier by charge (issue #106): full-charge bolts fly nearly flat for
+  // long-range sniping, low-charge & full-auto shots droop noticeably.
+  [Export] public Curve? DropCurve;
   [Export] public float MaxLifetimeSeconds = 4.0f;
-  [Export] public float PierceEnergyThreshold = 0.95f;
-  [Signal] public delegate void HitPlayerEventHandler (CharacterBody3D player, float energy);
+  public const float PierceEnergyThreshold = EnergyWeapon.FullChargeEnergyThreshold;
+  // How far past the entry point the exit-side burn mark is searched for (issue #94).
+  [Export] public float MaxPierceDepthMeters = 4.0f;
+  [Signal] public delegate void HitPlayerEventHandler (CharacterBody3D player, float energy, bool throughBarrier);
   // Baseline bright red at every charge level (issue #92); charge only makes it hotter.
   private static readonly Color LowEnergyColor = new(3.0f, 0.12f, 0.1f);
   private static readonly Color HighEnergyColor = new(6.0f, 0.3f, 0.15f);
   private Vector3 _velocity;
+  private Vector3 _sweepStart;
+  private bool _sweptFromStart;
   private float _energy;
   private float _age;
   private bool _isLive;
+  private bool _piercedBarrier;
   private Godot.Collections.Array <Rid> _exclusions = new();
+  private float DropFor (float energy) => DropAcceleration * (DropCurve?.Sample (energy) ?? 1.0f - energy);
 
-  public void Launch (Vector3 origin, Vector3 direction, float energy, bool isLive, CharacterBody3D shooter)
+  // sweepStart is the shooter's camera position: the bolt spawns at the muzzle, but
+  // the first sweep covers camera->muzzle too, so a wall closer than the muzzle
+  // offset can't be skipped (issue #112).
+  public void Launch (Vector3 origin, Vector3 sweepStart, Vector3 direction, float energy, bool isLive, CharacterBody3D shooter)
   {
     GlobalPosition = origin;
+    _sweepStart = sweepStart;
     _velocity = direction.Normalized() * Speed;
     _energy = energy;
     _isLive = isLive;
@@ -44,9 +60,10 @@ public partial class LaserBolt : Node3D
       return;
     }
 
-    var from = GlobalPosition;
-    _velocity.Y -= DropAcceleration * dt; // ponytail: simple laser drop, no drag
-    var to = from + _velocity * dt;
+    var from = _sweptFromStart ? GlobalPosition : _sweepStart;
+    _sweptFromStart = true;
+    _velocity.Y -= DropFor (_energy) * dt; // ponytail: simple laser drop, no drag
+    var to = GlobalPosition + _velocity * dt;
 
     // Re-query the same segment after each pierce so a player behind pierced
     // geometry still gets hit in the same physics frame.
@@ -72,7 +89,7 @@ public partial class LaserBolt : Node3D
   {
     if (hit["collider"].AsGodotObject() is CharacterBody3D player)
     {
-      if (_isLive) EmitSignal (SignalName.HitPlayer, player, _energy);
+      if (_isLive) EmitSignal (SignalName.HitPlayer, player, _energy, _piercedBarrier);
       QueueFree();
       return false;
     }
@@ -83,8 +100,30 @@ public partial class LaserBolt : Node3D
       return false;
     }
 
-    _exclusions.Add (hit["rid"].AsRid());
+    Pierce (hit);
     return true;
+  }
+
+  // Punch through: scorch both faces so the pierce reads on every peer (issue #94),
+  // then exclude the collider so the sweep doesn't re-hit it.
+  private void Pierce (Godot.Collections.Dictionary hit)
+  {
+    _piercedBarrier = true;
+    var entry = hit["position"].AsVector3();
+    BurnMark.Spawn (GetParent(), entry, hit["normal"].AsVector3());
+    SpawnExitBurnMark (hit["rid"].AsRid(), entry);
+    _exclusions.Add (hit["rid"].AsRid());
+  }
+
+  // Finds the far face of the pierced collider by casting back toward the entry
+  // point; skipped when the geometry is thicker than the search depth.
+  private void SpawnExitBurnMark (Rid pierced, Vector3 entry)
+  {
+    var direction = _velocity.Normalized();
+    var query = PhysicsRayQueryParameters3D.Create (entry + direction * MaxPierceDepthMeters, entry, exclude: _exclusions);
+    var hit = GetWorld3D().DirectSpaceState.IntersectRay (query);
+    if (hit.Count == 0 || hit["rid"].AsRid() != pierced) return;
+    BurnMark.Spawn (GetParent(), hit["position"].AsVector3(), hit["normal"].AsVector3());
   }
 
   private void Orient()
