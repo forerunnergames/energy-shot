@@ -22,7 +22,7 @@ public partial class Player
   private void Fall (ref Vector3 velocity, double delta) => velocity += Gravity * (float)delta;
   private bool WantsSlide() => _isInputEnabled && !IsStunned && Input.IsActionPressed ("slide");
   // Slide wins: crouch is ignored while sliding (see issue #51).
-  private bool WantsCrouch() => _isInputEnabled && !Sliding && Input.IsActionPressed ("crouch");
+  private bool ToggledCrouch() => _isInputEnabled && Input.IsActionJustPressed ("crouch");
   private float MoveSpeed() => (Sliding ? Speed * SlideSpeedMultiplier : _crouching ? Speed * CrouchSpeedMultiplier : Speed) * StunSpeedMultiplier();
 
   // Hold to slide: double speed & a horizontal pose, capped at SlideDurationSeconds,
@@ -54,17 +54,20 @@ public partial class Player
   {
     _slideCooldownLeft = SlideCooldownSeconds;
     Sliding = false;
+    if (IsOverheadBlocked()) Crouching = true; // Slid under something low: come up into a crouch, not the ceiling.
     ApplyCameraHeight();
   }
 
   // Hold C to crouch: shorter profile & half speed (see issue #51). Standing back up
   // requires overhead clearance so the head can't clip into geometry above.
+  // Press C to crouch, press again to stand (issue #85). Sliding cancels a crouch;
+  // standing needs overhead clearance.
   private void UpdateCrouch()
   {
-    var crouching = WantsCrouch();
-    if (crouching == _crouching) return;
-    if (!crouching && IsOverheadBlocked()) return;
-    Crouching = crouching;
+    if (Sliding && _crouching) { Crouching = false; ApplyCameraHeight(); return; }
+    if (!ToggledCrouch() || Sliding) return;
+    if (_crouching && IsOverheadBlocked()) return;
+    Crouching = !_crouching;
     ApplyCameraHeight();
   }
 
@@ -198,6 +201,12 @@ public partial class Player
     _energyWeapon.ResetCharge(); // Every life starts with a cold weapon (issue #67).
     ClearStun(); // Death shakes off any punch/banana stun.
     ActivateSpawnArmor();
+    // Fresh lives start standing & slide-ready: no lingering pose, no cooldown carryover (#104).
+    Sliding = false;
+    _slideSecondsLeft = 0.0f;
+    _slideCooldownLeft = 0.0f;
+    Crouching = false;
+    ApplyCameraHeight();
     SetInputEnabled (isEnabled: false);
     _respawnSound.Play();
     GD.Print ($"{DisplayName}: I respawned!");

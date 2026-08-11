@@ -15,6 +15,8 @@ namespace com.forerunnergames.energyshot.playtest;
 public partial class PlaytestDriver : Node
 {
   private const int Port = 55599;
+  // Fixed, deterministic game password (issue #90): exercises the server-side check.
+  private const string Password = "playtest-secret";
   private const string HostName = "Host";
   private const string ShooterName = "Shooter";
   private const string VictimName = "Victim";
@@ -88,7 +90,7 @@ public partial class PlaytestDriver : Node
 
   private async Task RunHost()
   {
-    _world.StartHostSession (HostName, difficulty: 2, Port);
+    _world.StartHostSession (HostName, difficulty: 2, Port, Password);
     await WaitUntil (() => _world.GetPlayers().Count() == 3, 60, "all 3 players joined");
     // Shooter kills victim once; wait to observe the replicated score.
     await WaitUntil (() => FindPlayer (ShooterName)?.Score == 1, 120, "shooter's kill replicated to host");
@@ -100,7 +102,7 @@ public partial class PlaytestDriver : Node
 
   private async Task RunShooter()
   {
-    _world.StartClientSession (ShooterName, difficulty: 1, _address, Port);
+    _world.StartClientSession (ShooterName, difficulty: 1, _address, Port, Password);
     await WaitUntil (() => _world.GetPlayers().Count() == 3, 60, "all 3 players visible");
     var victim = FindPlayer (VictimName)!;
     var host = FindPlayer (HostName)!;
@@ -211,7 +213,7 @@ public partial class PlaytestDriver : Node
 
   private async Task RunVictim()
   {
-    _world.StartClientSession (VictimName, difficulty: 0, _address, Port);
+    _world.StartClientSession (VictimName, difficulty: 0, _address, Port, Password);
     await WaitUntil (() => _world.GetPlayers().Count() == 3, 60, "all 3 players visible");
     Assert (Self.MaxHealth == 400, $"own MaxHealth is Beginner 400, got {Self.MaxHealth}");
     Assert (Self.SpawnArmor, "spawned with spawn armor");

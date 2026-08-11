@@ -1,4 +1,4 @@
-[gd_scene load_steps=18 format=3 uid="uid://b1w1b7u4gtpbh"]
+[gd_scene load_steps=19 format=3 uid="uid://b1w1b7u4gtpbh"]
 
 [ext_resource type="Script" path="res://core/players/Player.cs" id="1_nipvj"]
 [ext_resource type="Texture2D" uid="uid://ddlk1r4wak13u" path="res://assets/crosshairs.png" id="2_37lxu"]
@@ -10,6 +10,7 @@
 [ext_resource type="AudioStream" path="res://assets/sounds/damage.wav" id="7_dmg"]
 [ext_resource type="AudioStream" path="res://assets/sounds/zap-out.mp3" id="8_zapout"]
 [ext_resource type="AudioStream" path="res://assets/sounds/respawn.wav" id="9_rspwn"]
+[ext_resource type="Mesh" uid="uid://bbgg3dls6oyy4" path="res://assets/items/crown.obj" id="11_crown"]
 
 [sub_resource type="ViewportTexture" id="ViewportTexture_udl6m"]
 viewport_path = NodePath("SubViewport")
@@ -109,6 +110,14 @@ billboard = 1
 no_depth_test = true
 text = "PlayerName"
 outline_size = 20
+
+[node name="Crown" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.6, 0)
+visible = false
+
+[node name="CrownMesh" type="MeshInstance3D" parent="Crown"]
+transform = Transform3D(0.03, 0, 0, 0, 0, 0.03, 0, -0.03, 0, 0, 0, 0)
+mesh = ExtResource("11_crown")
 
 [node name="StreakLight" type="OmniLight3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, 0)

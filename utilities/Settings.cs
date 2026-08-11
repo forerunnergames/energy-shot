@@ -41,6 +41,19 @@ public static class Settings
     set => Set ("max_players", value);
   }
 
+  // Game passwords (issue #90), remembered like the other dialog fields.
+  public static string HostPassword
+  {
+    get => Get ("host_password");
+    set => Set ("host_password", value);
+  }
+
+  public static string LastJoinPassword
+  {
+    get => Get ("last_join_password");
+    set => Set ("last_join_password", value);
+  }
+
   private static string Get (string key)
   {
     var config = new ConfigFile();

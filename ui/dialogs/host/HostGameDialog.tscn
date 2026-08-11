@@ -112,6 +112,20 @@ value = 12.0
 rounded = true
 alignment = 1
 
+[node name="PasswordLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 50
+text = "Game Password (required; share it with your friends)"
+horizontal_alignment = 1
+
+[node name="Password" type="LineEdit" parent="PanelContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_uneditable_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 100
+placeholder_text = "Enter Game Password"
+alignment = 1
+secret = true
+
 [node name="HSeparator2" type="HSeparator" parent="PanelContainer/MarginContainer/VBoxContainer"]
 layout_mode = 2
 
