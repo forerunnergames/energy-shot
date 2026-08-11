@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using com.forerunnergames.energyshot.players;
+using com.forerunnergames.energyshot.weapons;
 using Godot;
 
 namespace com.forerunnergames.energyshot.ui.hud;
@@ -9,7 +10,7 @@ namespace com.forerunnergames.energyshot.ui.hud;
 // the names, so it stays unit-testable.
 public static class MessageGenerator
 {
-  public const float FullChargeThreshold = 0.95f;
+  public const float FullChargeThreshold = EnergyWeapon.FullChargeEnergyThreshold;
   public const float BananaDirectThreshold = 0.85f;
 
   // @formatter:off

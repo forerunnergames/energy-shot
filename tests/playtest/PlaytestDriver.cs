@@ -249,10 +249,11 @@ public partial class PlaytestDriver : Node
     await WaitUntil (() => Self.SpawnArmor && Self.Health == Self.MaxHealth, 120, "died & respawned with armor & full health");
     Assert (partialLaserHits == 0, $"full-charge kill took exactly one hit (#93), saw {partialLaserHits} partial-damage hits");
     Assert (Self.GlobalPosition.Y > 20.0f, $"respawned up in the spawn room, y={Self.GlobalPosition.Y}");
-    await WaitUntil (() => FindPlayer (ShooterName)?.Score == 1, 30, "shooter's score replicated to victim");
+    // >= 1: an incidental one-hit kill on the host in the line of fire also counts.
+    await WaitUntil (() => FindPlayer (ShooterName)?.Score >= 1, 30, "shooter's score replicated to victim");
     // Streak glow (#77/#88): the shooter's kill streak must replicate to the victim's
     // copy of the shooter node, since that drives the glow & leaderboard pulsing here.
-    await WaitUntil (() => FindPlayer (ShooterName)?.ZapStreakCount == 1, 15, "shooter's streak replicated to victim");
+    await WaitUntil (() => FindPlayer (ShooterName)?.ZapStreakCount >= 1, 15, "shooter's streak replicated to victim");
     // Give the shooter time to finish its solo phases (fire-rate & full-auto) before we vanish.
     await Task.Delay (8000);
   }

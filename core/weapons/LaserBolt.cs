@@ -17,7 +17,7 @@ public partial class LaserBolt : Node3D
   // long-range sniping, low-charge & full-auto shots droop noticeably.
   [Export] public Curve? DropCurve;
   [Export] public float MaxLifetimeSeconds = 4.0f;
-  [Export] public float PierceEnergyThreshold = 0.95f;
+  public const float PierceEnergyThreshold = EnergyWeapon.FullChargeEnergyThreshold;
   // How far past the entry point the exit-side burn mark is searched for (issue #94).
   [Export] public float MaxPierceDepthMeters = 4.0f;
   [Signal] public delegate void HitPlayerEventHandler (CharacterBody3D player, float energy, bool throughBarrier);

@@ -268,7 +268,7 @@ public partial class Player
     var decrease = Mathf.RoundToInt (CalculateHealthDecrease (energy) * handicap);
     // A full-charge shot is lethal on ANY target (issue #93): the 100-damage cap &
     // tier handicap don't apply - only the survivable banana blast is exempt.
-    if (energy >= FullChargeEnergyThreshold && !isSurvivableAtFullHealth) decrease = Health;
+    if (energy >= EnergyWeapon.FullChargeEnergyThreshold && !isSurvivableAtFullHealth) decrease = Health;
     // A banana blast never one-shots a full-health player (issue #61): leave ≥1 HP.
     if (isSurvivableAtFullHealth && Health >= MaxHealth) decrease = Mathf.Min (decrease, Health - 1);
     Health -= decrease;

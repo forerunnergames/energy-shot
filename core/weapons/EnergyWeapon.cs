@@ -21,8 +21,9 @@ public partial class EnergyWeapon : Node3D
   [Export] public float ShotCooldownSeconds = 0.5f;
   [Export] public float RecoilStrength = 5.0f;
   [Export] public float RecoilRecoverySpeed = 5.0f;
-  // Matches LaserBolt.PierceEnergyThreshold: at this energy the shot pierces & one-hit-kills.
-  [Export] public float FullChargeEnergyThreshold = 0.95f;
+  // Single source for the full-charge threshold (#93, #94, #105, #113): at this
+  // energy the shot pierces, one-hit-kills, x-rays, & gets its own message pool.
+  public const float FullChargeEnergyThreshold = 0.95f;
   [Signal] public delegate void ShotFiredEventHandler (float energy, bool isFullAuto);
   // Fired once per charge when the spin-up crosses the full-charge threshold (issue #113).
   [Signal] public delegate void FullChargeReachedEventHandler();

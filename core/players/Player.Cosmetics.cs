@@ -48,7 +48,9 @@ public partial class Player
   private void UpdateXrayReveal()
   {
     var active = HasLaser && IsLaserSelected && _energyWeapon.IsFullyCharged;
-    if (active == _xrayRevealActive) return;
+    // Re-apply every frame while active (it's idempotent) so players who join
+    // mid-charge get revealed too; only skip when staying inactive.
+    if (!active && !_xrayRevealActive) return;
     _xrayRevealActive = active;
     foreach (var player in GetParent().GetChildren().OfType <Player>().Where (player => player != this)) player.SetXrayRevealed (active);
   }

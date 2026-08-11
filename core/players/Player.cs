@@ -127,8 +127,6 @@ public partial class Player : CharacterBody3D
   public bool IsOnStreak => ZapStreakCount >= 3;
 
   [Export] public float SpawnArmorSeconds = 5.0f;
-  // Matches LaserBolt.PierceEnergyThreshold: a shot this hot pierces & one-hit-kills (#93).
-  [Export] public float FullChargeEnergyThreshold = 0.95f;
   [Export] public float MouseSensitivity = 0.0025f;
   [Export] public float FullAutoDurationSeconds = 3.0f;
   [Export] public float FullAutoCooldownSeconds = 15.0f;
