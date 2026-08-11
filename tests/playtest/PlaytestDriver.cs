@@ -92,8 +92,9 @@ public partial class PlaytestDriver : Node
   {
     _world.StartHostSession (HostName, difficulty: 2, Port, Password);
     await WaitUntil (() => _world.GetPlayers().Count() == 3, 60, "all 3 players joined");
-    // Shooter kills victim once; wait to observe the replicated score.
-    await WaitUntil (() => FindPlayer (ShooterName)?.Score == 1, 120, "shooter's kill replicated to host");
+    // Shooter kills victim once (plus possibly the host itself in the line of
+    // fire); wait to observe the replicated score.
+    await WaitUntil (() => FindPlayer (ShooterName)?.Score >= 1, 120, "shooter's kill replicated to host");
     // Victim respawns with armor visible to the host too.
     await WaitUntil (() => FindPlayer (VictimName)?.SpawnArmor == true, 30, "victim respawn armor replicated to host");
     // Stay up until both clients have finished & disconnected.
@@ -162,8 +163,11 @@ public partial class PlaytestDriver : Node
     // so the first bolt that connects scores (shooter is told via NotifyScored -> Score).
     // Retry until a bolt actually spawns each attempt - under CI load, physics time
     // (which drives the weapon cooldown) can lag the wall clock these delays use.
+    // Count only kills of the designated victim: a full-charge bolt one-hit kills
+    // ANY player (#93), so the host wandering into the line of fire must not end
+    // the loop early & leave the victim alive.
     var kills = 0;
-    Self.Scored += (_, _) => ++kills;
+    Self.Scored += (_, shotPlayerName) => { if (shotPlayerName == victim.DisplayName) ++kills; };
     // The 5s respawn-armor window can elapse during the shot loop's waits, so watch
     // for it continuously instead of only checking after the loop.
     var respawnArmorSeen = false;
@@ -188,7 +192,8 @@ public partial class PlaytestDriver : Node
     }
 
     Assert (kills == 1, "scored a kill with charged shots");
-    Assert (Self.Score == 1, $"own replicated Score is 1, got {Self.Score}");
+    // >= 1: an incidental one-hit kill on the host in the line of fire also scores.
+    Assert (Self.Score >= 1, $"own replicated Score is >= 1, got {Self.Score}");
 
     // Victim must come back armored in the spawn room.
     await WaitUntil (() => respawnArmorSeen, 15, "victim respawned with spawn armor");
