@@ -107,6 +107,7 @@ public partial class Player
     if (!IsMultiplayerAuthority()) return;
     if (SpawnArmor) return;
     GD.Print ($"{DisplayName}: I was blasted by {firedByPlayerName}'s banana!");
+    LastDamageKind = DamageKind.Banana; // Message context (issue #84).
     ApplyBananaStun(); // Flat 5s stun synced with the splatter overlay (issue #70).
     EmitSignal (SignalName.Splattered);
     ApplyBlastKnockback (blastOrigin);

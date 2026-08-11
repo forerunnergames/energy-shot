@@ -21,7 +21,7 @@ public partial class EnergyWeapon : Node3D
   [Export] public float ShotCooldownSeconds = 0.5f;
   [Export] public float RecoilStrength = 5.0f;
   [Export] public float RecoilRecoverySpeed = 5.0f;
-  [Signal] public delegate void ShotFiredEventHandler (float energy);
+  [Signal] public delegate void ShotFiredEventHandler (float energy, bool isFullAuto);
   public bool IsSpinningUp { get; private set; }
   private static readonly Color FullAutoColor = new(3.0f, 0.1f, 0.1f);
   private AudioStreamPlayer3D _shootingSound = null!;
@@ -118,7 +118,7 @@ public partial class EnergyWeapon : Node3D
     _cooldownLeft = ShotCooldownSeconds;
     PlayShootingSound();
     var energy = CalculateEnergy();
-    EmitSignal (SignalName.ShotFired, energy);
+    EmitSignal (SignalName.ShotFired, energy, false);
     StartRecoil (energy);
     SpinDown();
   }
@@ -127,7 +127,7 @@ public partial class EnergyWeapon : Node3D
   public void FireLowPower (float energy)
   {
     PlayShootingSound();
-    EmitSignal (SignalName.ShotFired, energy);
+    EmitSignal (SignalName.ShotFired, energy, true);
     StartRecoil (energy);
   }
 

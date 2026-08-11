@@ -1,7 +1,9 @@
 using System.Linq;
 using com.forerunnergames.energyshot.core.world;
+using com.forerunnergames.energyshot.players;
 using com.forerunnergames.energyshot.ui.dialogs;
 using com.forerunnergames.energyshot.ui.hud.messages;
+using com.forerunnergames.energyshot.weapons;
 using Godot;
 
 namespace com.forerunnergames.energyshot.ui.hud;
@@ -185,24 +187,44 @@ public partial class Hud : Control
   }
 
   // Every peer sees the exact same message text (#53): the victim picks the zap line
-  // once & broadcasts it to everyone (including the shooter); streak lines are picked
-  // once & shared the same way.
+  // once & broadcasts it to everyone (including the shooter); streak & theft-revenge
+  // lines are picked once & shared the same way.
   private void OnPlayerRespawnedShot (string playerName, string shotByPlayerName)
   {
     if (IsSelf (shotByPlayerName))
     {
       ++_zapStreak;
       _zappedStreak = 0;
-      if (_zapStreak >= 3) Announce (MessageGenerator.OnZapStreak (shotByPlayerName));
+      if (_world.SelfPlayer?.TookRevengeOn (playerName) == true) Announce (MessageGenerator.OnTheftRevenge (playerName, shotByPlayerName));
+      if (_zapStreak >= 3) Announce (MessageGenerator.OnZapStreak (shotByPlayerName, _zapStreak));
       return;
     }
 
     if (!IsSelf (playerName)) return;
-    var fullCharge = _world.SelfPlayer?.LastZapEnergy >= 0.95f;
-    Announce (MessageGenerator.OnZapped (playerName, shotByPlayerName, selfIsVictim: false, selfIsZapper: false, fullCharge));
+    Announce (MessageGenerator.OnZapped (playerName, shotByPlayerName, BuildDeathContext (shotByPlayerName)));
     ++_zappedStreak;
     _zapStreak = 0;
     if (_zappedStreak >= 3) Announce (MessageGenerator.OnZappedStreak (playerName));
+  }
+
+  // The victim knows its own death snapshot; the killer's stance (sliding/airborne/
+  // unarmed) is read from the killer's replicated node at message time (issue #84).
+  private DeathContext BuildDeathContext (string killerName)
+  {
+    var self = _world.SelfPlayer;
+    var killer = _world.GetPlayers().FirstOrDefault (player => player.DisplayName == killerName);
+    return new DeathContext (
+      self?.LastDamageKind ?? DamageKind.None,
+      self?.LastZapEnergy ?? 0.0f,
+      self?.DiedSliding ?? false,
+      self?.DiedArmed ?? false,
+      self?.DiedHoldingBananaGun ?? false,
+      self?.LostStreakCount ?? 0,
+      killer?.Sliding ?? false,
+      killer?.IsLikelyAirborne() ?? false,
+      killer?.HeldWeapon == HeldWeapon.None,
+      _splatterSecondsLeft > 0.0f,
+      _blurIntensity > 0.0f);
   }
 
   private void Announce (string message) => NotifyMessage (message, message);

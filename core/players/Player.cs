@@ -249,6 +249,9 @@ public partial class Player : CharacterBody3D
       _crossHairs.Hide();
       RestoreBaseColor();
       ApplySlidePose();
+      // Spawn-state sync runs before _Ready, when the glow node refs were still null,
+      // so re-apply it here or a late joiner never sees an existing streak (issue #88).
+      ApplyStreakGlow();
       return;
     }
 

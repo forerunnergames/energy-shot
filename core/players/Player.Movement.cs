@@ -1,11 +1,21 @@
+using com.forerunnergames.energyshot.weapons;
 using Godot;
 
 namespace com.forerunnergames.energyshot.players;
 
 // Movement: walking, jumping, falling, sliding, crouching, world-boundary collisions,
-// respawns, & spawn positioning.
+// respawns, spawn positioning, & the death snapshot for scenario messages.
 public partial class Player
 {
+  // Death snapshot (issue #84): what this player was doing & holding at the moment
+  // it got zapped out, captured before the respawn resets everything, so the HUD
+  // can pick the right scenario message afterward. LastDamageKind is recorded by
+  // the receive-hit RPCs in Player.Combat.cs & Player.Banana.cs.
+  public DamageKind LastDamageKind { get; private set; }
+  public bool DiedSliding { get; private set; }
+  public bool DiedArmed { get; private set; }
+  public bool DiedHoldingBananaGun { get; private set; }
+  public int LostStreakCount { get; private set; }
   private bool IsFalling() => !IsOnFloor();
   // Stun blocks jumping & sliding (issues #70 & #71).
   private bool IsJumping() => _isInputEnabled && !IsStunned && _jumpTimer.IsStopped() && Input.IsActionJustPressed ("jump") && IsOnFloor();
@@ -135,9 +145,40 @@ public partial class Player
 
   private void RespawnShot (string shotByPlayerName)
   {
+    CaptureDeathSnapshot();
     DropAllHeldWeapons(); // Death drops everything carried at the death spot (issue #72).
     Respawn();
     EmitSignal (SignalName.RespawnedShot, DisplayName, shotByPlayerName);
+  }
+
+  private void CaptureDeathSnapshot()
+  {
+    DiedSliding = Sliding;
+    DiedArmed = HeldWeapon != HeldWeapon.None;
+    DiedHoldingBananaGun = Holds (HeldWeapon.Banana);
+    LostStreakCount = ZapStreakCount;
+  }
+
+  // Belt & braces for issue #88: the on-fire glow & pulsing leaderboard entry must
+  // never outlive a death. The authority already resets ZapStreakCount in Respawn(),
+  // but ON_CHANGE sync only re-sends on the NEXT change, so a puppet that missed
+  // that one reset delta (e.g. spawned mid-handshake) stays stuck on a stale 3+.
+  // Every peer hears the reliable respawn broadcast, so the World clears the local
+  // display state there too - the authority's value agrees (it's also 0).
+  public void ClearStreakDisplayLocally()
+  {
+    _zapStreakCount = 0;
+    ApplyStreakGlow();
+  }
+
+  // Killer-side context for jump-shot messages (issue #84): IsOnFloor() is only
+  // meaningful on the authority, so puppets probe for ground beneath their feet.
+  public bool IsLikelyAirborne()
+  {
+    if (IsMultiplayerAuthority()) return !IsOnFloor();
+    var from = GlobalPosition + Vector3.Up * 0.2f;
+    var query = PhysicsRayQueryParameters3D.Create (from, from + Vector3.Down * 0.8f, exclude: new Godot.Collections.Array <Rid> { GetRid() });
+    return GetWorld3D().DirectSpaceState.IntersectRay (query).Count == 0;
   }
 
   private void RespawnFell()

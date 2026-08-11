@@ -121,6 +121,10 @@ public partial class PlaytestDriver : Node
     // Wait out everyone's initial spawn armor before the damage phase.
     await WaitUntil (() => !victim.SpawnArmor, 15, "victim's initial spawn armor expired");
 
+    // Streak replication (#88): the victim simulates an active 3-streak; it must
+    // replicate here so the on-fire glow & pulsing leaderboard entry appear.
+    await WaitUntil (() => victim.ZapStreakCount == 3, 15, "victim's simulated 3-streak replicated to shooter");
+
     // Punch phase: walk up to the victim & punch them; verify melee damage lands.
     var healthBeforePunch = victim.Health;
     await WaitUntil (() => ApproachedVictim (victim), 30, "walked into punch range of victim");
@@ -135,6 +139,8 @@ public partial class PlaytestDriver : Node
     }
 
     Assert (victim.Health < healthBeforePunch, $"punch damaged the victim ({healthBeforePunch} -> {victim.Health})");
+    // Sync property index 14 (#88): the punch stun must replicate to the shooter's copy.
+    await WaitUntil (() => victim.StunFactor > 0.0f, 2, "victim's punch stun replicated to shooter");
 
     // Weapon lifecycle (#72): everyone spawns unarmed, so collect the deterministic
     // laser pickup the WeaponSpawner keeps in the spawn room in --playtest mode.
@@ -175,6 +181,10 @@ public partial class PlaytestDriver : Node
     // Victim must come back armored in the spawn room.
     await WaitUntil (() => respawnArmorSeen, 15, "victim respawned with spawn armor");
 
+    // Streak glow bug (#88): the kill ended the victim's streak; the reset must
+    // replicate here so the glow & pulsing leaderboard entry clear.
+    await WaitUntil (() => victim.ZapStreakCount == 0, 15, "victim's streak reset replicated to shooter");
+
     // Fire-rate cap: spamming can spawn at most 1 bolt (cooldown blocks recharging).
     AimAt (Self.GlobalPosition + new Vector3 (0, 1, 10)); // Aim away from everyone.
     var boltsBefore = _boltsSpawned;
@@ -208,11 +218,17 @@ public partial class PlaytestDriver : Node
     Assert (Self.MaxHealth == 400, $"own MaxHealth is Beginner 400, got {Self.MaxHealth}");
     Assert (Self.SpawnArmor, "spawned with spawn armor");
     await WaitUntil (() => !Self.SpawnArmor, 15, "spawn armor expired on its own");
+    // Streak replication (#88): simulate an active 3-streak on our own authority so
+    // the shooter can verify it replicates - & that the death reset replicates too.
+    Self.ZapStreakCount = 3;
     // The shooter opens fire once armor drops; verify damage & then a full respawn.
     await WaitUntil (() => Self.Health < Self.MaxHealth, 120, "took damage from shooter");
     await WaitUntil (() => Self.SpawnArmor && Self.Health == Self.MaxHealth, 120, "died & respawned with armor & full health");
     Assert (Self.GlobalPosition.Y > 20.0f, $"respawned up in the spawn room, y={Self.GlobalPosition.Y}");
     await WaitUntil (() => FindPlayer (ShooterName)?.Score == 1, 30, "shooter's score replicated to victim");
+    // Streak glow (#77/#88): the shooter's kill streak must replicate to the victim's
+    // copy of the shooter node, since that drives the glow & leaderboard pulsing here.
+    await WaitUntil (() => FindPlayer (ShooterName)?.ZapStreakCount == 1, 15, "shooter's streak replicated to victim");
     // Give the shooter time to finish its solo phases (fire-rate & full-auto) before we vanish.
     await Task.Delay (8000);
   }

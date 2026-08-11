@@ -37,8 +37,8 @@ public partial class WeaponSpawner : Node3D
   private IEnumerable <Player> Players() => GetParent().GetChildren().OfType <Player>();
   private static bool IsFree (Vector3 point, IEnumerable <WeaponPickup> pickups) => pickups.All (pickup => pickup.Position.DistanceTo (point) > OccupiedRadius);
   private static int Count (HeldWeapon type, List <WeaponPickup> pickups, List <Player> players) => pickups.Count (pickup => pickup.Weapon == type) + players.Count (player => player.Holds (type));
-  private void GrantToSelf (int type) => (GetParent() as World)?.SelfPlayer?.GrantWeapon ((HeldWeapon)type);
-  [Rpc] private void ConfirmPickup (int type) => GrantToSelf (type);
+  private void GrantToSelf (int type, string previousOwner) => (GetParent() as World)?.SelfPlayer?.GrantWeapon ((HeldWeapon)type, previousOwner);
+  [Rpc] private void ConfirmPickup (int type, string previousOwner) => GrantToSelf (type, previousOwner);
 
   public override void _Ready()
   {
@@ -130,13 +130,14 @@ public partial class WeaponSpawner : Node3D
     return point;
   }
 
-  private void Spawn (HeldWeapon type, Vector3 position, bool expires)
+  private void Spawn (HeldWeapon type, Vector3 position, bool expires, string previousOwner = "")
   {
     var pickup = _pickupScene.Instantiate <WeaponPickup>();
     pickup.Name = $"WeaponPickup{++_nextPickupId}";
     pickup.Weapon = type;
     pickup.Position = position;
     pickup.Expires = expires;
+    pickup.PreviousOwner = previousOwner; // For theft-revenge messages (issue #84).
     GetParent().AddChild (pickup); // The MultiplayerSpawner replicates the spawn to every peer.
     GD.Print ($"Server: Spawned {type} pickup at {position}");
   }
@@ -149,26 +150,32 @@ public partial class WeaponSpawner : Node3D
     var pickup = GetParent().GetNodeOrNull <WeaponPickup> (pickupName);
     if (pickup == null || pickup.IsQueuedForDeletion()) return;
     var type = pickup.Weapon;
+    var previousOwner = pickup.PreviousOwner;
     pickup.QueueFree(); // Despawns on every peer via the MultiplayerSpawner.
     GD.Print ($"Server: Player [{collectorId}] picked up the {type}");
 
     if (collectorId == Multiplayer.GetUniqueId())
     {
-      GrantToSelf ((int)type);
+      GrantToSelf ((int)type, previousOwner);
       return;
     }
 
-    RpcId (collectorId, MethodName.ConfirmPickup, (int)type);
+    RpcId (collectorId, MethodName.ConfirmPickup, (int)type, previousOwner);
   }
 
   // Dropped weapons become expiring pickups at the drop spot (side by side when both drop at once).
+  // The dropper's identity comes from the RPC sender, never from client-supplied data
+  // (CodeRabbit on #96): a forged name could plant false theft-revenge attribution.
   [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
   private void RequestDrop (Vector3 position, int droppedMask)
   {
     if (!Multiplayer.IsServer()) return;
+    var senderId = Multiplayer.GetRemoteSenderId();
+    if (senderId == 0) senderId = Multiplayer.GetUniqueId(); // Direct local call: the host player itself.
+    var dropperName = Players().FirstOrDefault (player => player.NetworkId == senderId)?.DisplayName ?? string.Empty;
     var dropped = (HeldWeapon)droppedMask;
     var spot = position + Vector3.Up * PickupHoverHeight;
-    if (dropped.HasFlag (HeldWeapon.Laser)) Spawn (HeldWeapon.Laser, spot, expires: true);
-    if (dropped.HasFlag (HeldWeapon.Banana)) Spawn (HeldWeapon.Banana, spot + Vector3.Right * 0.8f, expires: true);
+    if (dropped.HasFlag (HeldWeapon.Laser)) Spawn (HeldWeapon.Laser, spot, expires: true, dropperName);
+    if (dropped.HasFlag (HeldWeapon.Banana)) Spawn (HeldWeapon.Banana, spot + Vector3.Right * 0.8f, expires: true, dropperName);
   }
 }

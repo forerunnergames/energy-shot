@@ -27,6 +27,9 @@ public partial class WeaponPickup : Area3D
   // Dropped weapons despawn if unclaimed; spawn-point pickups never expire.
   // Server-side only - clients never free spawned nodes themselves.
   public bool Expires { get; set; }
+  // Who dropped this weapon (issue #84), for theft-revenge messages. Server-side
+  // only - the server reads it when awarding the pickup; empty for spawn-point pickups.
+  public string PreviousOwner { get; set; } = string.Empty;
   [Export] public float ExpirySeconds = 5.0f;
   // Grace period so a dropper doesn't instantly re-collect their own drop.
   private const float ClaimDelaySeconds = 0.75f;
