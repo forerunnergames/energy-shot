@@ -119,7 +119,9 @@ public partial class Player : CharacterBody3D
   }
 
   // Replicated like SpawnArmor so every peer renders (& can shoot at) the horizontal
-  // slide pose (see issue #41).
+  // slide pose (see issue #41). Synced ALWAYS, not ON_CHANGE (issue #131): a dropped
+  // pose delta is never re-sent, which left remote copies wedged mid-slide forever;
+  // always-sync self-heals on the next tick, like position & rotation already do.
   [Export]
   public bool Sliding
   {
@@ -132,7 +134,8 @@ public partial class Player : CharacterBody3D
   }
 
   // Replicated like Sliding so every peer renders (& can shoot at) the shorter
-  // crouched hitbox (see issue #51).
+  // crouched hitbox (see issue #51). Synced ALWAYS for the same self-healing
+  // reason as Sliding (issue #131).
   [Export]
   public bool Crouching
   {
@@ -323,6 +326,7 @@ public partial class Player : CharacterBody3D
 
     _rng.Randomize();
     _localPlayer = this;
+    ApplyFirstPersonWeaponOverlay(); // Own weapons draw over walls (issue #124).
     _healthBar.Hide();
     _nameTag.Hide();
     _energyWeapon.ShotFired += OnWeaponShotFired;

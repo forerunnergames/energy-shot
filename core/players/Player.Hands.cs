@@ -26,6 +26,7 @@ public partial class Player
   {
     var camera = GetNode <Node3D> ("Camera3D");
     var material = new StandardMaterial3D { AlbedoColor = new Color (NormalColor, 0.85f), Transparency = BaseMaterial3D.TransparencyEnum.Alpha, Roughness = 0.4f };
+    if (IsMultiplayerAuthority()) MakeOverlay (material); // Own first-person hands draw over walls (issue #124).
     for (var i = 0; i < _hands.Length; ++i) _hands[i] = CreateHand (i, camera, material);
     UpdateHandsVisibility();
   }

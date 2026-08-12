@@ -19,6 +19,10 @@ public partial class BananaProjectile : Node3D
   [Export] public float SpinRadiansPerSecond = 10.0f;
   private const float FlashRadius = 6.0f;
   private const float FlashSeconds = 0.4f;
+  // Rest height (issue #132): the tumbling mesh sweeps a ~0.27m radius around the
+  // node origin, so bounces & rolls keep the origin this far off the surface - the
+  // visible banana sits ON the floor instead of sinking in like shallow water.
+  private const float SurfaceClearance = 0.3f;
   [Signal] public delegate void ExplodedEventHandler (Vector3 origin);
   [Signal] public delegate void StuckToPlayerEventHandler (Player victim, Vector3 hitPosition);
   private static readonly Color BananaYellow = new(0.92f, 0.78f, 0.12f);
@@ -91,7 +95,7 @@ public partial class BananaProjectile : Node3D
     LightFuse();
     var normal = (Vector3)hit["normal"];
     _velocity = _velocity.Bounce (normal) * Restitution;
-    GlobalPosition = (Vector3)hit["position"] + normal * 0.05f;
+    GlobalPosition = (Vector3)hit["position"] + normal * SurfaceClearance;
   }
 
   private void LightFuse()
