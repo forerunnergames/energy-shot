@@ -16,6 +16,8 @@ public partial class Player
   public bool DiedArmed { get; private set; }
   public bool DiedHoldingBananaGun { get; private set; }
   public int LostStreakCount { get; private set; }
+  // 0..1 for the HUD's slide cooldown bar, like PunchReadyFraction (issue #127).
+  public float SlideReadyFraction => 1.0f - _slideCooldownLeft / SlideCooldownSeconds;
   private bool IsFalling() => !IsOnFloor();
   // Stun blocks jumping & sliding (issues #70 & #71).
   private bool IsJumping() => _isInputEnabled && !IsStunned && _jumpTimer.IsStopped() && Input.IsActionJustPressed ("jump") && IsOnFloor();

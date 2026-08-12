@@ -7,8 +7,6 @@ namespace com.forerunnergames.energyshot.ui.hud.messages;
 
 public partial class MessageScroller : Control
 {
-  [Signal] public delegate void OnMessageScrollerExpandedEventHandler();
-  [Signal] public delegate void OnMessageScrollerCollapsedEventHandler();
   [Export] public float LowMessageImportanceDisplayTimeSeconds = 0.1f;
   [Export] public float MediumMessageImportanceDisplayTimeSeconds = 1.0f;
   [Export] public float HighMessageImportanceDisplayTimeSeconds = 2.0f;
@@ -110,7 +108,8 @@ public partial class MessageScroller : Control
   }
 
   // Tab toggles the full message history - a clickable button can't work while the
-  // mouse is captured for aiming (see issue #74).
+  // mouse is captured for aiming (see issue #74). The history is a passive overlay
+  // that never captures input: movement, shooting, & camera keep working (issue #118).
   public override void _UnhandledInput (InputEvent @event)
   {
     if (!Input.IsActionJustPressed ("messages")) return;
@@ -122,12 +121,10 @@ public partial class MessageScroller : Control
     if (IsMessageHistoryVisible())
     {
       HideMessageHistory();
-      EmitSignal (SignalName.OnMessageScrollerCollapsed);
       return;
     }
 
     ShowMessageHistory();
-    EmitSignal (SignalName.OnMessageScrollerExpanded);
   }
 
   private void DisplayNextMessage()
