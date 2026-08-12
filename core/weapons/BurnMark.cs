@@ -8,7 +8,9 @@ namespace com.forerunnergames.energyshot.weapons;
 public partial class BurnMark : MeshInstance3D
 {
   private const float FadeSeconds = 5.0f;
-  private const float SizeMeters = 0.4f;
+  // Small circular scorch matching the tracer's thickness (issue #130).
+  private const float RadiusMeters = 0.08f;
+  private const float ThicknessMeters = 0.01f;
   private const float SurfaceOffsetMeters = 0.02f;
   private static readonly Color ScorchColor = new(0.08f, 0.04f, 0.02f);
   private static readonly Color EmberColor = new(2.0f, 0.6f, 0.1f);
@@ -18,13 +20,15 @@ public partial class BurnMark : MeshInstance3D
     if (normal.LengthSquared() < 0.01f) return;
     var mark = new BurnMark
     {
-      Mesh = new QuadMesh { Size = new Vector2 (SizeMeters, SizeMeters) },
+      // Flattened cylinder = decal-like disc (issue #130), not a floating rectangle.
+      Mesh = new CylinderMesh { TopRadius = RadiusMeters, BottomRadius = RadiusMeters, Height = ThicknessMeters },
       MaterialOverride = CreateMaterial(),
       CastShadow = ShadowCastingSetting.Off
     };
     parent.AddChild (mark);
     var up = Mathf.Abs (normal.Dot (Vector3.Up)) > 0.99f ? Vector3.Forward : Vector3.Up;
     mark.LookAtFromPosition (position + normal * SurfaceOffsetMeters, position - normal, up);
+    mark.RotateObjectLocal (Vector3.Right, Mathf.Pi / 2.0f); // Cylinder axis onto the surface normal.
     mark.StartFade();
   }
 
