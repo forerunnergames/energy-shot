@@ -2,7 +2,7 @@ using System.Collections.Generic;
 
 namespace com.forerunnergames.energyshot.ui.hud;
 
-// The 100 unique message templates (issue #84), grouped into scenario pools.
+// The unique message templates (issue #84), grouped into scenario pools.
 // {v} = the player who got zapped out, {z} = the player who did the zapping,
 // {youOrThey} = pronoun in fall messages. All short, sarcastic, & non-violent.
 public static class MessagePools
@@ -200,6 +200,15 @@ public static class MessagePools
     "{v} is farming respawns at an industrial scale"
   };
 
+  // Boomerang zap-outs (issue #98).
+  public static readonly List <string> Boomerang = new()
+  {
+    "{z}'s boomerang made a round trip through {v}",
+    "{v} stood on the flight path & {z}'s boomerang kept the schedule",
+    "{z} threw it away & it still came back with {v}'s dignity",
+    "{v} got clipped by {z}'s frisbee with commitment issues"
+  };
+
   // {z} zapped {v} with the weapon {v} dropped earlier.
   public static readonly List <string> TheftRevenge = new()
   {
@@ -215,6 +224,6 @@ public static class MessagePools
     Fall, FallStreak, Zapped, ThroughWall, FullCharge, FullAuto, Punch, PunchedOutArmed, FistsVsFists,
     BananaBlast, BananaDirect, HoldingBananaGun, ComboSplatterPunch, JumpShot, SlideShotKiller,
     SlideShotVictim, ZapStreakTier3, ZapStreakTier5, ZapStreakTier7, StreakEnded, StreakLost,
-    ZappedStreak, TheftRevenge
+    ZappedStreak, Boomerang, TheftRevenge
   };
 }

@@ -51,6 +51,7 @@ public static class MessageGenerator
     if (context.Kind == DamageKind.Punch && context.VictimArmed) return MessagePools.PunchedOutArmed;
     if (context.Kind == DamageKind.Punch && context.KillerUnarmed) return MessagePools.FistsVsFists;
     if (context.Kind == DamageKind.Punch) return MessagePools.Punch;
+    if (context.Kind == DamageKind.Boomerang) return MessagePools.Boomerang; // Issue #98.
     if (context.VictimHeldBananaGun) return MessagePools.HoldingBananaGun;
     if (context.Kind == DamageKind.Laser && context.ThroughBarrier) return MessagePools.ThroughWall; // Pierced a wall/floor first (issue #94).
     if (context.KillerSliding) return MessagePools.SlideShotKiller;
