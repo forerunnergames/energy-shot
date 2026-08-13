@@ -22,6 +22,7 @@ A fast, friendly multiplayer laser-tag arena FPS built with Godot 4 (.NET/C#). N
 | Right mouse | Punch |
 | F | Full-auto ability (3 s, 15 s cooldown) |
 | Space | Jump |
+| V | Toggle first-/third-person view |
 | Esc | Quit dialog |
 
 ## Multiplayer

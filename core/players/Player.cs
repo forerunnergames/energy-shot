@@ -361,6 +361,7 @@ public partial class Player : CharacterBody3D
     Input.MouseMode = Input.MouseModeEnum.Captured;
     Position = CalculateRandomSpawnPosition();
     ActivateSpawnArmor();
+    ApplySavedViewPreference(); // Third-person view survives restarts (issue #119).
   }
 
   public override void _ExitTree()
@@ -384,6 +385,7 @@ public partial class Player : CharacterBody3D
     if (!IsMultiplayerAuthority()) return;
     UpdateSpawnArmor();
     UpdateXrayReveal();
+    UpdateViewToggle(); // Third-person toggle on V (issue #119).
     UpdateWeaponSelection();
     UpdateBananaLauncher();
     UpdateBread();

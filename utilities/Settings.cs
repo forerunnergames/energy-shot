@@ -61,6 +61,13 @@ public static class Settings
     set => Set ("last_join_password", value);
   }
 
+  // Third-person chase view (issue #119), remembered so the chosen view survives restarts.
+  public static bool ThirdPersonView
+  {
+    get => GetBool ("third_person_view", false);
+    set => Set ("third_person_view", value);
+  }
+
   // Mini music player visibility (issue #137): hiding it never stops the music.
   public static bool ShowMusicPlayer
   {
