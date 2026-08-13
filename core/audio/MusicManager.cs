@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using com.forerunnergames.energyshot.core.world;
 using com.forerunnergames.energyshot.utilities;
 using Godot;
 
@@ -17,6 +18,7 @@ public partial class MusicManager : Node
 {
   [Signal] public delegate void TrackChangedEventHandler (string title);
   [Signal] public delegate void VoteCountsChangedEventHandler (int upCount, int downCount);
+  [Signal] public delegate void OwnVoteChangedEventHandler (int vote); // +1 up, -1 down, 0 none (issue #162).
   public const string BusName = "Music";
   // Thumbs-down votes in the current play that trigger a skip; the dedicated
   // server overrides this with --skip-votes N (issue #137).
@@ -24,6 +26,12 @@ public partial class MusicManager : Node
   public string CurrentTrackTitle { get; private set; } = string.Empty;
   public int CurrentUpVotes { get; private set; }
   public int CurrentDownVotes { get; private set; }
+  // The local player's remembered vote for the current track (issue #162), recalled
+  // by the server on each track start & confirmed after every vote.
+  public int CurrentOwnVote { get; private set; }
+  // Authoritative all-time totals for the playing track - populated server-side
+  // only; the playtest host reads it to assert the vote-memory transitions (#162).
+  public (int Up, int Down) CurrentTrackAllTimeVotes => _currentTrack != -1 && _allTimeVotes.TryGetValue (TrackStems[_currentTrack], out var totals) ? totals : (0, 0);
   private const float MusicVolumeDb = -12.0f;
   private const float SilentDb = -80.0f;
   private const float FadeSeconds = 2.0f;
@@ -43,7 +51,10 @@ public partial class MusicManager : Node
   private readonly RandomNumberGenerator _rng = new();
   private readonly Dictionary <long, int> _playVotes = new(); // Peer id -> +1 (up) / -1 (down) for the current play.
   private Dictionary <string, (int Up, int Down)> _allTimeVotes = new();
-  private (int Up, int Down) _playBaseVotes; // All-time totals when the current play began.
+  // Own-vote memory (issue #162): per-track voter map keyed by DisplayName - the best
+  // identity available without accounts, so rename collisions are an accepted limitation.
+  private Dictionary <string, Dictionary <string, int>> _voterVotes = new();
+  private World _world = null!;
   private Timer _trackTimer = null!;
   private Tween? _fadeTween;
   private int _currentTrack = -1;
@@ -77,6 +88,10 @@ public partial class MusicManager : Node
     _trackTimer.Timeout += OnTrackFinished;
     AddChild (_trackTimer);
     Multiplayer.PeerConnected += OnPeerConnected;
+    _world = GetParent <World>();
+    // A joiner's spawn is when its DisplayName exists server-side, so that's the
+    // moment to recall its remembered vote for the playing track (issue #162).
+    _world.PlayerJoinedGame += OnPlayerJoinedGame;
     StartPlaylistPoller();
   }
 
@@ -159,7 +174,8 @@ public partial class MusicManager : Node
     var next = PickNextTrack();
     _trackTimer.Start (LengthOf (next));
     Rpc (MethodName.OnTrackStarted, next, 0.0f);
-    ResetPlayVotes (next);
+    ResetPlayVotes();
+    RecallRememberedVotes();
   }
 
   private int PickNextTrack()
@@ -176,11 +192,37 @@ public partial class MusicManager : Node
     return candidates[^1];
   }
 
-  private void ResetPlayVotes (int track)
+  private void ResetPlayVotes()
   {
     _playVotes.Clear();
-    _playBaseVotes = _allTimeVotes[TrackStems[track]];
     Rpc (MethodName.OnVoteCounts, 0, 0);
+  }
+
+  // Own-vote memory (issue #162): on each track start the server tells every spawned
+  // player which way it last voted on this track, so the mini player can render that
+  // thumb as already pressed.
+  private void RecallRememberedVotes()
+  {
+    foreach (var player in _world.GetPlayers()) SendOwnVote (player.NetworkId, RememberedVoteFor (player.DisplayName));
+  }
+
+  private int RememberedVoteFor (string displayName) => _voterVotes[TrackStems[_currentTrack]].GetValueOrDefault (displayName, 0);
+  private string DisplayNameFor (long peerId) => _world.GetPlayers().FirstOrDefault (player => player.NetworkId == peerId)?.DisplayName ?? string.Empty;
+
+  // RpcId to our own peer id doesn't loop back locally, so the hosting player's
+  // recall is a direct call (issue #162).
+  private void SendOwnVote (long peerId, int vote)
+  {
+    if (peerId == Multiplayer.GetUniqueId()) OnOwnVote (vote);
+    else RpcId (peerId, MethodName.OnOwnVote, vote);
+  }
+
+  private void OnPlayerJoinedGame (string playerName)
+  {
+    if (!IsActiveServer() || _currentTrack == -1) return;
+    var player = _world.GetPlayers().FirstOrDefault (candidate => candidate.DisplayName == playerName);
+    if (player == null) return;
+    SendOwnVote (player.NetworkId, RememberedVoteFor (playerName));
   }
 
   // Late joiners pick up the current track mid-song & the current play's counts.
@@ -200,7 +242,17 @@ public partial class MusicManager : Node
     _currentTrack = track;
     CurrentTrackTitle = TitleFor (track);
     CrossfadeTo (track, fromPosition);
+    OnOwnVote (0); // Clear the pressed thumb until the server recalls a remembered vote (issue #162).
     EmitSignal (SignalName.TrackChanged, CurrentTrackTitle);
+  }
+
+  // The server's word on which way this player voted on the current track (issue
+  // #162): recalled memory on track start & join, or confirmation of a fresh vote.
+  [Rpc]
+  private void OnOwnVote (int vote)
+  {
+    CurrentOwnVote = vote;
+    EmitSignal (SignalName.OwnVoteChanged, vote);
   }
 
   [Rpc (CallLocal = true)]
@@ -218,21 +270,48 @@ public partial class MusicManager : Node
     ApplyVote (Multiplayer.GetRemoteSenderId(), isUpVote);
   }
 
-  // One vote per player per play; re-voting switches the vote (issue #137). Every
-  // vote lands in the permanent per-track totals that drive the weighting.
+  // One vote per player per play; re-voting switches the vote (issue #137). The
+  // permanent totals track one remembered vote per player per track (issue #162).
+  // Only a named, spawned player may vote: an AnyPeer RPC from a connected-but-
+  // unjoined peer must neither move the skip tally nor receive an own-vote state
+  // that has nothing durable to persist against (issue #162).
   private void ApplyVote (long peerId, bool isUpVote)
   {
     if (_currentTrack == -1) return;
+    var name = DisplayNameFor (peerId);
+    if (name.Length == 0) return;
     _playVotes[peerId] = isUpVote ? 1 : -1;
     var upCount = _playVotes.Values.Count (vote => vote == 1);
     var downCount = _playVotes.Values.Count (vote => vote == -1);
-    _allTimeVotes[TrackStems[_currentTrack]] = (_playBaseVotes.Up + upCount, _playBaseVotes.Down + downCount);
-    SaveVotes();
+    UpdateRememberedVote (name, isUpVote ? 1 : -1);
     ServerLog.Event (peerId, $"music vote {(isUpVote ? "up" : "down")} for [{CurrentTrackTitle}]: play now {upCount} up / {downCount} down");
     Rpc (MethodName.OnVoteCounts, upCount, downCount);
+    SendOwnVote (peerId, isUpVote ? 1 : -1); // Instant pressed-thumb feedback for the voter (issue #162).
     if (downCount < SkipVotes) return;
     ServerLog.Event ($"music skip: [{CurrentTrackTitle}] reached {downCount} thumbs-down (threshold {SkipVotes})");
     StartNextTrack();
+  }
+
+  // Own-vote memory (issue #162): the all-time totals hold one vote per player per
+  // track - switching stance removes the old vote & adds the new one, & a repeat of
+  // the same vote changes nothing, so nothing ever double-counts.
+  private void UpdateRememberedVote (string name, int vote)
+  {
+    var stem = TrackStems[_currentTrack];
+    var previous = _voterVotes[stem].GetValueOrDefault (name, 0);
+    if (previous == vote) return;
+    _allTimeVotes[stem] = AdjustTotals (_allTimeVotes[stem], previous, vote);
+    _voterVotes[stem][name] = vote;
+    SaveVotes();
+  }
+
+  // Pure vote-memory arithmetic (issue #162), public so the stance transitions are
+  // directly unit-testable: a fresh vote adds it, a switch moves it, & a repeat
+  // returns the totals untouched.
+  public static (int Up, int Down) AdjustTotals ((int Up, int Down) totals, int previousVote, int newVote)
+  {
+    if (previousVote == newVote) return totals;
+    return (totals.Up - (previousVote == 1 ? 1 : 0) + (newVote == 1 ? 1 : 0), totals.Down - (previousVote == -1 ? 1 : 0) + (newVote == -1 ? 1 : 0));
   }
 
   private void CrossfadeTo (int track, float fromPosition) => CrossfadeToFile (FileFor (track), fromPosition);
@@ -291,11 +370,13 @@ public partial class MusicManager : Node
     return threshold;
   }
 
-  // All-time per-track vote totals (issue #137): loaded on start, saved on every
-  // vote, so rankings & weights survive server restarts.
+  // All-time per-track vote totals & per-track voter memory (issues #137/#162):
+  // loaded on start, saved on every vote, so rankings, weights, & each player's
+  // remembered stance survive server restarts.
   private void LoadVotes()
   {
     _allTimeVotes = TrackStems.ToDictionary (name => name, _ => (Up: 0, Down: 0));
+    _voterVotes = TrackStems.ToDictionary (name => name, _ => new Dictionary <string, int>());
     if (!FileAccess.FileExists (VotesFilePath)) return;
     using var file = FileAccess.Open (VotesFilePath, FileAccess.ModeFlags.Read);
     if (file == null) return;
@@ -309,13 +390,29 @@ public partial class MusicManager : Node
     var up = entry.TryGetValue ("up", out var upValue) ? (int)upValue : 0;
     var down = entry.TryGetValue ("down", out var downValue) ? (int)downValue : 0;
     _allTimeVotes[name] = (up, down);
+    LoadTrackVoters (entry, name);
+  }
+
+  // Per-track voter map keyed by DisplayName (issue #162); rename collisions are an
+  // accepted limitation of account-less identity.
+  private void LoadTrackVoters (Godot.Collections.Dictionary entry, string name)
+  {
+    if (!entry.TryGetValue ("voters", out var value) || value.Obj is not Godot.Collections.Dictionary voters) return;
+    foreach (var key in voters.Keys) _voterVotes[name][(string)key] = (int)voters[key];
   }
 
   private void SaveVotes()
   {
     var root = new Godot.Collections.Dictionary();
-    foreach (var (name, votes) in _allTimeVotes) root[name] = new Godot.Collections.Dictionary { { "up", votes.Up }, { "down", votes.Down } };
+    foreach (var (name, votes) in _allTimeVotes) root[name] = new Godot.Collections.Dictionary { { "up", votes.Up }, { "down", votes.Down }, { "voters", VotersFor (name) } };
     using var file = FileAccess.Open (VotesFilePath, FileAccess.ModeFlags.Write);
     file?.StoreString (Json.Stringify (root, "  "));
+  }
+
+  private Godot.Collections.Dictionary VotersFor (string name)
+  {
+    var voters = new Godot.Collections.Dictionary();
+    foreach (var (voter, vote) in _voterVotes[name]) voters[voter] = vote;
+    return voters;
   }
 }
