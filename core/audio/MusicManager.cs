@@ -25,9 +25,12 @@ public partial class MusicManager : Node
   public int CurrentUpVotes { get; private set; }
   public int CurrentDownVotes { get; private set; }
   private const float MusicVolumeDb = -12.0f;
-  private const float SilentDb = -60.0f;
+  private const float SilentDb = -80.0f;
   private const float FadeSeconds = 2.0f;
   private const string VotesFilePath = "user://music-votes.json";
+  // Menu music (issue #137): plays locally while no game session is active; it's
+  // outside the voted arena rotation.
+  private const string MenuTrackFile = "res://assets/music/track-14-main-menu.ogg";
   // The soundtrack's stable filename stems: track-NN-<intensity>. The stem is the
   // permanent vote-persistence key; the display title is derived from it.
   private static readonly string[] TrackStems =
@@ -36,14 +39,13 @@ public partial class MusicManager : Node
     "track-06-light", "track-07-light", "track-08-light", "track-09-light", "track-10-medium",
     "track-11-intense", "track-12-intense", "track-13-medium"
   ];
-  private readonly AudioStreamPlayer[] _players = [new(), new()];
+  private readonly AudioStreamPlayer _musicPlayer = new();
   private readonly RandomNumberGenerator _rng = new();
   private readonly Dictionary <long, int> _playVotes = new(); // Peer id -> +1 (up) / -1 (down) for the current play.
   private Dictionary <string, (int Up, int Down)> _allTimeVotes = new();
   private (int Up, int Down) _playBaseVotes; // All-time totals when the current play began.
   private Timer _trackTimer = null!;
   private Tween? _fadeTween;
-  private int _activePlayer;
   private int _currentTrack = -1;
   private bool _playlistStarted;
   private static string FileFor (int track) => $"res://assets/music/{TrackStems[track]}.ogg";
@@ -57,15 +59,20 @@ public partial class MusicManager : Node
     return $"Track {int.Parse (parts[1])} ({char.ToUpper (parts[2][0])}{parts[2][1..]})";
   }
 
+  // A connected ENet peer, checked before Multiplayer.IsServer(): polling IsServer()
+  // on an inactive peer (e.g. between the playtest's wrong-password kick & the
+  // rejoin) spams "multiplayer instance isn't currently active" errors.
+  private bool IsSessionActive() => Multiplayer.MultiplayerPeer is ENetMultiplayerPeer peer && peer.GetConnectionStatus() == MultiplayerPeer.ConnectionStatus.Connected;
+
   // Only a live ENet server session runs the playlist (same guard as World, issue #111).
-  private bool IsActiveServer() => Multiplayer.MultiplayerPeer is ENetMultiplayerPeer && Multiplayer.IsServer();
+  private bool IsActiveServer() => IsSessionActive() && Multiplayer.IsServer();
 
   public override void _EnterTree() => CreateMusicBus();
 
   public override void _Ready()
   {
     SkipVotes = ParseSkipVotes (SkipVotes);
-    foreach (var player in _players) AddPlayer (player);
+    AddPlayer (_musicPlayer);
     _trackTimer = new Timer { OneShot = true };
     _trackTimer.Timeout += OnTrackFinished;
     AddChild (_trackTimer);
@@ -112,11 +119,13 @@ public partial class MusicManager : Node
   }
 
   // The playlist begins once a live server session exists - hosting a game or
-  // running the dedicated server - & stops mattering when the session ends.
+  // running the dedicated server - & the menu track covers every idle moment
+  // outside a session (issue #137).
   private void StartPlaylistPoller()
   {
     var timer = new Timer { WaitTime = 1.0, Autostart = true };
     timer.Timeout += StartPlaylistWhenServing;
+    timer.Timeout += PlayMenuMusicWhenIdle;
     AddChild (timer);
   }
 
@@ -126,6 +135,16 @@ public partial class MusicManager : Node
     _playlistStarted = true;
     LoadVotes();
     StartNextTrack();
+  }
+
+  // Outside a session, the menu track fades in locally; joining crossfades to the
+  // server's synced pick, & leaving/kicks crossfade back here on the next poll.
+  private void PlayMenuMusicWhenIdle()
+  {
+    if (OS.HasFeature ("dedicated_server") || IsSessionActive()) return;
+    _currentTrack = -1;
+    if (_musicPlayer.Playing && _musicPlayer.Stream?.ResourcePath == MenuTrackFile) return;
+    CrossfadeToFile (MenuTrackFile, fromPosition: 0.0f);
   }
 
   private void OnTrackFinished()
@@ -216,19 +235,50 @@ public partial class MusicManager : Node
     StartNextTrack();
   }
 
-  private void CrossfadeTo (int track, float fromPosition)
+  private void CrossfadeTo (int track, float fromPosition) => CrossfadeToFile (FileFor (track), fromPosition);
+
+  // One persistent main player; each crossfade hands the outgoing track to a
+  // throwaway sibling player (seeked to the same position) that fades to silence
+  // & frees itself, while the main player fades the new track in. Interrupted
+  // fades can orphan a sibling mid-fade, so each crossfade sweeps them first.
+  private void CrossfadeToFile (string file, float fromPosition)
   {
-    _fadeTween?.Kill();
-    var fadeOut = _players[_activePlayer];
-    _activePlayer = 1 - _activePlayer;
-    var fadeIn = _players[_activePlayer];
-    fadeIn.Stream = ResourceLoader.Load <AudioStream> (FileFor (track));
-    fadeIn.VolumeDb = SilentDb;
-    fadeIn.Play (fromPosition);
+    KillFadeTween();
+    CleanupOrphanedPlayers();
+    if (_musicPlayer.Playing) HandOffToFadeOutPlayer();
+    _musicPlayer.Stream = ResourceLoader.Load <AudioStream> (file);
+    _musicPlayer.VolumeDb = SilentDb;
+    _musicPlayer.Play (fromPosition);
     _fadeTween = CreateTween();
-    _fadeTween.TweenProperty (fadeIn, "volume_db", MusicVolumeDb, FadeSeconds);
-    _fadeTween.Parallel().TweenProperty (fadeOut, "volume_db", SilentDb, FadeSeconds);
-    _fadeTween.TweenCallback (Callable.From (fadeOut.Stop));
+    _fadeTween.TweenProperty (_musicPlayer, "volume_db", MusicVolumeDb, FadeSeconds);
+  }
+
+  private void HandOffToFadeOutPlayer()
+  {
+    var fadeOut = new AudioStreamPlayer { Stream = _musicPlayer.Stream, VolumeDb = _musicPlayer.VolumeDb, Bus = BusName };
+    AddChild (fadeOut);
+    fadeOut.Play (_musicPlayer.GetPlaybackPosition());
+    _musicPlayer.Stop();
+    var tween = CreateTween();
+    tween.TweenProperty (fadeOut, "volume_db", SilentDb, FadeSeconds);
+    tween.TweenCallback (Callable.From (fadeOut.QueueFree));
+  }
+
+  private void KillFadeTween()
+  {
+    if (_fadeTween == null || !IsInstanceValid (_fadeTween)) return;
+    _fadeTween.Kill();
+    _fadeTween = null;
+  }
+
+  private void CleanupOrphanedPlayers()
+  {
+    foreach (var child in GetChildren())
+    {
+      if (child is not AudioStreamPlayer player || player == _musicPlayer || !IsInstanceValid (player)) continue;
+      player.Stop();
+      player.QueueFree();
+    }
   }
 
   // Dedicated-server skip threshold (issue #137): --skip-votes N, minimum 1.

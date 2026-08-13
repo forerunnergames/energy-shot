@@ -335,31 +335,20 @@ public partial class PlaytestDriver : Node
   // ---------------------------------------------------------------- helpers
 
   // One approach step per poll: aim at the victim & hold forward until within 2m.
-  private bool ApproachedVictim (Player victim)
-  {
-    var distance = Self.GlobalPosition.DistanceTo (victim.GlobalPosition);
-
-    if (distance <= 2.0f)
-    {
-      Input.ActionRelease ("move_forward");
-      return true;
-    }
-
-    AimAt (victim.GlobalPosition + Vector3.Up);
-    Input.ActionPress ("move_forward");
-    return false;
-  }
+  // Same stuck-strafe as WalkedTo: shoving straight into the victim (or a pillar
+  // between us) otherwise stalls this phase forever under CI load.
+  private bool ApproachedVictim (Player victim) => WalkedTo (victim.GlobalPosition, reach: 2.0f);
 
   // One walk step per poll toward a world position, releasing forward once in reach.
   private float _lastWalkDistance = float.MaxValue;
   private int _stuckPolls;
 
-  private bool WalkedTo (Vector3 target)
+  private bool WalkedTo (Vector3 target, float reach = 0.8f)
   {
     var flatTarget = new Vector3 (target.X, Self.GlobalPosition.Y, target.Z);
     var distance = Self.GlobalPosition.DistanceTo (flatTarget);
 
-    if (distance <= 0.8f)
+    if (distance <= reach)
     {
       Input.ActionRelease ("move_forward");
       Input.ActionRelease ("move_left");
