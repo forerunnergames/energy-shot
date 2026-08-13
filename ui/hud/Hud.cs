@@ -60,7 +60,8 @@ public partial class Hud : Control
   }
 
   // 3+ streak entries glow & pulse so the hot player stands out (see issue #77); the
-  // current leader wears the crown (issue #107) & every entry shows its ping (issue #100).
+  // crown holder wears the crown here too - only above zero points, & ties don't
+  // steal it (issues #107/#178) - & every entry shows its ping (issue #100).
   // Entries are ranked by sorted position, ties keep list order (issue #126).
   // Names are tinted with each player's chosen body color (issue #43).
   private static string LeaderboardEntry (players.Player player, int rank)
@@ -68,7 +69,7 @@ public partial class Hud : Control
     var name = $"[color=#{players.PlayerColors.TextHex (player.ColorIndex)}]{player.DisplayName}[/color]";
     var entry = $"{rank}. {name}  {player.Score}  ({Mathf.Max (0, player.PingMs)}ms)";
     if (player.IsOnStreak) entry = $"[pulse freq=1.5 color=#ffd24d ease=-2.0][wave amp=18.0 freq=4.0][b]{entry}[/b][/wave][/pulse]";
-    return rank == 1 ? $"\U0001F451 {entry}" : entry;
+    return player.IsCrowned ? $"\U0001F451 {entry}" : entry;
   }
 
   // Score can also drop (fall penalty), so the label reads the replicated value.

@@ -105,8 +105,9 @@ public partial class PlaytestDriver : Node
     // Chosen body colors (issue #43): own pick stuck & both clients' picks replicate to the host.
     Assert (Self.ColorIndex == HostColor, $"own chosen color is {HostColor}, got {Self.ColorIndex}");
     await WaitUntil (() => FindPlayer (ShooterName)?.ColorIndex == ShooterColor && FindPlayer (VictimName)?.ColorIndex == VictimColor, 15, "clients' chosen colors replicated to host (#43)");
-    // Exactly one player wears the crown even at 0-0 (issue #107).
-    await WaitUntil (() => _world.GetPlayers().Count (player => player.IsCrowned) == 1, 10, "exactly one player crowned at 0-0");
+    // Crown rules (issue #178): nobody wears the crown at 0-0 - it must be earned.
+    await Task.Delay (3000); // Let a few 1s crown ticks pass before judging.
+    Assert (_world.GetPlayers().All (player => !player.IsCrowned), "no crown at 0-0 (#178)");
     // Server-measured pings replicate back to every peer (issue #100).
     await WaitUntil (() => FindPlayer (ShooterName)?.PingMs >= 0, 15, "shooter's ping measured & replicated to host");
     // Synced music (issue #137): the server picked a track & the shooter's thumbs-up
@@ -116,10 +117,17 @@ public partial class PlaytestDriver : Node
     // Shooter kills victim once (plus possibly the host itself in the line of
     // fire); wait to observe the replicated score.
     await WaitUntil (() => FindPlayer (ShooterName)?.Score >= 1, 120, "shooter's kill replicated to host");
+    // Crown rules (issue #178): the first score puts the crown on the scorer - & on
+    // nobody else. (A tie handover isn't cheaply reachable in this scenario's score
+    // flow, so the incumbent rules beyond these are covered by the logic itself.)
+    await WaitUntil (() => FindPlayer (ShooterName)?.IsCrowned == true, 10, "crown appeared on the first scorer (#178)");
+    await WaitUntil (() => _world.GetPlayers().Count (player => player.IsCrowned) == 1, 10, "exactly one crown after the first score (#178)");
     // Victim respawns with armor visible to the host too.
     await WaitUntil (() => FindPlayer (VictimName)?.SpawnArmor == true, 30, "victim respawn armor replicated to host");
     // The victim's fall at score 0 goes negative & replicates (issue #108).
     await WaitUntil (() => FindPlayer (VictimName)?.Score == -1, 60, "victim's fall penalty (-1) replicated to host");
+    // Crown rules (issue #178): a lower score moving (the fall) never moves the crown.
+    Assert (FindPlayer (ShooterName)?.IsCrowned == true, "crown stayed on the leader after the fall penalty (#178)");
     // Stay up until both clients have finished & disconnected.
     await WaitUntil (() => _world.GetPlayers().Count() == 1, 120, "clients disconnected");
   }
@@ -148,6 +156,9 @@ public partial class PlaytestDriver : Node
     // thumbs-up vote here must show up on every other peer's tally.
     await WaitUntil (() => Music.CurrentTrackTitle.Length > 0, 15, "current music track synced from server");
     Music.SubmitVote (isUpVote: true);
+    // Own-vote memory (issue #162): the server confirms the vote back to the voter,
+    // which is what drives the mini player's pressed-thumb highlight.
+    await WaitUntil (() => Music.CurrentOwnVote == 1, 15, "own vote confirmed back by the server (#162)");
 
     // Movement: hold forward briefly & verify we actually moved.
     var startPosition = Self.GlobalPosition;
