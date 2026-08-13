@@ -11,11 +11,15 @@ public partial class MessageScroller : Control
   [Export] public float MediumMessageImportanceDisplayTimeSeconds = 1.0f;
   [Export] public float HighMessageImportanceDisplayTimeSeconds = 2.0f;
   [Export] public float CriticalMessageImportanceDisplayTimeSeconds = 3.0f;
+  // Admin announcements linger longer than normal messages (issue #158).
+  [Export] public float AdminMessageImportanceDisplayTimeSeconds = 6.0f;
   [Export] public float LoadingCompleteMessageImportanceDisplayTimeSeconds = 1.0f;
   [Export] public Color LowMessageImportanceColor = Colors.White;
   [Export] public Color MediumMessageImportanceColor = Colors.White;
   [Export] public Color HighMessageImportanceColor = Colors.LightSkyBlue;
   [Export] public Color CriticalMessageImportanceColor = Colors.IndianRed;
+  // Gold reads well on the dark arena & is distinct from the red/white/blue above (issue #158).
+  [Export] public Color AdminMessageImportanceColor = Colors.Gold;
   [Export] public Color LoadingStartMessageImportanceColor = Colors.White;
   [Export] public Color LoadingCompleteMessageImportanceColor = Colors.White;
   [Export] public int MaxMessageHistoryLines = 1000;
@@ -44,6 +48,7 @@ public partial class MessageScroller : Control
     Medium,
     High,
     Critical,
+    Admin, // Server-operator announcements (issue #158).
     Stop,
     Resume
   }
@@ -58,6 +63,7 @@ public partial class MessageScroller : Control
       { MessageImportance.Medium, MediumMessageImportanceDisplayTimeSeconds },
       { MessageImportance.High, HighMessageImportanceDisplayTimeSeconds },
       { MessageImportance.Critical, CriticalMessageImportanceDisplayTimeSeconds },
+      { MessageImportance.Admin, AdminMessageImportanceDisplayTimeSeconds },
       { MessageImportance.Stop, float.MaxValue }, // Shows message immediately & indefinitely until a 'Resume' message is received
       { MessageImportance.Resume, LoadingCompleteMessageImportanceDisplayTimeSeconds }
     };
@@ -68,6 +74,7 @@ public partial class MessageScroller : Control
       { MessageImportance.Medium, MediumMessageImportanceColor },
       { MessageImportance.High, HighMessageImportanceColor },
       { MessageImportance.Critical, CriticalMessageImportanceColor },
+      { MessageImportance.Admin, AdminMessageImportanceColor },
       { MessageImportance.Stop, LoadingStartMessageImportanceColor },
       { MessageImportance.Resume, LoadingCompleteMessageImportanceColor }
     };
