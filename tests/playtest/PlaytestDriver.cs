@@ -427,6 +427,11 @@ public partial class PlaytestDriver : Node
 
   private async Task RunVictim()
   {
+    // Version enforcement (issue #170): a pre-#170 client joining via the legacy
+    // versionless RPC, & a client with a mismatched version, must each get kicked
+    // with the update-required reason before anything else is checked.
+    await AssertLegacyJoinIsKicked();
+    await AssertWrongVersionIsKicked();
     // Password enforcement (issue #109): a wrong password must get kicked with
     // "Wrong password." before the real join succeeds.
     await AssertWrongPasswordIsKicked();
@@ -481,6 +486,37 @@ public partial class PlaytestDriver : Node
     // The shooter's forged admin RPC must never have been relayed to us: the
     // server drops admin messages from any sender but peer 1 (#158).
     Assert (_adminMessages.All (message => !message.Contains ("FORGED")), "forged admin RPC never relayed to the victim (#158)");
+  }
+
+  // Legacy-client check (issue #170): join the way a pre-#170 client does (the
+  // 4-argument RequestPlayerSlot RPC with no version), expect the server to kick
+  // us with the exact update-required reason old clients can already display
+  // (#109), then wait out the disconnect so the next join starts clean.
+  private async Task AssertLegacyJoinIsKicked()
+  {
+    var kickReason = string.Empty;
+    _world.KickedFromServer += reason => kickReason = reason;
+    _world.StartLegacyClientSession (VictimName, difficulty: 0, _address, Port, Password);
+    await WaitUntil (() => kickReason.Length > 0, 30, "legacy versionless join was kicked");
+    var expected = $"Update required: server is v{World.GameVersion}, you have an older version.";
+    Assert (kickReason == expected, $"kick reason is \"{expected}\", got \"{kickReason}\"");
+    await WaitUntil (() => Multiplayer.MultiplayerPeer.GetConnectionStatus() != MultiplayerPeer.ConnectionStatus.Connected, 15, "kicked connection fully closed");
+    await Task.Delay (500); // Let the peer teardown settle before reconnecting.
+  }
+
+  // Negative version check (issue #170): join with a spoofed version & the right
+  // password, expect the server to kick us with the exact update-required reason,
+  // then wait out the disconnect so the next join starts clean.
+  private async Task AssertWrongVersionIsKicked()
+  {
+    var kickReason = string.Empty;
+    _world.KickedFromServer += reason => kickReason = reason;
+    _world.StartClientSession (VictimName, difficulty: 0, _address, Port, Password, version: "0.0.0-spoofed");
+    await WaitUntil (() => kickReason.Length > 0, 30, "wrong-version join was kicked");
+    var expected = $"Update required: server is v{World.GameVersion}, you have v0.0.0-spoofed.";
+    Assert (kickReason == expected, $"kick reason is \"{expected}\", got \"{kickReason}\"");
+    await WaitUntil (() => Multiplayer.MultiplayerPeer.GetConnectionStatus() != MultiplayerPeer.ConnectionStatus.Connected, 15, "kicked connection fully closed");
+    await Task.Delay (500); // Let the peer teardown settle before reconnecting.
   }
 
   // Negative password check (issue #109): join with a bogus password, expect the
