@@ -209,6 +209,15 @@ public static class MessagePools
     "{v} got clipped by {z}'s frisbee with commitment issues"
   };
 
+  // Slingshot zap-outs (issue #99).
+  public static readonly List <string> Slingshot = new()
+  {
+    "{z} slingshotted {v} straight back to the stone age",
+    "{v} was zapped out by a pebble. {z} is very proud",
+    "{z} drew, released, & {v}'s day unraveled",
+    "physics homework by {z}: the arc ended on {v}"
+  };
+
   // {z} zapped {v} with the weapon {v} dropped earlier.
   public static readonly List <string> TheftRevenge = new()
   {
@@ -224,6 +233,6 @@ public static class MessagePools
     Fall, FallStreak, Zapped, ThroughWall, FullCharge, FullAuto, Punch, PunchedOutArmed, FistsVsFists,
     BananaBlast, BananaDirect, HoldingBananaGun, ComboSplatterPunch, JumpShot, SlideShotKiller,
     SlideShotVictim, ZapStreakTier3, ZapStreakTier5, ZapStreakTier7, StreakEnded, StreakLost,
-    ZappedStreak, Boomerang, TheftRevenge
+    ZappedStreak, Boomerang, Slingshot, TheftRevenge
   };
 }

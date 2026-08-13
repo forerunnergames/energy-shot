@@ -8,15 +8,16 @@ using Godot;
 namespace com.forerunnergames.energyshot.weapons;
 
 // Server-authoritative weapon lifecycle manager (issue #72): keeps at most 3 lasers,
-// 1 banana, & 1 boomerang (issue #98) existing in the level (held + dropped + pickups
-// + boomerang escrow), spawning pickups at the building-top & banana-platform spawn
-// points. Spawns replicate to every peer through the World's MultiplayerSpawner,
+// 1 banana, 1 boomerang (issue #98), & 1 slingshot (issue #99) existing in the level
+// (held + dropped + pickups + boomerang escrow), spawning pickups at the building-top
+// & banana-platform spawn points. Spawns replicate to every peer through the World's MultiplayerSpawner,
 // same as players.
 public partial class WeaponSpawner : Node3D
 {
   [Export] public int MaxLasers = 3;
   [Export] public int MaxBananas = 1;
   [Export] public int MaxBoomerangs = 1;
+  [Export] public int MaxSlingshots = 1;
   [Export] public float ReconcileIntervalSeconds = 1.0f;
   [Export] public float PickupHoverHeight = 0.9f;
   // Playtest-only (#72): a laser pickup is kept at this fixed spawn-room spot so the
@@ -25,6 +26,8 @@ public partial class WeaponSpawner : Node3D
   public static readonly Vector3 PlaytestLaserPosition = new(0.0f, 31.1f, 5.0f);
   // Playtest-only (#98): same idea for the boomerang throw/catch phase.
   public static readonly Vector3 PlaytestBoomerangPosition = new(3.0f, 31.1f, 5.0f);
+  // Playtest-only (#99): same idea for the slingshot draw/release phase.
+  public static readonly Vector3 PlaytestSlingshotPosition = new(-3.0f, 31.1f, 5.0f);
   private const float OccupiedRadius = 1.0f;
   // Cargo riding a boomerang home (issue #98): stolen & scooped weapons live here
   // between the grab & the thrower's catch, so the caps still count them.
@@ -118,15 +121,16 @@ public partial class WeaponSpawner : Node3D
     EnsurePlaytestPickups (pickups);
   }
 
-  // The banana & boomerang (issue #98) respawn at random free points: the high
-  // platform + whatever laser points the lasers didn't claim (laser precedence when
-  // contested); a shared candidate list keeps the two from stacking on one point.
+  // The banana, boomerang (issue #98), & slingshot (issue #99) respawn at random free
+  // points: the high platform + whatever laser points the lasers didn't claim (laser
+  // precedence when contested); a shared candidate list keeps them from stacking.
   private void SpawnSpecialsIfMissing (List <WeaponPickup> pickups, List <Player> players, List <Vector3> freePoints)
   {
     var candidates = new List <Vector3> (freePoints);
     if (IsFree (_bananaPoint, pickups)) candidates.Add (_bananaPoint);
     if (candidates.Count > 0 && Count (HeldWeapon.Banana, pickups, players) < MaxBananas) Spawn (HeldWeapon.Banana, TakeRandom (candidates), expires: false);
     if (candidates.Count > 0 && Count (HeldWeapon.Boomerang, pickups, players) < MaxBoomerangs) Spawn (HeldWeapon.Boomerang, TakeRandom (candidates), expires: false);
+    if (candidates.Count > 0 && Count (HeldWeapon.Slingshot, pickups, players) < MaxSlingshots) Spawn (HeldWeapon.Slingshot, TakeRandom (candidates), expires: false);
   }
 
   // Playtest-only (#72 & #98): keeps deterministic pickups available in the spawn
@@ -136,6 +140,7 @@ public partial class WeaponSpawner : Node3D
     if (!_isPlaytest) return;
     EnsurePlaytestPickup (HeldWeapon.Laser, PlaytestLaserPosition, pickups);
     EnsurePlaytestPickup (HeldWeapon.Boomerang, PlaytestBoomerangPosition, pickups);
+    EnsurePlaytestPickup (HeldWeapon.Slingshot, PlaytestSlingshotPosition, pickups); // Issue #99.
   }
 
   private void EnsurePlaytestPickup (HeldWeapon type, Vector3 position, List <WeaponPickup> pickups)
@@ -210,6 +215,7 @@ public partial class WeaponSpawner : Node3D
     if (dropped.HasFlag (HeldWeapon.Laser)) Spawn (HeldWeapon.Laser, spot, expires: true, dropperName);
     if (dropped.HasFlag (HeldWeapon.Banana)) Spawn (HeldWeapon.Banana, spot + Vector3.Right * 0.8f, expires: true, dropperName);
     if (dropped.HasFlag (HeldWeapon.Boomerang)) Spawn (HeldWeapon.Boomerang, spot + Vector3.Left * 0.8f, expires: true, dropperName); // Issue #98.
+    if (dropped.HasFlag (HeldWeapon.Slingshot)) Spawn (HeldWeapon.Slingshot, spot + Vector3.Back * 0.8f, expires: true, dropperName); // Issue #99.
   }
 
   // ------------------------------------------------ boomerang cargo (issue #98)
