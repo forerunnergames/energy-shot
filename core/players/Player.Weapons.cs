@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using com.forerunnergames.energyshot.weapons;
 using Godot;
 
@@ -179,7 +180,7 @@ public partial class Player
     ApplyOverlayMaterials (_boomerangHeld);
   }
 
-  private static void ApplyOverlayMaterials (Node node)
+  private void ApplyOverlayMaterials (Node node)
   {
     if (node is MeshInstance3D mesh) ApplyOverlayMaterial (mesh);
     foreach (var child in node.GetChildren()) ApplyOverlayMaterials (child);
@@ -187,13 +188,13 @@ public partial class Player
 
   // Per-instance override materials (muzzle, banana launcher) are mutated in place;
   // shared imported materials (glb handle) are duplicated first so puppets keep theirs.
-  private static void ApplyOverlayMaterial (MeshInstance3D mesh)
+  private void ApplyOverlayMaterial (MeshInstance3D mesh)
   {
     if (mesh.MaterialOverride is BaseMaterial3D overrideMaterial) { MakeOverlay (overrideMaterial); return; }
     for (var surface = 0; surface < mesh.GetSurfaceOverrideMaterialCount(); ++surface) ApplyOverlaySurface (mesh, surface);
   }
 
-  private static void ApplyOverlaySurface (MeshInstance3D mesh, int surface)
+  private void ApplyOverlaySurface (MeshInstance3D mesh, int surface)
   {
     if (mesh.GetActiveMaterial (surface) is not BaseMaterial3D material) return;
     var copy = (BaseMaterial3D)material.Duplicate();
@@ -201,12 +202,35 @@ public partial class Player
     mesh.SetSurfaceOverrideMaterial (surface, copy);
   }
 
+  // Each overlaid material's original settings, so the third-person view (issue #119)
+  // can restore the normal on-the-body look & the toggle can re-overlay it.
+  private readonly List <(BaseMaterial3D Material, BaseMaterial3D.TransparencyEnum Transparency, bool NoDepthTest, int RenderPriority)> _overlayMaterials = [];
+
+  private void MakeOverlay (BaseMaterial3D material)
+  {
+    _overlayMaterials.Add ((material, material.Transparency, material.NoDepthTest, material.RenderPriority));
+    ApplyOverlay (material);
+  }
+
   // Alpha transparency is required for render_priority to order the draw (priority
   // only applies in the transparent pass); 99 keeps the crosshairs (100) on top.
-  private static void MakeOverlay (BaseMaterial3D material)
+  private static void ApplyOverlay (BaseMaterial3D material)
   {
     material.Transparency = BaseMaterial3D.TransparencyEnum.Alpha;
     material.NoDepthTest = true;
     material.RenderPriority = 99;
+  }
+
+  // The overlay is a first-person trick only (issue #119): the third-person view
+  // restores every material's originals so the weapons render normally on the body.
+  private void SetFirstPersonOverlayEnabled (bool enabled)
+  {
+    foreach (var original in _overlayMaterials)
+    {
+      if (enabled) { ApplyOverlay (original.Material); continue; }
+      original.Material.Transparency = original.Transparency;
+      original.Material.NoDepthTest = original.NoDepthTest;
+      original.Material.RenderPriority = original.RenderPriority;
+    }
   }
 }
