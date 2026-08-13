@@ -54,6 +54,13 @@ public static class Settings
     set => Set ("last_join_password", value);
   }
 
+  // Mini music player visibility (issue #137): hiding it never stops the music.
+  public static bool ShowMusicPlayer
+  {
+    get => GetBool ("show_music_player", true);
+    set => Set ("show_music_player", value);
+  }
+
   private static string Get (string key)
   {
     var config = new ConfigFile();
@@ -66,6 +73,13 @@ public static class Settings
     var config = new ConfigFile();
     config.Load (FilePath);
     return (int)config.GetValue (Section, key, defaultValue);
+  }
+
+  private static bool GetBool (string key, bool defaultValue)
+  {
+    var config = new ConfigFile();
+    config.Load (FilePath);
+    return (bool)config.GetValue (Section, key, defaultValue);
   }
 
   private static void Set (string key, Variant value)

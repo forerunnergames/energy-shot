@@ -1,4 +1,4 @@
-[gd_scene load_steps=14 format=3 uid="uid://cobme7o27cxru"]
+[gd_scene load_steps=15 format=3 uid="uid://cobme7o27cxru"]
 
 [ext_resource type="Script" path="res://ui/hud/Hud.cs" id="1_5s36p"]
 [ext_resource type="PackedScene" uid="uid://huun2vjv0k1v" path="res://ui/hud/messages/MessageScroller.tscn" id="1_6ovnf"]
@@ -6,6 +6,7 @@
 [ext_resource type="Shader" path="res://ui/hud/vignette.gdshader" id="4_vgntt"]
 [ext_resource type="Shader" path="res://ui/hud/blur.gdshader" id="5_blur"]
 [ext_resource type="Shader" path="res://ui/hud/splatter.gdshader" id="6_spltr"]
+[ext_resource type="PackedScene" path="res://ui/hud/MusicPlayer.tscn" id="7_msplr"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_vgntt"]
 shader = ExtResource("4_vgntt")
@@ -247,6 +248,9 @@ text = ""
 autostart = true
 
 [node name="MessageScroller" parent="." instance=ExtResource("1_6ovnf")]
+layout_mode = 1
+
+[node name="MusicPlayer" parent="." instance=ExtResource("7_msplr")]
 layout_mode = 1
 
 [node name="QuitDialog" parent="." instance=ExtResource("3_v7kl8")]
