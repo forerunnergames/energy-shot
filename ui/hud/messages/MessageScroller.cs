@@ -112,8 +112,22 @@ public partial class MessageScroller : Control
   // that never captures input: movement, shooting, & camera keep working (issue #118).
   public override void _UnhandledInput (InputEvent @event)
   {
-    if (!Input.IsActionJustPressed ("messages")) return;
-    ToggleMessageHistory();
+    if (Input.IsActionJustPressed ("messages")) ToggleMessageHistory();
+    if (!IsMessageHistoryVisible()) return;
+    // PageUp/PageDown scroll the open history (built-in ui actions, nothing captured):
+    // with the scrollbar hidden, this is the only path to entries beyond the visible
+    // range (issue #118).
+    if (Input.IsActionJustPressed ("ui_page_up")) ScrollMessageHistoryBy (-HistoryScrollStepLines);
+    if (Input.IsActionJustPressed ("ui_page_down")) ScrollMessageHistoryBy (HistoryScrollStepLines);
+  }
+
+  private const int HistoryScrollStepLines = 10;
+  private int _historyScrollLine;
+
+  private void ScrollMessageHistoryBy (int lines)
+  {
+    _historyScrollLine = Mathf.Clamp (_historyScrollLine + lines, 0, Mathf.Max (0, _messageHistoryLabel.GetLineCount() - 1));
+    _messageHistoryLabel.ScrollToLine (_historyScrollLine);
   }
 
   private void ToggleMessageHistory()
@@ -211,6 +225,9 @@ public partial class MessageScroller : Control
     UpdateMessageHistory();
     _messageContainer.Hide();
     _messageHistoryContainer.Show();
+    // Open at the newest entry; PageUp walks back from there (issue #118).
+    _historyScrollLine = Mathf.Max (0, _messageHistoryLabel.GetLineCount() - 1);
+    _messageHistoryLabel.ScrollToLine (_historyScrollLine);
   }
 
   private void HideMessageHistory()
