@@ -24,11 +24,12 @@ public static class PlayerColors
 
   public static int Count => Palette.Length;
   // Out-of-range (e.g. a stale saved setting after a palette change, or a spoofed
-  // value) falls back to the default blue instead of crashing every peer.
-  public static Color At (int index) => index >= 0 && index < Palette.Length ? Palette[index] : Palette[0];
+  // replicated value) always lands on the default blue - never some other entry -
+  // so every consumer (body tint, dialogs, leaderboard) agrees on the fallback.
+  public static int NormalizeIndex (int index) => index >= 0 && index < Palette.Length ? index : 0;
+  public static Color At (int index) => Palette[NormalizeIndex (index)];
   // Leaderboard name tint (issue #43): lightened so dark palette entries stay readable on the HUD.
   public static string TextHex (int index) => At (index).Lerp (Colors.White, 0.35f).ToHtml (includeAlpha: false);
-  public static int Clamp (int index) => Mathf.Clamp (index, 0, Palette.Length - 1);
   // Fills a host/join dialog dropdown with one swatch + name entry per palette color.
   public static void Populate (OptionButton button)
   {

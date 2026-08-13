@@ -71,7 +71,7 @@ public partial class JoinGameDialog : Control
     if (string.IsNullOrEmpty (_password.Text)) _password.Text = Settings.LastJoinPassword;
     if (string.IsNullOrEmpty (_serverAddress.Text)) _serverAddress.Text = Settings.LastJoinAddress;
     _difficulty.Selected = Settings.Difficulty;
-    _playerColor.Selected = PlayerColors.Clamp (Settings.PlayerColor);
+    _playerColor.Selected = PlayerColors.NormalizeIndex (Settings.PlayerColor);
     UpdateJoinGameButtonState();
     Show();
   }

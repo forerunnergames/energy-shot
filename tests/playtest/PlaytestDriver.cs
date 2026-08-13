@@ -98,7 +98,8 @@ public partial class PlaytestDriver : Node
   {
     _world.StartHostSession (HostName, difficulty: 2, Port, Password, HostColor);
     await WaitUntil (() => _world.GetPlayers().Count() == 3, 60, "all 3 players joined");
-    // Chosen body colors (issue #43) replicate to the host like every other peer.
+    // Chosen body colors (issue #43): own pick stuck & both clients' picks replicate to the host.
+    Assert (Self.ColorIndex == HostColor, $"own chosen color is {HostColor}, got {Self.ColorIndex}");
     await WaitUntil (() => FindPlayer (ShooterName)?.ColorIndex == ShooterColor && FindPlayer (VictimName)?.ColorIndex == VictimColor, 15, "clients' chosen colors replicated to host (#43)");
     // Exactly one player wears the crown even at 0-0 (issue #107).
     await WaitUntil (() => _world.GetPlayers().Count (player => player.IsCrowned) == 1, 10, "exactly one player crowned at 0-0");
@@ -184,6 +185,11 @@ public partial class PlaytestDriver : Node
     Assert (victim.Health < healthBeforePunch, $"punch damaged the victim ({healthBeforePunch} -> {victim.Health})");
     // Sync property index 14 (#88): the punch stun must replicate to the shooter's copy.
     await WaitUntil (() => victim.StunFactor > 0.0f, 2, "victim's punch stun replicated to shooter");
+
+    // Hit-flash restoration (#43): the punch just flashed this puppet's body dark
+    // red; the flash must settle back onto the exact chosen palette color - the
+    // riskiest base-color path, since it used to restore a hardcoded default.
+    await WaitUntil (() => victimBody.AlbedoColor.IsEqualApprox (PlayerColors.At (VictimColor)), 15, "victim's body returned to its chosen color after the hit flash (#43)");
 
     // Weapon lifecycle (#72): everyone spawns unarmed, so collect the deterministic
     // laser pickup the WeaponSpawner keeps in the spawn room in --playtest mode.
@@ -329,8 +335,9 @@ public partial class PlaytestDriver : Node
     _world.StartClientSession (VictimName, difficulty: 0, _address, Port, Password, VictimColor);
     await WaitUntil (() => _world.GetPlayers().Count() == 3, 60, "all 3 players visible");
     Assert (Self.MaxHealth == 400, $"own MaxHealth is Beginner 400, got {Self.MaxHealth}");
-    // Chosen body color (issue #43): the shooter's pick replicates to the victim too.
-    await WaitUntil (() => FindPlayer (ShooterName)?.ColorIndex == ShooterColor, 15, "shooter's chosen color replicated to victim (#43)");
+    // Chosen body colors (issue #43): own pick stuck & both peers' picks replicate to the victim.
+    Assert (Self.ColorIndex == VictimColor, $"own chosen color is {VictimColor}, got {Self.ColorIndex}");
+    await WaitUntil (() => FindPlayer (ShooterName)?.ColorIndex == ShooterColor && FindPlayer (HostName)?.ColorIndex == HostColor, 15, "shooter's & host's chosen colors replicated to victim (#43)");
     Assert (Self.SpawnArmor, "spawned with spawn armor");
     // Synced music (issue #137): same track as everyone & the shooter's vote
     // propagated here through the server broadcast.

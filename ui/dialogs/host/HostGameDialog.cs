@@ -61,7 +61,7 @@ public partial class HostGameDialog : Control
     if (string.IsNullOrEmpty (_playerName.Text)) _playerName.Text = Settings.PlayerName;
     if (string.IsNullOrEmpty (_password.Text)) _password.Text = Settings.HostPassword;
     _difficulty.Selected = Settings.Difficulty;
-    _playerColor.Selected = PlayerColors.Clamp (Settings.PlayerColor);
+    _playerColor.Selected = PlayerColors.NormalizeIndex (Settings.PlayerColor);
     _maxPlayers.Value = Settings.MaxPlayers;
     UpdateHostGameButtonState();
     Show();
