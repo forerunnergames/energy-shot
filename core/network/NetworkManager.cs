@@ -8,6 +8,7 @@ public partial class NetworkManager : Node
 {
   // @formatter:off
   public event Action <string>? RemoteMessageReceived;
+  public event Action <string>? AdminMessageReceived;
   public event Action <string, string>? PlayerRespawnedShot;
   public event Action <string>? PlayerRespawnedFell;
   public event Action <string>? PlayerJoinGame;
@@ -25,6 +26,27 @@ public partial class NetworkManager : Node
   private void SendToAllClientsExcept (int excludingId, string method, params Variant[] args) => Multiplayer.GetPeers().Where (id => id != excludingId).ToList().ForEach (id => RpcId (id, method, args));
   private void SendToAllClientsExcept (int excludingId1, int excludingId2, string method, params Variant[] args) => Multiplayer.GetPeers().Where (id => id != excludingId1 && id != excludingId2).ToList().ForEach (id => RpcId (id, method, args));
   // @formatter:on
+
+  // Admin announcements (issue #158): server-only broadcast, shown on every peer
+  // including the host. Same text everywhere (#53).
+  public void NotifyAdminMessage (string message)
+  {
+    AdminMessageReceived?.Invoke (message);
+    SendToAllClients (nameof (OnAdminMessageReceived), message);
+  }
+
+  // Version line for a single joining peer (issue #158): targeted, not a broadcast,
+  // so it doubles as version info without spamming everyone on every join.
+  public void SendAdminMessageTo (int peerId, string message) => RpcId (peerId, nameof (OnAdminMessageReceived), message);
+
+  [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
+  private void OnAdminMessageReceived (string message)
+  {
+    // Admin messages are only honored from peer 1, the server (issue #158);
+    // a forged send from any other peer is dropped.
+    if (Multiplayer.GetRemoteSenderId() != 1) return;
+    AdminMessageReceived?.Invoke (message);
+  }
 
   public void NotifyPlayerJoinGame (string playerName)
   {
