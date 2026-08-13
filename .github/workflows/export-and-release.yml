@@ -51,6 +51,21 @@ jobs:
           # Checkout the entire commit history.
           fetch-depth: 0
 
+      # Stamp the release tag into the project version (issue #170) so every exported
+      # build carries it: the server compares client versions at join & blocks
+      # mismatched (usually outdated) clients with an update-required message.
+      # The canonical form is the tag without the leading "v" (e.g. 0.8.15);
+      # dev builds keep project.godot's "-dev" value.
+      - name: Stamp release version
+        env:
+          # Passed as an environment value (never interpolated into the script)
+          # so a hostile ref name can't inject shell commands.
+          TAG: ${{ github.ref_name }}
+        run: |
+          VERSION="${TAG#v}"
+          sed -i "s|^config/version=.*|config/version=\"$VERSION\"|" project.godot
+          grep "^config/version=" project.godot
+
       # Remove the addons directory before the build, to avoid failing the
       # build with this error:
       # "Error: The process '.../Godot_v4.7.1-stable_mono_linux.x86_64' failed with exit code null"

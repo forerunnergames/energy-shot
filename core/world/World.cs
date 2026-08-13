@@ -21,6 +21,9 @@ public partial class World : Node3D
   [Signal] public delegate void KickedFromServerEventHandler (string reason);
   [Signal] public delegate void ServerShutDownEventHandler();
   private const int DefaultServerPort = 55556;
+  // Build version (issue #170): the release workflow stamps the tag (without the
+  // leading "v") into project.godot at export time; dev builds keep the "-dev" value.
+  public static string GameVersion => (string)ProjectSettings.GetSetting ("application/config/version", "unknown");
   // Hard engine limit on players per game (issue #73); hosts can choose fewer.
   public const int MaxPlayers = 12;
   private NetworkManager _networkManager = null!;
@@ -109,7 +112,9 @@ public partial class World : Node3D
     OnHostGameSuccess (playerName, difficulty, MaxPlayers, password, colorIndex);
   }
 
-  public void StartClientSession (string playerName, int difficulty, string address, int port, string password, int colorIndex = 0)
+  // The version override exists only for the playtest's wrong-version probe (issue
+  // #170); real joins always report this build's own version.
+  public void StartClientSession (string playerName, int difficulty, string address, int port, string password, int colorIndex = 0, string? version = null)
   {
     var peer = new ENetMultiplayerPeer();
     var error = peer.CreateClient (address, port);
@@ -117,7 +122,7 @@ public partial class World : Node3D
     Multiplayer.MultiplayerPeer = peer;
     // One-shot: a retried session (e.g. the playtest's wrong-password probe, issue
     // #109) must not replay stale credentials from an earlier attempt's handler.
-    Multiplayer.Connect (MultiplayerApi.SignalName.ConnectedToServer, Callable.From (() => OnJoinGameSuccess (playerName, difficulty, password, colorIndex)), (uint)ConnectFlags.OneShot);
+    Multiplayer.Connect (MultiplayerApi.SignalName.ConnectedToServer, Callable.From (() => RequestSlot (playerName, difficulty, password, colorIndex, version ?? GameVersion)), (uint)ConnectFlags.OneShot);
   }
 
   // Dedicated-server exports carry the feature tag, so the server binary needs no flag;
@@ -162,15 +167,24 @@ public partial class World : Node3D
     Multiplayer.PeerConnected += OnClientConnectedToServer;
     Multiplayer.PeerDisconnected += OnClientDisconnectedFromServer;
     _serverPassword = ParseServerPassword();
-    GD.Print ($"Server: Dedicated server listening on port [{port}], password {(_serverPassword.Length > 0 ? "required" : "not required")}");
+    GD.Print ($"Server: Dedicated server v{GameVersion} listening on port [{port}], password {(_serverPassword.Length > 0 ? "required" : "not required")}");
   }
 
   [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
-  private void RequestPlayerSlot (string playerName, int difficulty, string password, int colorIndex)
+  private void RequestPlayerSlot (string playerName, int difficulty, string password, int colorIndex, string version)
   {
     if (!Multiplayer.IsServer()) return;
     var senderId = Multiplayer.GetRemoteSenderId();
-    ServerLog.Event (senderId, $"join request: [{playerName}] (difficulty {difficulty})");
+    ServerLog.Event (senderId, $"join request: [{playerName}] (difficulty {difficulty}, version {version})");
+
+    // Mixed client versions silently break RPCs between peers (issue #170): block
+    // any mismatch up front with an update prompt, same UX as the password kick (#109).
+    if (version != GameVersion)
+    {
+      ServerLog.Event (senderId, $"join denied: [{playerName}] version mismatch (server {GameVersion}, client {version})");
+      Kick (senderId, $"Update required: server is v{GameVersion}, you have v{version}.");
+      return;
+    }
 
     // Server-enforced game password (issue #90); empty server password = open server.
     if (_serverPassword.Length > 0 && password != _serverPassword)
@@ -228,13 +242,16 @@ public partial class World : Node3D
     AddPlayer (Multiplayer.GetUniqueId(), playerName, Player.MaxHealthFor (difficulty), colorIndex);
   }
 
-  private void OnJoinGameSuccess (string playerName, int difficulty, string password, int colorIndex)
+  // The UI join path always reports this build's own version (issue #170).
+  private void OnJoinGameSuccess (string playerName, int difficulty, string password, int colorIndex) => RequestSlot (playerName, difficulty, password, colorIndex, GameVersion);
+
+  private void RequestSlot (string playerName, int difficulty, string password, int colorIndex, string version)
   {
     _selfPlayerName = playerName;
     _selfDifficulty = difficulty;
     _selfColorIndex = colorIndex;
     if (!Multiplayer.IsConnected (MultiplayerApi.SignalName.ServerDisconnected, _onServerDisconnectedCallable)) Multiplayer.Connect (MultiplayerApi.SignalName.ServerDisconnected, _onServerDisconnectedCallable);
-    RpcId (1, MethodName.RequestPlayerSlot, playerName, difficulty, password, colorIndex);
+    RpcId (1, MethodName.RequestPlayerSlot, playerName, difficulty, password, colorIndex, version);
   }
 
   private void OnServerDisconnected() => EmitSignal (SignalName.ServerShutDown);
