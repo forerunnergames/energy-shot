@@ -30,6 +30,8 @@ public partial class World : Node3D
   private string _serverPassword = string.Empty;
   // Running build tag from --version-file (issue #158); empty = no version line on join.
   private string _serverVersion = string.Empty;
+  // Peers already told the version line, so the ready handshake & its fallback can't double-send (PR #166 review).
+  private readonly System.Collections.Generic.HashSet <int> _versionLinePeerIds = new();
   private UI _ui = null!;
   private Callable _onServerDisconnectedCallable;
   private PackedScene _playerScene = null!;
@@ -120,14 +122,42 @@ public partial class World : Node3D
 
   // The version line goes to the joining peer only - not a broadcast, so it
   // doubles as version info without spamming everyone on every join (issue #158).
-  // Delayed past the client's spawn: NewGameStarted resets the message scroller,
-  // which would wipe a line that arrives before the HUD is up.
-  private async void SendVersionTo (int peerId)
+  // Sent on the client's readiness confirmation, not a guessed delay (PR #166
+  // review): NewGameStarted resets the message scroller, which would wipe a line
+  // that arrives before the HUD is up.
+  private void SendVersionTo (int peerId)
   {
     if (_serverVersion.Length == 0) return;
-    await ToSignal (GetTree().CreateTimer (2.0), SceneTreeTimer.SignalName.Timeout);
-    if (!Multiplayer.GetPeers().Contains (peerId)) return; // Already left.
+    if (!_versionLinePeerIds.Add (peerId)) return; // Already sent (ready + fallback paths).
     _networkManager.SendAdminMessageTo (peerId, $"Running {_serverVersion}");
+  }
+
+  // A joined client confirmed its HUD is up: safe to send its version line now (PR #166 review).
+  [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
+  private void ConfirmClientReady()
+  {
+    if (!Multiplayer.IsServer()) return;
+    var senderId = Multiplayer.GetRemoteSenderId();
+    if (FindPlayer (senderId) == null) return; // Only joined players get the line.
+    SendVersionTo (senderId);
+  }
+
+  // Tell the server our HUD finished NewGameStarted; the host is the server
+  // itself & needs no confirmation (PR #166 review).
+  private void NotifyServerClientReady()
+  {
+    if (Multiplayer.GetUniqueId() == 1) return;
+    RpcId (1, MethodName.ConfirmClientReady);
+  }
+
+  // Fallback (PR #166 review): a client whose readiness confirmation is lost
+  // still gets its version line, just on the old fixed-delay timing.
+  private async void SendVersionToAfterFallbackDelay (int peerId)
+  {
+    if (_serverVersion.Length == 0) return;
+    await ToSignal (GetTree().CreateTimer (10.0), SceneTreeTimer.SignalName.Timeout);
+    if (!Multiplayer.GetPeers().Contains (peerId)) return; // Already left.
+    SendVersionTo (peerId);
   }
 
   private void StartPlaytest() => AddChild (new playtest.PlaytestDriver());
@@ -253,7 +283,7 @@ public partial class World : Node3D
     }
 
     AddPlayer (senderId, playerName, Player.MaxHealthFor (difficulty), colorIndex);
-    SendVersionTo (senderId);
+    SendVersionToAfterFallbackDelay (senderId);
   }
 
   // Delay the disconnect so the kick-reason RPC isn't dropped by an immediate peer disconnect (see issue #23).
@@ -297,6 +327,7 @@ public partial class World : Node3D
   private void OnClientDisconnectedFromServer (long id)
   {
     RemovePlayer (id);
+    _versionLinePeerIds.Remove ((int)id); // A rejoin counts as a fresh join (PR #166 review).
     ServerLog.Event (id, "disconnected");
   }
 
@@ -346,6 +377,9 @@ public partial class World : Node3D
     selfPlayer.Scored += (playerName, shotPlayerName) => EmitSignal (SignalName.PlayerScored, ++_score, playerName, shotPlayerName);
     GD.Print ($"{_selfPlayer.NetworkId}: Registered my player {_selfPlayer.DisplayName}");
     EmitSignal (SignalName.NewGameStarted, _selfPlayer.DisplayName, _selfPlayer.MaxHealth);
+    // NewGameStarted handlers (incl. the HUD's scroller reset) ran synchronously
+    // above, so the version line can't be wiped after this (PR #166 review).
+    NotifyServerClientReady();
   }
 
   private void RemovePlayer (long peerId)

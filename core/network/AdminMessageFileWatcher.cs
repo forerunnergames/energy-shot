@@ -4,7 +4,7 @@ namespace com.forerunnergames.energyshot.utilities;
 
 // Server-operator announcement channel (issue #158): with --admin-message-file
 // <path>, the server polls the file once a second & hands any new non-empty
-// content to the broadcast callback, then truncates the file - so the same text
+// content to the broadcast callback, consuming the file - so the same text
 // can be re-sent later & nothing re-broadcasts on restart. Sending a message
 // from SSH is one line: echo "Back in a minute!" > /path/to/admin-message
 public partial class AdminMessageFileWatcher : Node
@@ -34,10 +34,21 @@ public partial class AdminMessageFileWatcher : Node
 
   private string TakePendingMessage()
   {
-    if (!System.IO.File.Exists (_path)) return string.Empty;
-    var message = System.IO.File.ReadAllText (_path).Trim();
-    if (message.Length == 0) return string.Empty;
-    System.IO.File.WriteAllText (_path, string.Empty);
+    var claimedPath = $"{_path}.claimed";
+    if (!TryClaim (claimedPath)) return string.Empty;
+    var message = System.IO.File.ReadAllText (claimedPath).Trim();
+    System.IO.File.Delete (claimedPath);
     return message;
+  }
+
+  // Atomic claim (PR #166 review): rename the file aside before reading it, so an
+  // operator echo racing the poll lands in a fresh file at the watched path
+  // instead of being truncated away unread.
+  private bool TryClaim (string claimedPath)
+  {
+    if (!System.IO.File.Exists (_path)) return false;
+    try { System.IO.File.Move (_path, claimedPath, overwrite: true); }
+    catch (System.IO.IOException) { return false; } // Vanished mid-claim; the next poll retries.
+    return true;
   }
 }

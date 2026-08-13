@@ -121,12 +121,12 @@ public partial class PlaytestDriver : Node
     await WaitUntil (() => Music.CurrentTrackTitle.Length > 0, 15, "music track started on the server");
     await WaitUntil (() => Music.CurrentUpVotes == 1, 30, "shooter's music vote tallied on host");
     // Admin messages (issue #158): drop an announcement into the operator file; the
-    // 1s poller must broadcast it to every peer (host included) & truncate the file
-    // so the same text can be re-sent later.
+    // 1s poller must broadcast it to every peer (host included) & consume the file
+    // (claimed atomically by rename) so the same text can be re-sent later.
     var adminFile = ArgValue (OS.GetCmdlineUserArgs(), "--admin-message-file")!;
     System.IO.File.WriteAllText (adminFile, AdminAnnouncement);
     await WaitUntil (() => _adminMessages.Contains (AdminAnnouncement), 15, "admin announcement broadcast from the message file (#158)");
-    await WaitUntil (() => System.IO.File.ReadAllText (adminFile).Length == 0, 10, "admin message file truncated after broadcast (#158)");
+    await WaitUntil (() => !System.IO.File.Exists (adminFile), 10, "admin message file consumed after broadcast (#158)");
     // Shooter kills victim once (plus possibly the host itself in the line of
     // fire); wait to observe the replicated score.
     await WaitUntil (() => FindPlayer (ShooterName)?.Score >= 1, 120, "shooter's kill replicated to host");

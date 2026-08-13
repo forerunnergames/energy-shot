@@ -28,16 +28,22 @@ public partial class NetworkManager : Node
   // @formatter:on
 
   // Admin announcements (issue #158): server-only broadcast, shown on every peer
-  // including the host. Same text everywhere (#53).
+  // including the host. Same text everywhere (#53). The server guard runs before
+  // local delivery, so a misused call on a client can neither display nor send.
   public void NotifyAdminMessage (string message)
   {
+    if (!IsServer) return;
     AdminMessageReceived?.Invoke (message);
     SendToAllClients (nameof (OnAdminMessageReceived), message);
   }
 
   // Version line for a single joining peer (issue #158): targeted, not a broadcast,
   // so it doubles as version info without spamming everyone on every join.
-  public void SendAdminMessageTo (int peerId, string message) => RpcId (peerId, nameof (OnAdminMessageReceived), message);
+  public void SendAdminMessageTo (int peerId, string message)
+  {
+    if (!IsServer) return;
+    RpcId (peerId, nameof (OnAdminMessageReceived), message);
+  }
 
   [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
   private void OnAdminMessageReceived (string message)

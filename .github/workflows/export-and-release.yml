@@ -197,8 +197,8 @@ jobs:
           chmod +x energy-shot-server.x86_64
           # Warn players in-game before the swap (issue #158): the running server
           # polls this file once a second (--admin-message-file on the systemd unit)
-          # & broadcasts new content as a gold admin announcement. Owned by the game
-          # user so the server process can truncate it after broadcasting.
+          # & broadcasts new content as a gold admin announcement, consuming the
+          # file (claimed by rename in the game user's home directory).
           echo "Server updating to $TAG - back in about a minute!" > /home/game/admin-message
           chown game:game /home/game/admin-message
           # Record the running version (issue #158): the new build reads this at
