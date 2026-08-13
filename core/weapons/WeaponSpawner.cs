@@ -201,17 +201,35 @@ public partial class WeaponSpawner : Node3D
   // Dropped weapons become expiring pickups at the drop spot (side by side when both drop at once).
   // The dropper's identity comes from the RPC sender, never from client-supplied data
   // (CodeRabbit on #96): a forged name could plant false theft-revenge attribution.
+  // The mask & position are validated too (CodeRabbit on #145): only weapons the
+  // sender's replicated HeldWeapon shows can drop - droppers send the request BEFORE
+  // clearing their local flags, so the server's view still holds them on arrival -
+  // & the drop grounds onto the level beneath the spot (issue #151).
   [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
   private void RequestDrop (Vector3 position, int droppedMask)
   {
     if (!Multiplayer.IsServer()) return;
-    // A direct (non-RPC) call means the host itself dropped, so there's no remote sender.
-    var senderId = Multiplayer.GetRemoteSenderId();
-    if (senderId == 0) senderId = Multiplayer.GetUniqueId();
-    var dropperName = Players().FirstOrDefault (player => player.NetworkId == senderId)?.DisplayName ?? string.Empty;
-    var dropped = (HeldWeapon)droppedMask;
-    ServerLog.Event (senderId, $"weapon drop: {dropped} at {position}");
-    var spot = position + Vector3.Up * PickupHoverHeight;
+    var senderId = SenderOrSelf();
+    var dropper = Players().FirstOrDefault (player => player.NetworkId == senderId);
+    var dropped = (HeldWeapon)droppedMask & (dropper?.HeldWeapon ?? HeldWeapon.None);
+
+    if (dropped == HeldWeapon.None)
+    {
+      ServerLog.Event (senderId, $"weapon drop deny: mask [{(HeldWeapon)droppedMask}] not held by sender");
+      return;
+    }
+
+    // Mid-air drops settle onto the level below (issue #151); over the void there's
+    // nothing to rest on, so the spawn is skipped & the caps respawn the weapons at
+    // spawn points instead of leaving unreachable floating pickups.
+    if (!TryFindGround (position, out var spot))
+    {
+      ServerLog.Event (senderId, $"weapon drop skip: no ground beneath {position}; [{dropped}] returns via the caps");
+      return;
+    }
+
+    ServerLog.Event (senderId, $"weapon drop: {dropped} at {spot}");
+    var dropperName = dropper!.DisplayName; // Non-null: the mask intersection above proved the sender exists.
     if (dropped.HasFlag (HeldWeapon.Laser)) Spawn (HeldWeapon.Laser, spot, expires: true, dropperName);
     if (dropped.HasFlag (HeldWeapon.Banana)) Spawn (HeldWeapon.Banana, spot + Vector3.Right * 0.8f, expires: true, dropperName);
     if (dropped.HasFlag (HeldWeapon.Boomerang)) Spawn (HeldWeapon.Boomerang, spot + Vector3.Left * 0.8f, expires: true, dropperName); // Issue #98.
@@ -334,9 +352,20 @@ public partial class WeaponSpawner : Node3D
 
   private Vector3 GroundedSpot (Vector3 position)
   {
-    var query = PhysicsRayQueryParameters3D.Create (position, position + Vector3.Down * 100.0f);
+    TryFindGround (position, out var spot);
+    return spot; // Over the void this keeps the raw position; the pickup expires & the caps respawn it.
+  }
+
+  // Level geometry only (collision layer 1): another player below isn't a shelf.
+  private const uint WorldLayer = 1;
+
+  // Finds the first level surface beneath the point (hover height above it); false
+  // over the void, where there's nothing for a pickup to rest on (issue #151).
+  private bool TryFindGround (Vector3 position, out Vector3 spot)
+  {
+    var query = PhysicsRayQueryParameters3D.Create (position, position + Vector3.Down * 100.0f, collisionMask: WorldLayer);
     var hit = GetWorld3D().DirectSpaceState.IntersectRay (query);
-    if (hit.Count == 0) return position;
-    return (Vector3)hit["position"] + Vector3.Up * PickupHoverHeight;
+    spot = hit.Count == 0 ? position : (Vector3)hit["position"] + Vector3.Up * PickupHoverHeight;
+    return hit.Count > 0;
   }
 }

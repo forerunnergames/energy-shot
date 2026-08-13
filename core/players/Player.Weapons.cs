@@ -142,10 +142,14 @@ public partial class Player
   {
     var type = PickDroppableWeapon();
     if (type == HeldWeapon.None) return;
+    // Request BEFORE clearing (CodeRabbit on #145): the server validates the drop
+    // mask against this player's replicated HeldWeapon, so the request must leave
+    // while the local flags (& therefore the server's replicated view) still show
+    // the weapon; clearing first would race the request with the clear delta.
+    Spawner.SendDropRequest (GlobalPosition, type);
     HeldWeapon &= ~type;
     ForgetTheft (type);
     DeselectUnheldWeapon();
-    Spawner.SendDropRequest (GlobalPosition, type);
     GD.Print ($"{DisplayName}: I dropped my {type}!");
   }
 
@@ -166,7 +170,9 @@ public partial class Player
   }
 
   // Death drops everything carried at the death spot (issue #72); a boomerang out
-  // flying drops where the boomerang is instead (issue #98).
+  // flying drops where the boomerang is instead (issue #98). Request before clear,
+  // same as DropHeldWeapon: the server validates the mask against the replicated
+  // HeldWeapon (CodeRabbit on #145).
   private void DropAllHeldWeapons()
   {
     ReleaseBoomerangInFlight();
