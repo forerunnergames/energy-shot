@@ -34,6 +34,13 @@ public static class Settings
     set => Set ("difficulty", value);
   }
 
+  // Selected body color (issue #43): an index into PlayerColors, remembered like the name.
+  public static int PlayerColor
+  {
+    get => GetInt ("player_color");
+    set => Set ("player_color", value);
+  }
+
   // Host-chosen player cap (issue #73), remembered like difficulty.
   public static int MaxPlayers
   {

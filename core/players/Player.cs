@@ -58,6 +58,21 @@ public partial class Player : CharacterBody3D
     }
   }
 
+  // Selected body color (issue #43): an index into PlayerColors, chosen in the
+  // host/join dialog & replicated like DisplayName so every peer tints this player's
+  // body, fists, & leaderboard entry. Duplicates are allowed - name tags & the crown
+  // disambiguate; the flash/glow effects always return to this chosen color.
+  [Export]
+  public int ColorIndex
+  {
+    get => _colorIndex;
+    set
+    {
+      _colorIndex = value;
+      ApplyChosenColor();
+    }
+  }
+
   // Round-trip time to the server in ms, measured server-side once a second &
   // replicated like Score so every peer can render it on the leaderboard (issue
   // #100); -1 = not measured yet.
@@ -270,6 +285,7 @@ public partial class Player : CharacterBody3D
   private Sprite3D _healthTag = null!;
   private ProgressBar _healthBar = null!;
   private string _displayName = string.Empty;
+  private int _colorIndex;
   private int _health;
   private int _score;
   private int _maxHealth = 200;

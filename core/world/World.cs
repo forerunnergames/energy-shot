@@ -33,6 +33,7 @@ public partial class World : Node3D
   private Player? _selfPlayer;
   private string _selfPlayerName = string.Empty;
   private int _selfDifficulty = 2;
+  private int _selfColorIndex; // Chosen body color (issue #43), applied on our own spawned node.
   private int _score;
   private int FindPlayerId (string displayName) => FindPlayer (displayName)?.NetworkId ?? 0;
   private Player? FindPlayer (string displayName) => GetChildren().OfType <Player>().FirstOrDefault (player => player.DisplayName == displayName);
@@ -99,16 +100,16 @@ public partial class World : Node3D
 
   // Session entry points for the automated playtest harness: same code paths the
   // host/join dialogs use, minus the UI & UPnP.
-  public void StartHostSession (string playerName, int difficulty, int port, string password)
+  public void StartHostSession (string playerName, int difficulty, int port, string password, int colorIndex = 0)
   {
     var peer = new ENetMultiplayerPeer();
     var error = peer.CreateServer (port);
     if (error != Error.Ok) GD.PrintErr ($"Playtest host failed: {error}");
     Multiplayer.MultiplayerPeer = peer;
-    OnHostGameSuccess (playerName, difficulty, MaxPlayers, password);
+    OnHostGameSuccess (playerName, difficulty, MaxPlayers, password, colorIndex);
   }
 
-  public void StartClientSession (string playerName, int difficulty, string address, int port, string password)
+  public void StartClientSession (string playerName, int difficulty, string address, int port, string password, int colorIndex = 0)
   {
     var peer = new ENetMultiplayerPeer();
     var error = peer.CreateClient (address, port);
@@ -116,7 +117,7 @@ public partial class World : Node3D
     Multiplayer.MultiplayerPeer = peer;
     // One-shot: a retried session (e.g. the playtest's wrong-password probe, issue
     // #109) must not replay stale credentials from an earlier attempt's handler.
-    Multiplayer.Connect (MultiplayerApi.SignalName.ConnectedToServer, Callable.From (() => OnJoinGameSuccess (playerName, difficulty, password)), (uint)ConnectFlags.OneShot);
+    Multiplayer.Connect (MultiplayerApi.SignalName.ConnectedToServer, Callable.From (() => OnJoinGameSuccess (playerName, difficulty, password, colorIndex)), (uint)ConnectFlags.OneShot);
   }
 
   // Dedicated-server exports carry the feature tag, so the server binary needs no flag;
@@ -165,7 +166,7 @@ public partial class World : Node3D
   }
 
   [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
-  private void RequestPlayerSlot (string playerName, int difficulty, string password)
+  private void RequestPlayerSlot (string playerName, int difficulty, string password, int colorIndex)
   {
     if (!Multiplayer.IsServer()) return;
     var senderId = Multiplayer.GetRemoteSenderId();
@@ -205,7 +206,7 @@ public partial class World : Node3D
       return;
     }
 
-    AddPlayer (senderId, playerName, Player.MaxHealthFor (difficulty));
+    AddPlayer (senderId, playerName, Player.MaxHealthFor (difficulty), colorIndex);
   }
 
   // Delay the disconnect so the kick-reason RPC isn't dropped by an immediate peer disconnect (see issue #23).
@@ -218,21 +219,22 @@ public partial class World : Node3D
     Multiplayer.MultiplayerPeer.DisconnectPeer (peerId);
   }
 
-  private void OnHostGameSuccess (string playerName, int difficulty, int maxPlayers, string password)
+  private void OnHostGameSuccess (string playerName, int difficulty, int maxPlayers, string password, int colorIndex)
   {
     _maxPlayers = Mathf.Clamp (maxPlayers, 2, MaxPlayers);
     _serverPassword = password;
     Multiplayer.PeerConnected += OnClientConnectedToServer;
     Multiplayer.PeerDisconnected += OnClientDisconnectedFromServer;
-    AddPlayer (Multiplayer.GetUniqueId(), playerName, Player.MaxHealthFor (difficulty));
+    AddPlayer (Multiplayer.GetUniqueId(), playerName, Player.MaxHealthFor (difficulty), colorIndex);
   }
 
-  private void OnJoinGameSuccess (string playerName, int difficulty, string password)
+  private void OnJoinGameSuccess (string playerName, int difficulty, string password, int colorIndex)
   {
     _selfPlayerName = playerName;
     _selfDifficulty = difficulty;
+    _selfColorIndex = colorIndex;
     if (!Multiplayer.IsConnected (MultiplayerApi.SignalName.ServerDisconnected, _onServerDisconnectedCallable)) Multiplayer.Connect (MultiplayerApi.SignalName.ServerDisconnected, _onServerDisconnectedCallable);
-    RpcId (1, MethodName.RequestPlayerSlot, playerName, difficulty, password);
+    RpcId (1, MethodName.RequestPlayerSlot, playerName, difficulty, password, colorIndex);
   }
 
   private void OnServerDisconnected() => EmitSignal (SignalName.ServerShutDown);
@@ -264,17 +266,19 @@ public partial class World : Node3D
     // This node is the replication authority, so the difficulty health pool must be
     // set here (client-side) - values set on the server copy get overwritten by sync.
     spawnedPlayer.MaxHealth = Player.MaxHealthFor (_selfDifficulty);
+    spawnedPlayer.ColorIndex = _selfColorIndex; // Chosen body color (issue #43), same authority rule.
     spawnedPlayer.Health = spawnedPlayer.MaxHealth;
     spawnedPlayer.RespawnedShot += (playerName, shotByPlayerName) => _networkManager.NotifyPlayerRespawnedShot (playerName, shotByPlayerName);
     spawnedPlayer.RespawnedFell += playerName => _networkManager.NotifyPlayerRespawnedFell (playerName);
     RegisterSelf (spawnedPlayer);
   }
 
-  private void AddPlayer (int peerId, string playerName, int maxHealth)
+  private void AddPlayer (int peerId, string playerName, int maxHealth, int colorIndex)
   {
     var player = _playerScene.Instantiate <Player>();
     player.Name = $"{peerId}";
     player.MaxHealth = maxHealth;
+    player.ColorIndex = colorIndex; // Chosen body color (issue #43), carried into spawn state for every peer.
     player.RespawnedShot += (respawnedPlayerName, shotByPlayerName) => _networkManager.NotifyPlayerRespawnedShot (respawnedPlayerName, shotByPlayerName);
     player.RespawnedFell += respawnedPlayerName => _networkManager.NotifyPlayerRespawnedFell (respawnedPlayerName);
     AddChild (player);

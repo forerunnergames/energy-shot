@@ -9,8 +9,8 @@ namespace com.forerunnergames.energyshot.ui;
 public partial class UI : CanvasLayer
 {
   [Signal] public delegate void MessageEventHandler (string message, string excludedPlayerName);
-  [Signal] public delegate void HostGameSuccessEventHandler (string playerName, int difficulty, int maxPlayers, string password);
-  [Signal] public delegate void JoinGameSuccessEventHandler (string playerName, int difficulty, string password);
+  [Signal] public delegate void HostGameSuccessEventHandler (string playerName, int difficulty, int maxPlayers, string password, int colorIndex);
+  [Signal] public delegate void JoinGameSuccessEventHandler (string playerName, int difficulty, string password, int colorIndex);
   [Signal] public delegate void JoinCanceledEventHandler();
   [Signal] public delegate void GamePausedEventHandler();
   [Signal] public delegate void GameResumedEventHandler();
@@ -38,8 +38,8 @@ public partial class UI : CanvasLayer
     _hud.GamePaused += () => EmitSignal (SignalName.GamePaused);
     _hud.GameResumed += () => EmitSignal (SignalName.GameResumed);
     _hud.GameQuit += () => EmitSignal (SignalName.GameQuit);
-    _hostGameDialog.HostGameSuccess += (playerName, difficulty, maxPlayers, password) => EmitSignal (SignalName.HostGameSuccess, playerName, difficulty, maxPlayers, password);
-    _joinGameDialog.JoinGameSuccess += (playerName, difficulty, password) => EmitSignal (SignalName.JoinGameSuccess, playerName, difficulty, password);
+    _hostGameDialog.HostGameSuccess += (playerName, difficulty, maxPlayers, password, colorIndex) => EmitSignal (SignalName.HostGameSuccess, playerName, difficulty, maxPlayers, password, colorIndex);
+    _joinGameDialog.JoinGameSuccess += (playerName, difficulty, password, colorIndex) => EmitSignal (SignalName.JoinGameSuccess, playerName, difficulty, password, colorIndex);
     // Animated joining screen (issue #91): covers connect through spawn; failures reopen the join dialog.
     _joinGameDialog.ConnectStarted += _joiningScreen.Open;
     _joinGameDialog.ConnectFailed += _joiningScreen.Close;

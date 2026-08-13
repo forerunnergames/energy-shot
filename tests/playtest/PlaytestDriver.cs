@@ -21,6 +21,10 @@ public partial class PlaytestDriver : Node
   private const string HostName = "Host";
   private const string ShooterName = "Shooter";
   private const string VictimName = "Victim";
+  // Distinct chosen body colors per role (issue #43), asserted to replicate everywhere.
+  private const int HostColor = 1;
+  private const int ShooterColor = 3;
+  private const int VictimColor = 5;
   private World _world = null!;
   private string _role = string.Empty;
   private string _address = "127.0.0.1";
@@ -92,8 +96,10 @@ public partial class PlaytestDriver : Node
 
   private async Task RunHost()
   {
-    _world.StartHostSession (HostName, difficulty: 2, Port, Password);
+    _world.StartHostSession (HostName, difficulty: 2, Port, Password, HostColor);
     await WaitUntil (() => _world.GetPlayers().Count() == 3, 60, "all 3 players joined");
+    // Chosen body colors (issue #43) replicate to the host like every other peer.
+    await WaitUntil (() => FindPlayer (ShooterName)?.ColorIndex == ShooterColor && FindPlayer (VictimName)?.ColorIndex == VictimColor, 15, "clients' chosen colors replicated to host (#43)");
     // Exactly one player wears the crown even at 0-0 (issue #107).
     await WaitUntil (() => _world.GetPlayers().Count (player => player.IsCrowned) == 1, 10, "exactly one player crowned at 0-0");
     // Server-measured pings replicate back to every peer (issue #100).
@@ -115,13 +121,16 @@ public partial class PlaytestDriver : Node
 
   private async Task RunShooter()
   {
-    _world.StartClientSession (ShooterName, difficulty: 1, _address, Port, Password);
+    _world.StartClientSession (ShooterName, difficulty: 1, _address, Port, Password, ShooterColor);
     await WaitUntil (() => _world.GetPlayers().Count() == 3, 60, "all 3 players visible");
     var victim = FindPlayer (VictimName)!;
     var host = FindPlayer (HostName)!;
     Assert (victim.MaxHealth == 400, $"victim MaxHealth replicated as Beginner 400, got {victim.MaxHealth}");
     Assert (host.MaxHealth == 200, $"host MaxHealth replicated as Expert 200, got {host.MaxHealth}");
     Assert (Self.MaxHealth == 300, $"own MaxHealth is Intermediate 300, got {Self.MaxHealth}");
+    // Chosen body colors (issue #43): everyone's pick replicates to this peer.
+    Assert (Self.ColorIndex == ShooterColor, $"own chosen color is {ShooterColor}, got {Self.ColorIndex}");
+    await WaitUntil (() => victim.ColorIndex == VictimColor && host.ColorIndex == HostColor, 15, "victim's & host's chosen colors replicated to shooter (#43)");
     Assert (Self.HeldWeapon == HeldWeapon.None, "spawned unarmed (#72)");
     // The server measures our ping & tells us within a tick or two (issue #100).
     await WaitUntil (() => Self.PingMs >= 0, 15, "own ping measured by the server");
@@ -140,6 +149,11 @@ public partial class PlaytestDriver : Node
 
     // Wait out everyone's initial spawn armor before the damage phase.
     await WaitUntil (() => !victim.SpawnArmor, 15, "victim's initial spawn armor expired");
+
+    // Chosen color on the body (issue #43): with armor's white glow gone, the victim's
+    // per-instance body material must show exactly its picked palette color.
+    var victimBody = (StandardMaterial3D)victim.GetNode <MeshInstance3D> ("MeshInstance3D").GetSurfaceOverrideMaterial (0);
+    Assert (victimBody.AlbedoColor.IsEqualApprox (PlayerColors.At (VictimColor)), "victim's body tinted with its chosen color (#43)");
 
     // Streak replication (#88): the victim simulates an active 3-streak; it must
     // replicate here so the on-fire glow & pulsing leaderboard entry appear.
@@ -282,9 +296,11 @@ public partial class PlaytestDriver : Node
     // Password enforcement (issue #109): a wrong password must get kicked with
     // "Wrong password." before the real join succeeds.
     await AssertWrongPasswordIsKicked();
-    _world.StartClientSession (VictimName, difficulty: 0, _address, Port, Password);
+    _world.StartClientSession (VictimName, difficulty: 0, _address, Port, Password, VictimColor);
     await WaitUntil (() => _world.GetPlayers().Count() == 3, 60, "all 3 players visible");
     Assert (Self.MaxHealth == 400, $"own MaxHealth is Beginner 400, got {Self.MaxHealth}");
+    // Chosen body color (issue #43): the shooter's pick replicates to the victim too.
+    await WaitUntil (() => FindPlayer (ShooterName)?.ColorIndex == ShooterColor, 15, "shooter's chosen color replicated to victim (#43)");
     Assert (Self.SpawnArmor, "spawned with spawn armor");
     // Synced music (issue #137): same track as everyone & the shooter's vote
     // propagated here through the server broadcast.

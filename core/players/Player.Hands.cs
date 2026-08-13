@@ -15,19 +15,23 @@ public partial class Player
   [Export] public Vector3 RightHandRestOffset = new(0.55f, -0.45f, -0.85f);
   [Export] public float HandBobFrequency = 2.2f;
   [Export] public float HandBobMeters = 0.05f;
+  private const float HandAlpha = 0.85f;
   private readonly MeshInstance3D?[] _hands = new MeshInstance3D?[2];
   private readonly Tween?[] _handTweens = new Tween?[2];
+  private StandardMaterial3D? _handsMaterial;
   private float _handBobPhase;
   private int ChooseRandomPunchHand() => _rng.Randf() < 0.5f ? 0 : 1;
   private Vector3 HandRestOffset (int hand) => hand == 0 ? LeftHandRestOffset : RightHandRestOffset;
+  // The fists follow the chosen body color too (issue #43).
+  private void UpdateHandColor() { if (_handsMaterial != null) _handsMaterial.AlbedoColor = new Color (BaseColor, HandAlpha); }
 
   // Runs on every peer so everyone sees everyone's fists.
   private void CreateHands()
   {
     var camera = GetNode <Node3D> ("Camera3D");
-    var material = new StandardMaterial3D { AlbedoColor = new Color (NormalColor, 0.85f), Transparency = BaseMaterial3D.TransparencyEnum.Alpha, Roughness = 0.4f };
-    if (IsMultiplayerAuthority()) MakeOverlay (material); // Own first-person hands draw over walls (issue #124).
-    for (var i = 0; i < _hands.Length; ++i) _hands[i] = CreateHand (i, camera, material);
+    _handsMaterial = new StandardMaterial3D { AlbedoColor = new Color (BaseColor, HandAlpha), Transparency = BaseMaterial3D.TransparencyEnum.Alpha, Roughness = 0.4f };
+    if (IsMultiplayerAuthority()) MakeOverlay (_handsMaterial); // Own first-person hands draw over walls (issue #124).
+    for (var i = 0; i < _hands.Length; ++i) _hands[i] = CreateHand (i, camera, _handsMaterial);
     UpdateHandsVisibility();
   }
 

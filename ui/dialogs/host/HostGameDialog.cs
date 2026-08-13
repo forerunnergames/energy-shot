@@ -1,3 +1,4 @@
+using com.forerunnergames.energyshot.players;
 using com.forerunnergames.energyshot.utilities;
 using Godot;
 
@@ -5,12 +6,13 @@ namespace com.forerunnergames.energyshot.ui.dialogs;
 
 public partial class HostGameDialog : Control
 {
-  [Signal] public delegate void HostGameSuccessEventHandler (string playerName, int difficulty, int maxPlayers, string password);
+  [Signal] public delegate void HostGameSuccessEventHandler (string playerName, int difficulty, int maxPlayers, string password, int colorIndex);
   [Signal] public delegate void ClosedEventHandler();
   private Button _closeButton = null!;
   private Button _hostGameButton = null!;
   private LineEdit _playerName = null!;
   private OptionButton _difficulty = null!;
+  private OptionButton _playerColor = null!;
   private SpinBox _maxPlayers = null!;
   private LineEdit _password = null!;
   private LineEdit _serverAddress = null!;
@@ -33,6 +35,9 @@ public partial class HostGameDialog : Control
     _difficulty = GetNode <OptionButton> ("PanelContainer/MarginContainer/VBoxContainer/Difficulty");
     // The dropdown's popup items don't inherit the button's font size override.
     _difficulty.GetPopup().AddThemeFontSizeOverride ("font_size", 90);
+    _playerColor = GetNode <OptionButton> ("PanelContainer/MarginContainer/VBoxContainer/PlayerColor");
+    _playerColor.GetPopup().AddThemeFontSizeOverride ("font_size", 90);
+    PlayerColors.Populate (_playerColor); // Selectable body color (issue #43).
     _maxPlayers = GetNode <SpinBox> ("PanelContainer/MarginContainer/VBoxContainer/MaxPlayers");
     _password = GetNode <LineEdit> ("PanelContainer/MarginContainer/VBoxContainer/Password");
     _serverAddress = GetNode <LineEdit> ("PanelContainer/MarginContainer/VBoxContainer/ServerAddress");
@@ -56,6 +61,7 @@ public partial class HostGameDialog : Control
     if (string.IsNullOrEmpty (_playerName.Text)) _playerName.Text = Settings.PlayerName;
     if (string.IsNullOrEmpty (_password.Text)) _password.Text = Settings.HostPassword;
     _difficulty.Selected = Settings.Difficulty;
+    _playerColor.Selected = PlayerColors.Clamp (Settings.PlayerColor);
     _maxPlayers.Value = Settings.MaxPlayers;
     UpdateHostGameButtonState();
     Show();
@@ -103,10 +109,11 @@ public partial class HostGameDialog : Control
     GD.Print ($"Successfully hosted server at [{_serverAddress.Text}:{_serverPort}]!");
     Settings.PlayerName = _playerName.Text;
     Settings.Difficulty = _difficulty.Selected;
+    Settings.PlayerColor = _playerColor.Selected;
     Settings.MaxPlayers = (int)_maxPlayers.Value;
     Settings.HostPassword = _password.Text;
     Hide();
-    EmitSignal (SignalName.HostGameSuccess, _playerName.Text, _difficulty.Selected, (int)_maxPlayers.Value, _password.Text);
+    EmitSignal (SignalName.HostGameSuccess, _playerName.Text, _difficulty.Selected, (int)_maxPlayers.Value, _password.Text, _playerColor.Selected);
   }
 
   private void OnError (string error)

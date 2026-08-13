@@ -9,14 +9,24 @@ namespace com.forerunnergames.energyshot.players;
 // tint, x-ray ghost) uses non-white colors or separate nodes.
 public partial class Player
 {
-  private static readonly Color NormalColor = new("0027ff");
   private static readonly Color HitColor = Colors.DarkRed;
-  // White glow blended over the player's color, so armored players stay identifiable.
-  private static readonly Color SpawnArmorColor = NormalColor.Lerp (Colors.White, 0.65f);
   private static readonly Color XrayColor = new(1.0f, 0.1f, 0.1f, 0.55f);
+  // The player's chosen palette color (issue #43): the "base color" every effect
+  // (hit flash, spawn-armor glow) returns to.
+  private Color BaseColor => PlayerColors.At (_colorIndex);
+  // White glow blended over the player's chosen color, so armored players stay identifiable.
+  private Color SpawnArmorColor => BaseColor.Lerp (Colors.White, 0.65f);
   private void SetColor (Color color) => (_mesh.GetSurfaceOverrideMaterial (0) as StandardMaterial3D)!.AlbedoColor = color;
-  // Restores the player's resting color: white glow while spawn armor holds, normal blue otherwise.
-  private void RestoreBaseColor() => SetColor (SpawnArmor ? SpawnArmorColor : NormalColor);
+  // Restores the player's resting color: white glow while spawn armor holds, the chosen color otherwise.
+  private void RestoreBaseColor() => SetColor (SpawnArmor ? SpawnArmorColor : BaseColor);
+
+  // Re-tints everything derived from the chosen color (issue #43); safe pre-_Ready,
+  // when spawn-state sync runs & the node refs are still null.
+  private void ApplyChosenColor()
+  {
+    if (_mesh != null) RestoreBaseColor();
+    UpdateHandColor();
+  }
 
   // A firing/punching player provably has no spawn armor, & those broadcasts are
   // reliable RPCs - so even if the SpawnArmor=false delta was missed, the white
