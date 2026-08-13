@@ -236,6 +236,15 @@ public partial class PlaytestDriver : Node
     // replicate here so the glow & pulsing leaderboard entry clear.
     await WaitUntil (() => victim.ZapStreakCount == 0, 15, "victim's streak reset replicated to shooter");
 
+    // Third-person view (#119): toggle mid-run so the fire-rate & full-auto phases
+    // below prove bolts still spawn from the aim ray with the chase camera live.
+    // Toggle-until-third-person (instead of a single press) absorbs a persisted
+    // third-person preference (the view survives restarts by design): whatever the
+    // starting view, the phases below must run in third person.
+    var startedThirdPerson = Self.IsThirdPerson;
+    await ToggleViewUntil (thirdPerson: true);
+    Assert (Self.IsThirdPerson, "third-person view toggled on (#119)");
+
     // Fire-rate cap: spamming can spawn at most 1 bolt (cooldown blocks recharging).
     AimAt (Self.GlobalPosition + new Vector3 (0, 1, 10)); // Aim away from everyone.
     var boltsBefore = _boltsSpawned;
@@ -289,6 +298,23 @@ public partial class PlaytestDriver : Node
     await Task.Delay (100);
     ReleaseAction ("crouch");
     await WaitUntil (() => !Self.Crouching, 5, "stood back up after the canceled slide (#131)");
+
+    // The toggle persists to the shared user settings (#119); restore the starting
+    // view so a playtest run never flips the developer's real preference.
+    await ToggleViewUntil (startedThirdPerson);
+  }
+
+  // Presses V until the view matches; the toggle only persists on a real key press,
+  // so this exercises the exact input path a player uses (#119).
+  private async Task ToggleViewUntil (bool thirdPerson)
+  {
+    for (var attempt = 0; attempt < 2 && Self.IsThirdPerson != thirdPerson; ++attempt)
+    {
+      PressAction ("toggle_view");
+      await Task.Delay (100);
+      ReleaseAction ("toggle_view");
+      await Task.Delay (200);
+    }
   }
 
   private async Task RunVictim()
