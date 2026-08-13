@@ -43,19 +43,21 @@ public partial class Player
     return mesh;
   }
 
-  // Hands render only while fists are the selected weapon (issue #82).
+  // Hands render only while fists are the selected weapon (issue #82) - except while
+  // dancing, when both hands wave regardless of the selected weapon (issue #103).
   private void UpdateHandsVisibility()
   {
     foreach (var hand in _hands)
     {
       if (hand == null) continue;
-      hand.Visible = IsFistsSelected;
+      hand.Visible = IsFistsSelected || Dancing;
     }
   }
 
   // Moving bobs the resting hands up & down (issue #82); a hand mid-punch is left alone.
   private void UpdateHandBob (double delta)
   {
+    if (Dancing) return; // The dance owns the hands (issue #103).
     var speed = new Vector2 (Velocity.X, Velocity.Z).Length();
     _handBobPhase += speed * HandBobFrequency * (float)delta;
     var bob = Vector3.Up * (Mathf.Sin (_handBobPhase) * HandBobMeters * Mathf.Min (1.0f, speed / Speed));

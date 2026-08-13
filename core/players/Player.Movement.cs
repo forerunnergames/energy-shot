@@ -94,6 +94,9 @@ public partial class Player
   private void ApplySlidePose()
   {
     if (_mesh == null) return;
+    // The dance owns the mesh (issue #103): Sliding syncs ALWAYS, so this re-runs
+    // every tick on puppets & would fight the dance tween; the dance's stop restores.
+    if (Dancing) return;
     var rotation = Sliding ? new Vector3 (-90.0f, 0.0f, 0.0f) : Vector3.Zero;
     var position = new Vector3 (0.0f, Sliding ? 0.5f : 1.0f, 0.0f);
     _mesh.RotationDegrees = rotation;
@@ -106,6 +109,7 @@ public partial class Player
   private void ApplyCrouchScale()
   {
     if (_mesh == null) return;
+    if (Dancing) return; // Same ALWAYS-sync reason as ApplySlidePose (issue #103).
     var scale = new Vector3 (1.0f, _crouching ? CrouchHeightScale : 1.0f, 1.0f);
     _mesh.Scale = scale;
     _collisionShape.Scale = scale;
@@ -218,6 +222,7 @@ public partial class Player
     _slideSecondsLeft = 0.0f;
     _slideCooldownLeft = 0.0f;
     Crouching = false;
+    Dancing = false; // A new life starts with the pose fully restored on every peer (issue #103).
     ApplyCameraHeight();
     SetInputEnabled (isEnabled: false);
     _respawnSound.Play();

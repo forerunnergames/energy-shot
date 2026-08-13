@@ -19,7 +19,7 @@ public partial class Player
 
   private void UpdateBananaLauncher()
   {
-    if (!IsBananaSelected || !HasBanana || !_isInputEnabled) return;
+    if (!IsBananaSelected || !HasBanana || !_isInputEnabled || Dancing) return; // Dancing blocks firing (issue #103).
     if (!Input.IsActionJustPressed ("shoot")) return;
     if (!_bananaLauncher.CanFire) return;
     FireBanana();

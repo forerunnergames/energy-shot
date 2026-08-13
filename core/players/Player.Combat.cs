@@ -41,8 +41,9 @@ public partial class Player
   public float ShotReadyFraction => _energyWeapon.CooldownFraction;
   public float PunchReadyFraction => 1.0f - _punchCooldownLeft / PunchCooldownSeconds;
   public float FullAutoReadyFraction => 1.0f - _fullAutoCooldownLeft / FullAutoCooldownSeconds;
-  // The laser only charges & fires while it's the selected weapon (issues #72 & #82).
-  private bool IsChargingWeapon() => _isInputEnabled && IsLaserSelected && HasLaser && !IsFullAutoActive() && Input.IsActionPressed ("shoot");
+  // The laser only charges & fires while it's the selected weapon (issues #72 & #82);
+  // dancing blocks charging - the press cancels the dance instead (issue #103).
+  private bool IsChargingWeapon() => _isInputEnabled && !Dancing && IsLaserSelected && HasLaser && !IsFullAutoActive() && Input.IsActionPressed ("shoot");
   private bool IsDischargingWeapon() => _isInputEnabled && IsLaserSelected && HasLaser && _energyWeapon.IsSpinningUp && Input.IsActionJustReleased ("shoot");
   private void ChargeWeapon() => _energyWeapon.Charge();
   private void DischargeWeapon() => _energyWeapon.Discharge();
@@ -110,7 +111,7 @@ public partial class Player
     _fullAutoCooldownLeft = Mathf.Max (0.0f, _fullAutoCooldownLeft - dt);
     if (wasRecharging && _fullAutoCooldownLeft <= 0.0f) _energyWeapon.PlayFullAutoReadySound();
 
-    if (_isInputEnabled && HasLaser && Input.IsActionJustPressed ("ability") && _fullAutoCooldownLeft <= 0.0f)
+    if (_isInputEnabled && !Dancing && HasLaser && Input.IsActionJustPressed ("ability") && _fullAutoCooldownLeft <= 0.0f) // Dancing blocks the ability (issue #103).
     {
       _fullAutoSecondsLeft = FullAutoDurationSeconds;
       _fullAutoCooldownLeft = FullAutoCooldownSeconds;
@@ -122,16 +123,17 @@ public partial class Player
     _fullAutoSecondsLeft -= dt;
     if (_fullAutoSecondsLeft <= 0.0f) _energyWeapon.SetFullAutoMode (false);
     _nextAutoShotIn -= dt;
-    if (!_isInputEnabled || !IsLaserSelected || !Input.IsActionPressed ("shoot") || _nextAutoShotIn > 0.0f) return;
+    if (!_isInputEnabled || Dancing || !IsLaserSelected || !Input.IsActionPressed ("shoot") || _nextAutoShotIn > 0.0f) return; // Dancing blocks firing (issue #103).
     _nextAutoShotIn = FullAutoShotIntervalSeconds;
     _energyWeapon.FireLowPower (FullAutoEnergy);
   }
 
-  // Punching requires fists as the selected weapon (issue #82).
+  // Punching requires fists as the selected weapon (issue #82); dancing blocks
+  // punching - the press cancels the dance instead (issue #103).
   private void UpdatePunch (double delta)
   {
     _punchCooldownLeft = Mathf.Max (0.0f, _punchCooldownLeft - (float)delta);
-    if (!_isInputEnabled || !IsFistsSelected || _punchCooldownLeft > 0.0f || !Input.IsActionJustPressed ("punch")) return;
+    if (!_isInputEnabled || Dancing || !IsFistsSelected || _punchCooldownLeft > 0.0f || !Input.IsActionJustPressed ("punch")) return;
     _punchCooldownLeft = PunchCooldownSeconds;
     CancelSpawnArmorIfFired(); // Punching drops your spawn armor, same as firing.
     var hand = ChooseRandomPunchHand();
@@ -315,6 +317,7 @@ public partial class Player
     // (+50% per tier gap: Beginner->Intermediate 1.5x, Beginner->Expert 2x,
     // Intermediate->Expert 1.5x). Attacking downward is unchanged - the bigger health
     // pool already is the handicap.
+    Dancing = false; // Getting zapped mid-dance ends the groove on every peer (issue #103).
     var attacker = GetParent().GetNodeOrNull <Player> ($"{attackerId}");
     var handicap = 1.0f + 0.5f * Mathf.Max (0, TierOf (MaxHealth) - TierOf (attacker?.MaxHealth ?? MaxHealth));
     var decrease = Mathf.RoundToInt (CalculateHealthDecrease (energy) * handicap);
