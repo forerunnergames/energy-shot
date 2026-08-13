@@ -211,7 +211,9 @@ public partial class WeaponSpawner : Node3D
     if (!Multiplayer.IsServer()) return;
     var senderId = SenderOrSelf();
     var dropper = Players().FirstOrDefault (player => player.NetworkId == senderId);
-    var dropped = (HeldWeapon)droppedMask & (dropper?.HeldWeapon ?? HeldWeapon.None);
+    // Current-or-recently-held (issue #167): the death-drop clear can replicate ahead
+    // of this RPC, so a strict current-held check denied every kill's weapon drop.
+    var dropped = (HeldWeapon)droppedMask & (dropper?.HeldOrRecentlyHeld ?? HeldWeapon.None);
 
     if (dropped == HeldWeapon.None)
     {

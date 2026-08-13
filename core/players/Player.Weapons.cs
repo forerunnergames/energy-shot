@@ -19,9 +19,27 @@ public partial class Player
     get => _heldWeapon;
     set
     {
+      RememberRecentlyHeld (value);
       _heldWeapon = value;
       UpdateWeaponVisibility();
     }
+  }
+
+  // Drop-validation grace (issue #167): a death drop clears the replicated HeldWeapon
+  // right after sending the drop RPC, & the synchronizer delta can beat the RPC to the
+  // server (different channels, no cross-ordering guarantee) - so the server validates
+  // masks against current-or-recently-held instead of denying the legit drop.
+  public HeldWeapon HeldOrRecentlyHeld => Time.GetTicksMsec() < _recentlyHeldUntilMs ? _heldWeapon | _recentlyHeld : _heldWeapon;
+  private HeldWeapon _recentlyHeld = HeldWeapon.None;
+  private ulong _recentlyHeldUntilMs;
+  private const float RecentlyHeldGraceSeconds = 2.0f;
+
+  private void RememberRecentlyHeld (HeldWeapon incoming)
+  {
+    var removed = _heldWeapon & ~incoming;
+    if (removed == HeldWeapon.None) return;
+    _recentlyHeld = removed;
+    _recentlyHeldUntilMs = Time.GetTicksMsec() + (ulong)(RecentlyHeldGraceSeconds * 1000.0f);
   }
 
   // Which slot is out (issue #82). Replicated so every peer renders the right model
