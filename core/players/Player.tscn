@@ -111,6 +111,9 @@ properties/17/replication_mode = 2
 properties/18/path = NodePath(".:Dancing")
 properties/18/spawn = true
 properties/18/replication_mode = 1
+properties/19/path = NodePath(".:Fallen")
+properties/19/spawn = true
+properties/19/replication_mode = 1
 
 [node name="Player" type="CharacterBody3D"]
 collision_layer = 2

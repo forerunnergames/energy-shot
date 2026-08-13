@@ -209,8 +209,18 @@ public partial class Player : CharacterBody3D
   [Export] public float CameraKickRecoverySpeed = 0.4f;
   [Export] public float Speed = 7.0f;
   [Export] public float SlideSpeedMultiplier = 2.0f;
-  [Export] public float SlideDurationSeconds = 5.0f;
+  // 5s -> 7s (issue #148): the duration cap is what actually ends a held slide -
+  // slide speed never decays - so longer simply means farther.
+  [Export] public float SlideDurationSeconds = 7.0f;
   [Export] public float SlideCooldownSeconds = 5.0f;
+  // Slide-jump chaining (issue #149): each slide chained inside the landing window
+  // carries its landing speed boosted by this much, capped at the scale below
+  // (2x base slide speed) so chains build real speed but can't diverge.
+  [Export] public float SlideChainBoostMultiplier = 1.15f;
+  [Export] public float MaxChainedSlideSpeedScale = 2.0f;
+  [Export] public float SlideChainWindowSeconds = 0.5f;
+  // How long a zapped-out body lies at the death spot before auto-respawning (issue #152).
+  [Export] public float DeathSequenceSeconds = 5.0f;
   [Export] public float SlideCameraHeight = 0.6f;
   [Export] public float CrouchHeightScale = 0.6f;
   [Export] public float CrouchSpeedMultiplier = 0.3f;
@@ -251,6 +261,13 @@ public partial class Player : CharacterBody3D
   private OmniLight3D _streakLight = null!;
   private float _slideSecondsLeft;
   private float _slideCooldownLeft;
+  // Current slide's speed (issue #149): base 2x, or higher when chained.
+  private float _currentSlideSpeed;
+  private bool _slideJumpCarrying;
+  private float _slideChainWindowLeft;
+  private float _slideChainLandingSpeed;
+  // Crouch mode (issue #147): cached from Settings so hold mode never reads disk per frame.
+  private bool _holdToCrouch;
   private float _standingCameraHeight;
   private CollisionShape3D _collisionShape = null!;
   private NetworkManager _networkManager = null!;
@@ -295,6 +312,8 @@ public partial class Player : CharacterBody3D
   public static Player? Local => _localPlayer;
   public override void _EnterTree() => SetMultiplayerAuthority (NetworkId);
   public void SetInputEnabled (bool isEnabled) => _isInputEnabled = isEnabled;
+  // Re-reads the persisted crouch mode (issue #147); the pause-dialog toggle calls this.
+  public void RefreshCrouchMode() => _holdToCrouch = Settings.HoldToCrouch;
   // Guards against "The multiplayer instance isn't currently active" error spam from
   // IsMultiplayerAuthority() after the session ends but before player nodes are freed (see issue #22).
   private bool IsMultiplayerActive() => Multiplayer.MultiplayerPeer != null && Multiplayer.MultiplayerPeer.GetConnectionStatus() == MultiplayerPeer.ConnectionStatus.Connected;
@@ -360,6 +379,7 @@ public partial class Player : CharacterBody3D
     _camera.Current = true;
     _standingCameraHeight = _camera.Position.Y;
     _isInputEnabled = true;
+    _holdToCrouch = Settings.HoldToCrouch; // Toggle-vs-hold crouch preference (issue #147).
     Input.MouseMode = Input.MouseModeEnum.Captured;
     Position = CalculateRandomSpawnPosition();
     ActivateSpawnArmor();
@@ -401,6 +421,7 @@ public partial class Player : CharacterBody3D
     UpdateStickyFlight (delta);
     UpdateCameraKick (delta);
     UpdateCameraShake (delta);
+    UpdateDeathView(); // Keeps the fallen body framed during the lie-down (issue #152).
     UpdateStun (delta);
     UpdateSlide (delta);
     UpdateCrouch();
