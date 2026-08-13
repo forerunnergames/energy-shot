@@ -18,6 +18,7 @@ public partial class World : Node3D
   [Signal] public delegate void SelfPlayerPunchedEventHandler();
   [Signal] public delegate void SelfPlayerSplatteredEventHandler();
   [Signal] public delegate void RemoteMessageReceivedEventHandler (string message);
+  [Signal] public delegate void AdminMessageReceivedEventHandler (string message);
   [Signal] public delegate void KickedFromServerEventHandler (string reason);
   [Signal] public delegate void ServerShutDownEventHandler();
   private const int DefaultServerPort = 55556;
@@ -30,6 +31,10 @@ public partial class World : Node3D
   private int _maxPlayers = MaxPlayers;
   // Required to join (issue #90); empty only on a dedicated server whose owner set no --password.
   private string _serverPassword = string.Empty;
+  // Running build tag from --version-file (issue #158); empty = no version line on join.
+  private string _serverVersion = string.Empty;
+  // Peers already told the version line, so the ready handshake & its fallback can't double-send (PR #166 review).
+  private readonly System.Collections.Generic.HashSet <int> _versionLinePeerIds = new();
   private UI _ui = null!;
   private Callable _onServerDisconnectedCallable;
   private PackedScene _playerScene = null!;
@@ -82,11 +87,80 @@ public partial class World : Node3D
     _networkManager.PlayerRespawnedShot += (playerName, shotByPlayerName) => { if (IsActiveServer()) ServerLog.Event (FindPlayerId (playerName), $"death: {playerName} zapped out by {shotByPlayerName}"); };
     _networkManager.PlayerRespawnedFell += playerName => { if (IsActiveServer()) ServerLog.Event (FindPlayerId (playerName), $"death: {playerName} fell off the world"); };
     _networkManager.RemoteMessageReceived += message => EmitSignal (SignalName.RemoteMessageReceived, message);
+    _networkManager.AdminMessageReceived += message => EmitSignal (SignalName.AdminMessageReceived, message);
     _networkManager.PlayerJoinGame += playerName => EmitSignal (SignalName.PlayerJoinedGame, playerName);
     _networkManager.PlayerLeftGame += playerName => EmitSignal (SignalName.PlayerLeftGame, playerName);
     if (OS.GetCmdlineUserArgs().Contains ("--playtest")) CallDeferred (MethodName.StartPlaytest);
     if (IsDedicatedServer()) StartDedicatedServer();
+    StartAdminMessagePolling();
+    _serverVersion = ReadServerVersion();
     StartCrownTicker();
+  }
+
+  // Admin announcements (issue #158): only active with --admin-message-file; no
+  // polling otherwise. Broadcasts only run on a live server session.
+  private void StartAdminMessagePolling()
+  {
+    var path = ParseArgValue ("--admin-message-file");
+    if (path.Length == 0) return;
+    AddChild (new AdminMessageFileWatcher (path, BroadcastAdminMessage));
+  }
+
+  private void BroadcastAdminMessage (string message)
+  {
+    if (!IsActiveServer()) return;
+    ServerLog.Event ($"admin announcement: {message}");
+    _networkManager.NotifyAdminMessage (message);
+  }
+
+  // Release announcement (issue #158): --version-file <path> names the running
+  // build; read once at startup & shown to each joining peer as "Running <tag>".
+  // Absent file/flag = skipped silently (self-hosted games don't show it).
+  private static string ReadServerVersion()
+  {
+    var path = ParseArgValue ("--version-file");
+    if (path.Length == 0 || !System.IO.File.Exists (path)) return string.Empty;
+    return System.IO.File.ReadAllText (path).Trim();
+  }
+
+  // The version line goes to the joining peer only - not a broadcast, so it
+  // doubles as version info without spamming everyone on every join (issue #158).
+  // Sent on the client's readiness confirmation, not a guessed delay (PR #166
+  // review): NewGameStarted resets the message scroller, which would wipe a line
+  // that arrives before the HUD is up.
+  private void SendVersionTo (int peerId)
+  {
+    if (_serverVersion.Length == 0) return;
+    if (!_versionLinePeerIds.Add (peerId)) return; // Already sent (ready + fallback paths).
+    _networkManager.SendAdminMessageTo (peerId, $"Running {_serverVersion}");
+  }
+
+  // A joined client confirmed its HUD is up: safe to send its version line now (PR #166 review).
+  [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
+  private void ConfirmClientReady()
+  {
+    if (!Multiplayer.IsServer()) return;
+    var senderId = Multiplayer.GetRemoteSenderId();
+    if (FindPlayer (senderId) == null) return; // Only joined players get the line.
+    SendVersionTo (senderId);
+  }
+
+  // Tell the server our HUD finished NewGameStarted; the host is the server
+  // itself & needs no confirmation (PR #166 review).
+  private void NotifyServerClientReady()
+  {
+    if (Multiplayer.GetUniqueId() == 1) return;
+    RpcId (1, MethodName.ConfirmClientReady);
+  }
+
+  // Fallback (PR #166 review): a client whose readiness confirmation is lost
+  // still gets its version line, just on the old fixed-delay timing.
+  private async void SendVersionToAfterFallbackDelay (int peerId)
+  {
+    if (_serverVersion.Length == 0) return;
+    await ToSignal (GetTree().CreateTimer (10.0), SceneTreeTimer.SignalName.Timeout);
+    if (!Multiplayer.GetPeers().Contains (peerId)) return; // Already left.
+    SendVersionTo (peerId);
   }
 
   private void StartPlaytest() => AddChild (new playtest.PlaytestDriver());
@@ -151,10 +225,12 @@ public partial class World : Node3D
 
   // Dedicated-server password (issue #90): --password <p>; empty means no password
   // required, so the official server keeps working until its owner sets one.
-  private static string ParseServerPassword()
+  private static string ParseServerPassword() => ParseArgValue ("--password");
+
+  private static string ParseArgValue (string name)
   {
     var args = OS.GetCmdlineUserArgs();
-    var index = System.Array.IndexOf (args, "--password");
+    var index = System.Array.IndexOf (args, name);
     if (index == -1 || index + 1 >= args.Length) return string.Empty;
     return args[index + 1];
   }
@@ -248,6 +324,7 @@ public partial class World : Node3D
     }
 
     AddPlayer (senderId, playerName, Player.MaxHealthFor (difficulty), colorIndex);
+    SendVersionToAfterFallbackDelay (senderId);
   }
 
   // Delay the disconnect so the kick-reason RPC isn't dropped by an immediate peer disconnect (see issue #23).
@@ -294,6 +371,7 @@ public partial class World : Node3D
   private void OnClientDisconnectedFromServer (long id)
   {
     RemovePlayer (id);
+    _versionLinePeerIds.Remove ((int)id); // A rejoin counts as a fresh join (PR #166 review).
     ServerLog.Event (id, "disconnected");
   }
 
@@ -343,6 +421,9 @@ public partial class World : Node3D
     selfPlayer.Scored += (playerName, shotPlayerName) => EmitSignal (SignalName.PlayerScored, ++_score, playerName, shotPlayerName);
     GD.Print ($"{_selfPlayer.NetworkId}: Registered my player {_selfPlayer.DisplayName}");
     EmitSignal (SignalName.NewGameStarted, _selfPlayer.DisplayName, _selfPlayer.MaxHealth);
+    // NewGameStarted handlers (incl. the HUD's scroller reset) ran synchronously
+    // above, so the version line can't be wiped after this (PR #166 review).
+    NotifyServerClientReady();
   }
 
   private void RemovePlayer (long peerId)

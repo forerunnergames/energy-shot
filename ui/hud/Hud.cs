@@ -38,6 +38,8 @@ public partial class Hud : Control
   private int _fallStreak;
   private string _selfPlayerName = string.Empty;
   private void OnRemoteMessageReceived (string message) => _messageScroller.AddMessage (message);
+  // Server-operator announcements render gold with a [SERVER] prefix (issue #158).
+  private void OnAdminMessageReceived (string message) => PrintMessage ($"[SERVER] {message}", MessageScroller.MessageImportance.Admin);
 
   private void OnSelfPlayerHealthChanged (string playerName, int health)
   {
@@ -104,6 +106,7 @@ public partial class Hud : Control
     _world.PlayerJoinedGame += OnPlayerJoinedGame;
     _world.PlayerLeftGame += OnPlayerLeftGame;
     _world.RemoteMessageReceived += OnRemoteMessageReceived;
+    _world.AdminMessageReceived += OnAdminMessageReceived;
     _world.PlayerScored += OnPlayerScored;
     _world.PlayerRespawnedShot += OnPlayerRespawnedShot;
     _world.PlayerRespawnedFell += OnPlayerRespawnedFell;

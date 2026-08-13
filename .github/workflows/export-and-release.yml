@@ -213,6 +213,18 @@ jobs:
           unzip -oq server.zip && rm server.zip
           test -f energy-shot-server.x86_64 || { echo "server binary missing from archive"; exit 1; }
           chmod +x energy-shot-server.x86_64
+          # Warn players in-game before the swap (issue #158): the running server
+          # polls this file once a second (--admin-message-file on the systemd unit)
+          # & broadcasts new content as a gold admin announcement, consuming the
+          # file (claimed by rename in the game user's home directory).
+          echo "Server updating to $TAG - back in about a minute!" > /home/game/admin-message
+          chown game:game /home/game/admin-message
+          # Record the running version (issue #158): the new build reads this at
+          # startup (--version-file) & shows each joining player "Running <tag>".
+          echo "$TAG" > /home/game/server-version
+          chown game:game /home/game/server-version
+          # Give players a moment to see the warning before the restart.
+          sleep 15
           # Swap in the validated build & restart.
           rm -rf /opt/energy-shot/build
           mv /opt/energy-shot/staging /opt/energy-shot/build
