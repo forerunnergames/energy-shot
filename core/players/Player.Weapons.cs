@@ -29,17 +29,28 @@ public partial class Player
   // right after sending the drop RPC, & the synchronizer delta can beat the RPC to the
   // server (different channels, no cross-ordering guarantee) - so the server validates
   // masks against current-or-recently-held instead of denying the legit drop.
-  public HeldWeapon HeldOrRecentlyHeld => Time.GetTicksMsec() < _recentlyHeldUntilMs ? _heldWeapon | _recentlyHeld : _heldWeapon;
-  private HeldWeapon _recentlyHeld = HeldWeapon.None;
-  private ulong _recentlyHeldUntilMs;
+  public HeldWeapon HeldOrRecentlyHeld => _heldWeapon | RecentlyHeld();
+  // Per-flag grace deadlines (CodeRabbit on #168): a single shared pair let a second
+  // removal inside the window overwrite the first weapon's remaining grace.
+  private readonly Dictionary <HeldWeapon, ulong> _recentlyHeldUntilMs = new();
   private const float RecentlyHeldGraceSeconds = 2.0f;
 
+  private HeldWeapon RecentlyHeld()
+  {
+    var now = Time.GetTicksMsec();
+    var recent = HeldWeapon.None;
+    foreach (var (flag, until) in _recentlyHeldUntilMs) recent |= now < until ? flag : HeldWeapon.None;
+    return recent;
+  }
+
+  // Each removed weapon keeps its own full grace period (CodeRabbit on #168), even
+  // when another removal follows inside the first one's window.
   private void RememberRecentlyHeld (HeldWeapon incoming)
   {
     var removed = _heldWeapon & ~incoming;
     if (removed == HeldWeapon.None) return;
-    _recentlyHeld = removed;
-    _recentlyHeldUntilMs = Time.GetTicksMsec() + (ulong)(RecentlyHeldGraceSeconds * 1000.0f);
+    var until = Time.GetTicksMsec() + (ulong)(RecentlyHeldGraceSeconds * 1000.0f);
+    foreach (var flag in new[] { HeldWeapon.Laser, HeldWeapon.Banana, HeldWeapon.Boomerang, HeldWeapon.Slingshot }) { if ((removed & flag) != 0) _recentlyHeldUntilMs[flag] = until; }
   }
 
   // Which slot is out (issue #82). Replicated so every peer renders the right model

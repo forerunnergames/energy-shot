@@ -50,7 +50,11 @@ public partial class WeaponSpawner : Node3D
   private static bool IsFree (Vector3 point, IEnumerable <WeaponPickup> pickups) => pickups.All (pickup => pickup.Position.DistanceTo (point) > OccupiedRadius);
   // Escrowed boomerang cargo counts too (issue #98), or a reconcile pass mid-flight
   // would over-spawn the weapon the boomerang is carrying.
-  private int Count (HeldWeapon type, List <WeaponPickup> pickups, List <Player> players) => pickups.Count (pickup => pickup.Weapon == type) + players.Count (player => player.Holds (type)) + _escrow.Count (cargo => cargo.Type == type);
+  // Players count via HeldOrRecentlyHeld (CodeRabbit on #168): a weapon inside its
+  // drop-grace window (cleared from HeldWeapon, drop RPC not yet processed) still
+  // exists, & counting only current holds let a reconcile pass over-spawn it. The
+  // union per player counts once - recently-held includes any still-held flags.
+  private int Count (HeldWeapon type, List <WeaponPickup> pickups, List <Player> players) => pickups.Count (pickup => pickup.Weapon == type) + players.Count (player => (player.HeldOrRecentlyHeld & type) != 0) + _escrow.Count (cargo => cargo.Type == type);
   private void GrantToSelf (int type, string previousOwner) => (GetParent() as World)?.SelfPlayer?.GrantWeapon ((HeldWeapon)type, previousOwner);
   [Rpc] private void ConfirmPickup (int type, string previousOwner) => GrantToSelf (type, previousOwner);
   // A direct (non-RPC) call means the host itself sent it, so there's no remote sender.
