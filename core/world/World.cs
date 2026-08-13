@@ -125,6 +125,17 @@ public partial class World : Node3D
     Multiplayer.Connect (MultiplayerApi.SignalName.ConnectedToServer, Callable.From (() => RequestSlot (playerName, difficulty, password, colorIndex, version ?? GameVersion)), (uint)ConnectFlags.OneShot);
   }
 
+  // Playtest-only probe (issue #170): joins exactly the way a pre-#170 client does -
+  // the legacy 4-argument RequestPlayerSlot RPC that carries no version.
+  public void StartLegacyClientSession (string playerName, int difficulty, string address, int port, string password)
+  {
+    var peer = new ENetMultiplayerPeer();
+    var error = peer.CreateClient (address, port);
+    if (error != Error.Ok) GD.PrintErr ($"Playtest join failed: {error}");
+    Multiplayer.MultiplayerPeer = peer;
+    Multiplayer.Connect (MultiplayerApi.SignalName.ConnectedToServer, Callable.From (() => RpcId (1, MethodName.RequestPlayerSlot, playerName, difficulty, password, 0)), (uint)ConnectFlags.OneShot);
+  }
+
   // Dedicated-server exports carry the feature tag, so the server binary needs no flag;
   // --server also works for running from a normal build (e.g. local testing).
   private static bool IsDedicatedServer() => OS.HasFeature ("dedicated_server") || OS.GetCmdlineUserArgs().Contains ("--server");
@@ -170,8 +181,24 @@ public partial class World : Node3D
     GD.Print ($"Server: Dedicated server v{GameVersion} listening on port [{port}], password {(_serverPassword.Length > 0 ? "required" : "not required")}");
   }
 
+  // Legacy pre-#170 join entry point: old clients send this 4-argument RPC, which
+  // carries no version. Kept at its original name & arity - Godot drops RPCs whose
+  // argument count doesn't match, so removing it would strand old clients with a
+  // silently dropped join instead of the readable update prompt their own
+  // kick-reason display (#109) can already show.
   [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
-  private void RequestPlayerSlot (string playerName, int difficulty, string password, int colorIndex, string version)
+  private void RequestPlayerSlot (string playerName, int difficulty, string password, int colorIndex)
+  {
+    if (!Multiplayer.IsServer()) return;
+    var senderId = Multiplayer.GetRemoteSenderId();
+    ServerLog.Event (senderId, $"join denied: [{playerName}] legacy versionless join (server {GameVersion})");
+    Kick (senderId, $"Update required: server is v{GameVersion}, you have an older version.");
+  }
+
+  // Versioned join handshake (issue #170); the version parameter is why this can't
+  // share the legacy RPC's name - see RequestPlayerSlot above.
+  [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
+  private void RequestPlayerSlotV2 (string playerName, int difficulty, string password, int colorIndex, string version)
   {
     if (!Multiplayer.IsServer()) return;
     var senderId = Multiplayer.GetRemoteSenderId();
@@ -251,7 +278,7 @@ public partial class World : Node3D
     _selfDifficulty = difficulty;
     _selfColorIndex = colorIndex;
     if (!Multiplayer.IsConnected (MultiplayerApi.SignalName.ServerDisconnected, _onServerDisconnectedCallable)) Multiplayer.Connect (MultiplayerApi.SignalName.ServerDisconnected, _onServerDisconnectedCallable);
-    RpcId (1, MethodName.RequestPlayerSlot, playerName, difficulty, password, colorIndex, version);
+    RpcId (1, MethodName.RequestPlayerSlotV2, playerName, difficulty, password, colorIndex, version);
   }
 
   private void OnServerDisconnected() => EmitSignal (SignalName.ServerShutDown);
