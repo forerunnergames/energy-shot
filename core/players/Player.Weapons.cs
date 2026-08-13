@@ -98,9 +98,8 @@ public partial class Player
   // the claimed pickup for everyone.
   public void GrantWeapon (HeldWeapon type, string previousOwner = "")
   {
-    var wasUnarmed = _heldWeapon == HeldWeapon.None;
     HeldWeapon |= type;
-    if (wasUnarmed) SelectedWeapon = type == HeldWeapon.Banana ? SelectedWeapon.Banana : SelectedWeapon.Laser; // Auto-equip your first gun.
+    SelectedWeapon = type == HeldWeapon.Banana ? SelectedWeapon.Banana : SelectedWeapon.Laser; // Every pickup auto-equips (issue #128).
     RememberTheft (type, previousOwner);
     _weaponPickupSound.Play(); // Satisfying pickup chime, owner-local only (issue #123).
     GD.Print ($"{DisplayName}: I picked up a {type}!");
@@ -143,5 +142,46 @@ public partial class Player
     if (_heldWeapon == HeldWeapon.None) return;
     Spawner.SendDropRequest (GlobalPosition, _heldWeapon);
     ClearHeldWeapons();
+  }
+
+  // First-person overlay (issue #124): the local player's own weapons & hands draw
+  // over world geometry so turning against a wall can't clip them inside it.
+  // Authority-only on purpose: these same nodes are the weapon model every other
+  // peer sees on this player, & those must keep normal depth testing.
+  private void ApplyFirstPersonWeaponOverlay()
+  {
+    ApplyOverlayMaterials (_energyWeapon);
+    ApplyOverlayMaterials (_bananaLauncher);
+  }
+
+  private static void ApplyOverlayMaterials (Node node)
+  {
+    if (node is MeshInstance3D mesh) ApplyOverlayMaterial (mesh);
+    foreach (var child in node.GetChildren()) ApplyOverlayMaterials (child);
+  }
+
+  // Per-instance override materials (muzzle, banana launcher) are mutated in place;
+  // shared imported materials (glb handle) are duplicated first so puppets keep theirs.
+  private static void ApplyOverlayMaterial (MeshInstance3D mesh)
+  {
+    if (mesh.MaterialOverride is BaseMaterial3D overrideMaterial) { MakeOverlay (overrideMaterial); return; }
+    for (var surface = 0; surface < mesh.GetSurfaceOverrideMaterialCount(); ++surface) ApplyOverlaySurface (mesh, surface);
+  }
+
+  private static void ApplyOverlaySurface (MeshInstance3D mesh, int surface)
+  {
+    if (mesh.GetActiveMaterial (surface) is not BaseMaterial3D material) return;
+    var copy = (BaseMaterial3D)material.Duplicate();
+    MakeOverlay (copy);
+    mesh.SetSurfaceOverrideMaterial (surface, copy);
+  }
+
+  // Alpha transparency is required for render_priority to order the draw (priority
+  // only applies in the transparent pass); 99 keeps the crosshairs (100) on top.
+  private static void MakeOverlay (BaseMaterial3D material)
+  {
+    material.Transparency = BaseMaterial3D.TransparencyEnum.Alpha;
+    material.NoDepthTest = true;
+    material.RenderPriority = 99;
   }
 }

@@ -24,12 +24,18 @@ public partial class Player
   private bool IsJumping() => _isInputEnabled && !IsStunned && _jumpTimer.IsStopped() && Input.IsActionJustPressed ("jump") && IsOnFloor();
   private void Fall (ref Vector3 velocity, double delta) => velocity += Gravity * (float)delta;
   private bool WantsSlide() => _isInputEnabled && !IsStunned && Input.IsActionPressed ("slide");
-  // Slide wins: crouch is ignored while sliding (see issue #51).
+  // Edge-triggered start (issue #131): a wedged pressed key state (e.g. a swallowed
+  // Shift release on focus loss) can't auto-restart slides after every cooldown.
+  private bool StartsSlide() => _isInputEnabled && !IsStunned && Input.IsActionJustPressed ("slide");
+  // Escape hatches (issue #131): while sliding, a fresh slide press always cancels, &
+  // a jump press cancels when there's room to stand; crouch cancels in UpdateCrouch.
+  private bool CanceledSlide() => _isInputEnabled && (Input.IsActionJustPressed ("slide") || (Input.IsActionJustPressed ("jump") && !IsOverheadBlocked()));
   private bool ToggledCrouch() => _isInputEnabled && Input.IsActionJustPressed ("crouch");
   private float MoveSpeed() => (Sliding ? Speed * SlideSpeedMultiplier : _crouching ? Speed * CrouchSpeedMultiplier : Speed) * StunSpeedMultiplier();
 
-  // Hold to slide: double speed & a horizontal pose, capped at SlideDurationSeconds,
-  // then a cooldown before the next slide (see issue #41).
+  // Press to slide, hold to sustain: double speed & a horizontal pose, capped at
+  // SlideDurationSeconds, then a cooldown before the next slide (see issue #41).
+  // Slide, crouch, & jump presses all cancel a slide mid-way (issue #131).
   private void UpdateSlide (double delta)
   {
     _slideCooldownLeft = Mathf.Max (0.0f, _slideCooldownLeft - (float)delta);
@@ -37,12 +43,12 @@ public partial class Player
     if (Sliding)
     {
       _slideSecondsLeft -= (float)delta;
-      if (WantsSlide() && _slideSecondsLeft > 0.0f) return;
+      if (WantsSlide() && !CanceledSlide() && _slideSecondsLeft > 0.0f) return;
       StopSlide();
       return;
     }
 
-    if (!WantsSlide() || _slideCooldownLeft > 0.0f) return;
+    if (!StartsSlide() || _slideCooldownLeft > 0.0f) return;
     StartSlide();
   }
 
@@ -61,14 +67,15 @@ public partial class Player
     ApplyCameraHeight();
   }
 
-  // Hold C to crouch: shorter profile & half speed (see issue #51). Standing back up
-  // requires overhead clearance so the head can't clip into geometry above.
-  // Press C to crouch, press again to stand (issue #85). Sliding cancels a crouch;
-  // standing needs overhead clearance.
+  // Press C to crouch, press again to stand (issue #85): shorter profile & slower
+  // speed (see issue #51). Sliding cancels a crouch; a crouch press mid-slide cancels
+  // the slide into a crouch (issue #131); standing needs overhead clearance so the
+  // head can't clip into geometry above.
   private void UpdateCrouch()
   {
     if (Sliding && _crouching) { Crouching = false; ApplyCameraHeight(); return; }
-    if (!ToggledCrouch() || Sliding) return;
+    if (!ToggledCrouch()) return;
+    if (Sliding) { StopSlide(); Crouching = true; ApplyCameraHeight(); return; }
     if (_crouching && IsOverheadBlocked()) return;
     Crouching = !_crouching;
     ApplyCameraHeight();
