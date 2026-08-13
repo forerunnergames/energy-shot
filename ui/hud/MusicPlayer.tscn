@@ -56,10 +56,23 @@ theme_override_font_sizes/font_size = 40
 text = ""
 horizontal_alignment = 1
 
-[node name="Votes" type="Label" parent="Panel/MarginContainer/VBoxContainer"]
+[node name="Votes" type="HBoxContainer" parent="Panel/MarginContainer/VBoxContainer"]
 layout_mode = 2
-theme_override_colors/font_color = Color(1, 1, 1, 0.8)
-theme_override_font_sizes/font_size = 32
+mouse_filter = 2
+alignment = 1
+theme_override_constants/separation = 40
+
+[node name="UpVote" type="Label" parent="Panel/MarginContainer/VBoxContainer/Votes"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 0.95)
+theme_override_font_sizes/font_size = 36
+text = ""
+horizontal_alignment = 1
+
+[node name="DownVote" type="Label" parent="Panel/MarginContainer/VBoxContainer/Votes"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 0.95)
+theme_override_font_sizes/font_size = 36
 text = ""
 horizontal_alignment = 1
 
