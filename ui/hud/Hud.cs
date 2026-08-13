@@ -62,7 +62,8 @@ public partial class Hud : Control
   // 3+ streak entries glow & pulse so the hot player stands out (see issue #77); the
   // crown holder wears the crown here too - only above zero points, & ties don't
   // steal it (issues #107/#178) - & every entry shows its ping (issue #100).
-  // Entries are ranked by sorted position, ties keep list order (issue #126).
+  // Entries are ranked by sorted position; equal scores order by ascending display
+  // name (issue #126), matching World.PickCrownHolder's tie ordering (issue #178).
   // Names are tinted with each player's chosen body color (issue #43).
   private static string LeaderboardEntry (players.Player player, int rank)
   {

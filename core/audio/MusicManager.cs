@@ -29,6 +29,9 @@ public partial class MusicManager : Node
   // The local player's remembered vote for the current track (issue #162), recalled
   // by the server on each track start & confirmed after every vote.
   public int CurrentOwnVote { get; private set; }
+  // Authoritative all-time totals for the playing track - populated server-side
+  // only; the playtest host reads it to assert the vote-memory transitions (#162).
+  public (int Up, int Down) CurrentTrackAllTimeVotes => _currentTrack != -1 && _allTimeVotes.TryGetValue (TrackStems[_currentTrack], out var totals) ? totals : (0, 0);
   private const float MusicVolumeDb = -12.0f;
   private const float SilentDb = -80.0f;
   private const float FadeSeconds = 2.0f;
@@ -269,13 +272,18 @@ public partial class MusicManager : Node
 
   // One vote per player per play; re-voting switches the vote (issue #137). The
   // permanent totals track one remembered vote per player per track (issue #162).
+  // Only a named, spawned player may vote: an AnyPeer RPC from a connected-but-
+  // unjoined peer must neither move the skip tally nor receive an own-vote state
+  // that has nothing durable to persist against (issue #162).
   private void ApplyVote (long peerId, bool isUpVote)
   {
     if (_currentTrack == -1) return;
+    var name = DisplayNameFor (peerId);
+    if (name.Length == 0) return;
     _playVotes[peerId] = isUpVote ? 1 : -1;
     var upCount = _playVotes.Values.Count (vote => vote == 1);
     var downCount = _playVotes.Values.Count (vote => vote == -1);
-    UpdateRememberedVote (peerId, isUpVote ? 1 : -1);
+    UpdateRememberedVote (name, isUpVote ? 1 : -1);
     ServerLog.Event (peerId, $"music vote {(isUpVote ? "up" : "down")} for [{CurrentTrackTitle}]: play now {upCount} up / {downCount} down");
     Rpc (MethodName.OnVoteCounts, upCount, downCount);
     SendOwnVote (peerId, isUpVote ? 1 : -1); // Instant pressed-thumb feedback for the voter (issue #162).
@@ -287,17 +295,23 @@ public partial class MusicManager : Node
   // Own-vote memory (issue #162): the all-time totals hold one vote per player per
   // track - switching stance removes the old vote & adds the new one, & a repeat of
   // the same vote changes nothing, so nothing ever double-counts.
-  private void UpdateRememberedVote (long peerId, int vote)
+  private void UpdateRememberedVote (string name, int vote)
   {
-    var name = DisplayNameFor (peerId);
-    if (name.Length == 0) return; // No spawned player yet: nothing durable to key the memory on.
     var stem = TrackStems[_currentTrack];
     var previous = _voterVotes[stem].GetValueOrDefault (name, 0);
     if (previous == vote) return;
-    var (up, down) = _allTimeVotes[stem];
-    _allTimeVotes[stem] = (up - (previous == 1 ? 1 : 0) + (vote == 1 ? 1 : 0), down - (previous == -1 ? 1 : 0) + (vote == -1 ? 1 : 0));
+    _allTimeVotes[stem] = AdjustTotals (_allTimeVotes[stem], previous, vote);
     _voterVotes[stem][name] = vote;
     SaveVotes();
+  }
+
+  // Pure vote-memory arithmetic (issue #162), public so the stance transitions are
+  // directly unit-testable: a fresh vote adds it, a switch moves it, & a repeat
+  // returns the totals untouched.
+  public static (int Up, int Down) AdjustTotals ((int Up, int Down) totals, int previousVote, int newVote)
+  {
+    if (previousVote == newVote) return totals;
+    return (totals.Up - (previousVote == 1 ? 1 : 0) + (newVote == 1 ? 1 : 0), totals.Down - (previousVote == -1 ? 1 : 0) + (newVote == -1 ? 1 : 0));
   }
 
   private void CrossfadeTo (int track, float fromPosition) => CrossfadeToFile (FileFor (track), fromPosition);

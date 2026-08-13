@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using com.forerunnergames.energyshot.core.audio;
@@ -101,6 +102,11 @@ public partial class PlaytestDriver : Node
   private async Task RunHost()
   {
     _world.StartHostSession (HostName, difficulty: 2, Port, Password, HostColor);
+    // Vote-memory transitions (#162): record every server-side tally change with
+    // the authoritative all-time totals at that exact moment - votes only flow
+    // through this instance, so hooking before any client joins misses nothing.
+    var voteHistory = new List <(int Up, int Down, (int Up, int Down) AllTime)>();
+    Music.VoteCountsChanged += (up, down) => voteHistory.Add ((up, down, Music.CurrentTrackAllTimeVotes));
     await WaitUntil (() => _world.GetPlayers().Count() == 3, 60, "all 3 players joined");
     // Chosen body colors (issue #43): own pick stuck & both clients' picks replicate to the host.
     Assert (Self.ColorIndex == HostColor, $"own chosen color is {HostColor}, got {Self.ColorIndex}");
@@ -113,7 +119,16 @@ public partial class PlaytestDriver : Node
     // Synced music (issue #137): the server picked a track & the shooter's thumbs-up
     // vote came back through the server tally.
     await WaitUntil (() => Music.CurrentTrackTitle.Length > 0, 15, "music track started on the server");
-    await WaitUntil (() => Music.CurrentUpVotes == 1, 30, "shooter's music vote tallied on host");
+    await WaitUntil (() => voteHistory.Any (entry => entry.Up == 1 && entry.Down == 0), 30, "shooter's up-vote tallied on host");
+    // The shooter re-votes up (a no-op) & then switches to down (#162): the same
+    // peer's reliable RPCs arrive in order, so once the switch lands both up
+    // entries are recorded - they must share identical totals (no double-count),
+    // & the switch must have moved exactly one all-time vote across.
+    await WaitUntil (() => voteHistory.Any (entry => entry.Up == 0 && entry.Down == 1), 60, "shooter's up-to-down switch tallied on host (#162)");
+    var upEntries = voteHistory.Where (entry => entry.Up == 1 && entry.Down == 0).ToList();
+    var downEntry = voteHistory.First (entry => entry.Up == 0 && entry.Down == 1);
+    Assert (upEntries.Count >= 2 && upEntries.All (entry => entry.AllTime == upEntries[0].AllTime), "repeated up-vote never double-counted the all-time totals (#162)");
+    Assert (downEntry.AllTime == (upEntries[0].AllTime.Up - 1, upEntries[0].AllTime.Down + 1), $"up-to-down switch moved one all-time vote (#162), got {upEntries[0].AllTime} -> {downEntry.AllTime}");
     // Shooter kills victim once (plus possibly the host itself in the line of
     // fire); wait to observe the replicated score.
     await WaitUntil (() => FindPlayer (ShooterName)?.Score >= 1, 120, "shooter's kill replicated to host");
@@ -158,7 +173,15 @@ public partial class PlaytestDriver : Node
     Music.SubmitVote (isUpVote: true);
     // Own-vote memory (issue #162): the server confirms the vote back to the voter,
     // which is what drives the mini player's pressed-thumb highlight.
-    await WaitUntil (() => Music.CurrentOwnVote == 1, 15, "own vote confirmed back by the server (#162)");
+    await WaitUntil (() => Music.CurrentOwnVote == 1 && Music.CurrentUpVotes == 1, 15, "own up-vote confirmed back by the server (#162)");
+    // Vote-memory transitions (#162): a repeated identical vote must change nothing
+    // (the host asserts the authoritative totals stayed put), then an up-to-down
+    // switch must press the other thumb & move the play tally by exactly one.
+    Music.SubmitVote (isUpVote: true);
+    await Task.Delay (1000);
+    Assert (Music.CurrentOwnVote == 1 && Music.CurrentUpVotes == 1 && Music.CurrentDownVotes == 0, "repeated up-vote was a no-op (#162)");
+    Music.SubmitVote (isUpVote: false);
+    await WaitUntil (() => Music.CurrentOwnVote == -1 && Music.CurrentUpVotes == 0 && Music.CurrentDownVotes == 1, 15, "up-to-down switch confirmed & re-tallied (#162)");
 
     // Movement: hold forward briefly & verify we actually moved.
     var startPosition = Self.GlobalPosition;
@@ -421,7 +444,10 @@ public partial class PlaytestDriver : Node
     // Synced music (issue #137): same track as everyone & the shooter's vote
     // propagated here through the server broadcast.
     await WaitUntil (() => Music.CurrentTrackTitle.Length > 0, 15, "current music track synced from server");
-    await WaitUntil (() => Music.CurrentUpVotes == 1, 30, "shooter's music vote visible to victim");
+    // The shooter's settled stance after its #162 transitions (up, repeat, down):
+    // waiting on the final state instead of the transient up-vote avoids racing
+    // the quick up-to-down switch.
+    await WaitUntil (() => Music.CurrentUpVotes == 0 && Music.CurrentDownVotes == 1, 60, "shooter's settled music vote (down after switch) visible to victim (#162)");
     await WaitUntil (() => !Self.SpawnArmor, 15, "spawn armor expired on its own");
     // Streak replication (#88): simulate an active 3-streak on our own authority so
     // the shooter can verify it replicates - & that the death reset replicates too.
