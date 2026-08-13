@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using System.Threading.Tasks;
+using com.forerunnergames.energyshot.core.audio;
 using com.forerunnergames.energyshot.core.world;
 using com.forerunnergames.energyshot.players;
 using com.forerunnergames.energyshot.weapons;
@@ -26,6 +27,7 @@ public partial class PlaytestDriver : Node
   private int _boltsSpawned;
   private Player? _self;
   private Player Self => _self ??= _world.GetPlayers().First (player => player.IsMultiplayerAuthority());
+  private MusicManager Music => _world.GetNode <MusicManager> ("MusicManager");
   private Player? FindPlayer (string name) => _world.GetPlayers().FirstOrDefault (player => player.DisplayName == name);
 
   public override void _Ready()
@@ -96,6 +98,10 @@ public partial class PlaytestDriver : Node
     await WaitUntil (() => _world.GetPlayers().Count (player => player.IsCrowned) == 1, 10, "exactly one player crowned at 0-0");
     // Server-measured pings replicate back to every peer (issue #100).
     await WaitUntil (() => FindPlayer (ShooterName)?.PingMs >= 0, 15, "shooter's ping measured & replicated to host");
+    // Synced music (issue #137): the server picked a track & the shooter's thumbs-up
+    // vote came back through the server tally.
+    await WaitUntil (() => Music.CurrentTrackTitle.Length > 0, 15, "music track started on the server");
+    await WaitUntil (() => Music.CurrentUpVotes == 1, 30, "shooter's music vote tallied on host");
     // Shooter kills victim once (plus possibly the host itself in the line of
     // fire); wait to observe the replicated score.
     await WaitUntil (() => FindPlayer (ShooterName)?.Score >= 1, 120, "shooter's kill replicated to host");
@@ -119,6 +125,11 @@ public partial class PlaytestDriver : Node
     Assert (Self.HeldWeapon == HeldWeapon.None, "spawned unarmed (#72)");
     // The server measures our ping & tells us within a tick or two (issue #100).
     await WaitUntil (() => Self.PingMs >= 0, 15, "own ping measured by the server");
+
+    // Synced music (issue #137): the server's track choice reached this client; a
+    // thumbs-up vote here must show up on every other peer's tally.
+    await WaitUntil (() => Music.CurrentTrackTitle.Length > 0, 15, "current music track synced from server");
+    Music.SubmitVote (isUpVote: true);
 
     // Movement: hold forward briefly & verify we actually moved.
     var startPosition = Self.GlobalPosition;
@@ -275,6 +286,10 @@ public partial class PlaytestDriver : Node
     await WaitUntil (() => _world.GetPlayers().Count() == 3, 60, "all 3 players visible");
     Assert (Self.MaxHealth == 400, $"own MaxHealth is Beginner 400, got {Self.MaxHealth}");
     Assert (Self.SpawnArmor, "spawned with spawn armor");
+    // Synced music (issue #137): same track as everyone & the shooter's vote
+    // propagated here through the server broadcast.
+    await WaitUntil (() => Music.CurrentTrackTitle.Length > 0, 15, "current music track synced from server");
+    await WaitUntil (() => Music.CurrentUpVotes == 1, 30, "shooter's music vote visible to victim");
     await WaitUntil (() => !Self.SpawnArmor, 15, "spawn armor expired on its own");
     // Streak replication (#88): simulate an active 3-streak on our own authority so
     // the shooter can verify it replicates - & that the death reset replicates too.
@@ -320,31 +335,20 @@ public partial class PlaytestDriver : Node
   // ---------------------------------------------------------------- helpers
 
   // One approach step per poll: aim at the victim & hold forward until within 2m.
-  private bool ApproachedVictim (Player victim)
-  {
-    var distance = Self.GlobalPosition.DistanceTo (victim.GlobalPosition);
-
-    if (distance <= 2.0f)
-    {
-      Input.ActionRelease ("move_forward");
-      return true;
-    }
-
-    AimAt (victim.GlobalPosition + Vector3.Up);
-    Input.ActionPress ("move_forward");
-    return false;
-  }
+  // Same stuck-strafe as WalkedTo: shoving straight into the victim (or a pillar
+  // between us) otherwise stalls this phase forever under CI load.
+  private bool ApproachedVictim (Player victim) => WalkedTo (victim.GlobalPosition, reach: 2.0f);
 
   // One walk step per poll toward a world position, releasing forward once in reach.
   private float _lastWalkDistance = float.MaxValue;
   private int _stuckPolls;
 
-  private bool WalkedTo (Vector3 target)
+  private bool WalkedTo (Vector3 target, float reach = 0.8f)
   {
     var flatTarget = new Vector3 (target.X, Self.GlobalPosition.Y, target.Z);
     var distance = Self.GlobalPosition.DistanceTo (flatTarget);
 
-    if (distance <= 0.8f)
+    if (distance <= reach)
     {
       Input.ActionRelease ("move_forward");
       Input.ActionRelease ("move_left");

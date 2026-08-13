@@ -45,7 +45,9 @@ public partial class World : Node3D
   private static void OnClientConnectedToServer (long peerId) => ServerLog.Event (peerId, "connected");
   // Only a live ENet server session logs (issue #111): the engine's default
   // OfflineMultiplayerPeer also reports IsServer, which would spam clients in menus.
-  private bool IsActiveServer() => Multiplayer.MultiplayerPeer is ENetMultiplayerPeer && Multiplayer.IsServer();
+  // Connected check first: polling IsServer() on an inactive peer (e.g. right after
+  // a kick) logs "multiplayer instance isn't currently active" errors.
+  private bool IsActiveServer() => Multiplayer.MultiplayerPeer is ENetMultiplayerPeer peer && peer.GetConnectionStatus() == MultiplayerPeer.ConnectionStatus.Connected && Multiplayer.IsServer();
 
   // Being kicked already explains the follow-up disconnect: unhooking first keeps the
   // kick reason (e.g. "Wrong password.") from being overwritten by a bogus
@@ -327,7 +329,7 @@ public partial class World : Node3D
   // every peer renders on the leaderboard.
   private void UpdatePings()
   {
-    if (Multiplayer.MultiplayerPeer is not ENetMultiplayerPeer peer || !Multiplayer.IsServer()) return;
+    if (Multiplayer.MultiplayerPeer is not ENetMultiplayerPeer peer || !IsActiveServer()) return;
     foreach (var player in GetPlayers()) UpdatePing (peer, player);
   }
 

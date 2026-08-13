@@ -1,6 +1,7 @@
-[gd_scene load_steps=13 format=3 uid="uid://bmu2hky25lw3q"]
+[gd_scene load_steps=14 format=3 uid="uid://bmu2hky25lw3q"]
 
 [ext_resource type="Script" path="res://core/world/World.cs" id="1_jsv3h"]
+[ext_resource type="Script" path="res://core/audio/MusicManager.cs" id="1_music"]
 [ext_resource type="Texture2D" uid="uid://daovrr00830xa" path="res://assets/floor/patterned_paving_diff_4k.png" id="2_g2q2r"]
 [ext_resource type="PackedScene" uid="uid://8revug3e4h32" path="res://core/network/NetworkManager.tscn" id="2_trrol"]
 [ext_resource type="Texture2D" uid="uid://nx56m31ose5b" path="res://assets/floor/patterned_paving_nor_gl_4k.png" id="3_rcb6p"]
@@ -40,6 +41,9 @@ texture_filter = 5
 script = ExtResource("1_jsv3h")
 
 [node name="NetworkManager" parent="." instance=ExtResource("2_trrol")]
+
+[node name="MusicManager" type="Node" parent="."]
+script = ExtResource("1_music")
 
 [node name="Sun" type="DirectionalLight3D" parent="."]
 transform = Transform3D(-0.866025, -0.433013, 0.25, 0, 0.5, 0.866025, -0.5, 0.75, -0.433013, 0, 0, 0)
