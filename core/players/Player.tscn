@@ -1,4 +1,4 @@
-[gd_scene load_steps=20 format=3 uid="uid://b1w1b7u4gtpbh"]
+[gd_scene load_steps=23 format=3 uid="uid://b1w1b7u4gtpbh"]
 
 [ext_resource type="Script" path="res://core/players/Player.cs" id="1_nipvj"]
 [ext_resource type="Texture2D" uid="uid://ddlk1r4wak13u" path="res://assets/crosshairs.png" id="2_37lxu"]
@@ -12,6 +12,9 @@
 [ext_resource type="AudioStream" path="res://assets/sounds/respawn.wav" id="9_rspwn"]
 [ext_resource type="Mesh" uid="uid://bbgg3dls6oyy4" path="res://assets/items/crown.obj" id="11_crown"]
 [ext_resource type="AudioStream" path="res://assets/sounds/through-wall-zap.wav" id="12_twzap"]
+[ext_resource type="AudioStream" path="res://assets/sounds/punch-whiff.wav" id="13_pwhiff"]
+[ext_resource type="AudioStream" path="res://assets/sounds/punch-thud.wav" id="14_pthud"]
+[ext_resource type="AudioStream" path="res://assets/sounds/weapon-pickup.wav" id="15_wpkup"]
 
 [sub_resource type="ViewportTexture" id="ViewportTexture_udl6m"]
 viewport_path = NodePath("SubViewport")
@@ -193,6 +196,15 @@ one_shot = true
 
 [node name="PunchSound" type="AudioStreamPlayer" parent="."]
 stream = ExtResource("5_punch")
+
+[node name="PunchWhiffSound" type="AudioStreamPlayer" parent="."]
+stream = ExtResource("13_pwhiff")
+
+[node name="PunchThudSound" type="AudioStreamPlayer" parent="."]
+stream = ExtResource("14_pthud")
+
+[node name="WeaponPickupSound" type="AudioStreamPlayer" parent="."]
+stream = ExtResource("15_wpkup")
 
 [node name="ThroughWallZapSound" type="AudioStreamPlayer" parent="."]
 stream = ExtResource("12_twzap")

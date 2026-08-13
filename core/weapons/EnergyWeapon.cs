@@ -16,6 +16,20 @@ public partial class EnergyWeapon : Node3D
 
   [Export] public float MinRotationSpeed = 1.0f;
   [Export] public float MaxRotationSpeed = 15.0f;
+  // Linear ramp to max rotation speed (issue #117): with the old ease-out tail the
+  // full-charge click landed ~0.5s before the spin looked finished. Kept comfortably
+  // under the 2.3s the playtest holds the trigger for a guaranteed full charge.
+  [Export] public float ChargeUpSeconds = 1.8f;
+  // Quick uncharged taps must never start the charging sound (issue #133); the
+  // charge itself still begins immediately.
+  [Export] public float ChargingSoundDelaySeconds = 0.2f;
+  // The audible ramp tracks the charge itself (issue #117): pitch & volume follow
+  // the spin-up so the sound peaks exactly when the rotation & lock-in do, instead
+  // of the stream's own slow multi-second ramp trailing past the click.
+  [Export] public float MinChargePitch = 0.9f;
+  [Export] public float MaxChargePitch = 1.8f;
+  [Export] public float MinChargeVolumeDb = -9.0f;
+  [Export] public float MaxChargeVolumeDb = 0.0f;
   // Caps fire rate: after a shot, the weapon can't begin a new charge until the
   // cooldown elapses, so fast clicks & auto-clickers can't spam shots.
   [Export] public float ShotCooldownSeconds = 0.5f;
@@ -50,6 +64,8 @@ public partial class EnergyWeapon : Node3D
   private Vector3 _recoilOffset = Vector3.Zero;
   private bool _isRecoiling;
   private float _cooldownLeft;
+  private float _chargeAge;
+  private bool _chargingSoundStarted;
   public void PlayShootingSound() => _shootingSound.Play();
   public void PlayFullAutoReadySound() => _fullAutoReadySound.Play();
   public float CooldownFraction => 1.0f - _cooldownLeft / ShotCooldownSeconds;
@@ -90,6 +106,8 @@ public partial class EnergyWeapon : Node3D
   private void Rotate (double delta) => _pivot.Rotate (Vector3.Right, _currentRotationSpeed * (float)delta);
   private bool IsRecoilRecovered() => _recoilOffset.Length() <= 0.01f;
   private float CalculateEnergy() => _currentRotationSpeed / MaxRotationSpeed;
+  // 0..1 spin-up progress, for the audible pitch/volume ramp (issue #117).
+  private float ChargeFraction() => (_currentRotationSpeed - MinRotationSpeed) / (MaxRotationSpeed - MinRotationSpeed);
 
   public override void _Ready()
   {
@@ -114,7 +132,31 @@ public partial class EnergyWeapon : Node3D
     _cooldownLeft = Mathf.Max (0.0f, _cooldownLeft - (float)delta);
     Rotate (delta);
     Recoil (delta);
+    UpdateChargingSound (delta);
     AnnounceFullCharge();
+  }
+
+  // Charging sound (issues #117 & #133): starts only after a short held charge so
+  // quick taps stay silent, then rides the spin-up with pitch & volume so it peaks
+  // exactly when the rotation maxes out & the lock-in click fires.
+  private void UpdateChargingSound (double delta)
+  {
+    if (!IsSpinningUp) return;
+    _chargeAge += (float)delta;
+    StartChargingSound();
+    if (!_chargingSound.Playing) return;
+    var ramp = Mathf.Clamp (ChargeFraction(), 0.0f, 1.0f);
+    _chargingSound.PitchScale = Mathf.Lerp (MinChargePitch, MaxChargePitch, ramp);
+    _chargingSound.VolumeDb = Mathf.Lerp (MinChargeVolumeDb, MaxChargeVolumeDb, ramp);
+  }
+
+  // Once per charge (issue #133): quick taps release before the delay elapses &
+  // never hear it; holding a full charge past the stream's end doesn't loop it.
+  private void StartChargingSound()
+  {
+    if (_chargingSoundStarted || _chargeAge < ChargingSoundDelaySeconds) return;
+    _chargingSoundStarted = true;
+    _chargingSound.Play();
   }
 
   // Crisp lock-in click the moment the charge maxes out, once per charge (issue #113).
@@ -158,11 +200,14 @@ public partial class EnergyWeapon : Node3D
     if (IsSpinningUp) return;
     IsSpinningUp = true;
     _fullChargeAnnounced = false;
-    _chargingSound.Play();
+    _chargeAge = 0.0f; // The sound starts later, gated by ChargingSoundDelaySeconds (issue #133).
+    _chargingSoundStarted = false;
     _tween?.Kill();
     _tween = CreateTween().SetParallel();
-    _tween.TweenProperty (this, "_currentRotationSpeed", MaxRotationSpeed, 2.0f).SetTrans (Tween.TransitionType.Quad).SetEase (Tween.EaseType.Out);
-    _tween.TweenProperty (this, "WeaponColor", _chargedColor, 2.0f).SetTrans (Tween.TransitionType.Quad).SetEase (Tween.EaseType.In);
+    // Linear (issue #117): the threshold crossing, the rotation maxing out, & the
+    // sound peak all land together at the end of the ramp.
+    _tween.TweenProperty (this, "_currentRotationSpeed", MaxRotationSpeed, ChargeUpSeconds);
+    _tween.TweenProperty (this, "WeaponColor", _chargedColor, ChargeUpSeconds).SetTrans (Tween.TransitionType.Quad).SetEase (Tween.EaseType.In);
   }
 
   private void SpinDown()

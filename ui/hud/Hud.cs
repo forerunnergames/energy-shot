@@ -25,7 +25,7 @@ public partial class Hud : Control
   private ShaderMaterial _blur = null!;
   private ShaderMaterial _splatter = null!;
   private ProgressBar _shotBar = null!;
-  private ProgressBar _punchBar = null!;
+  private ProgressBar _slideBar = null!;
   private ProgressBar _fullAutoBar = null!;
   private ProgressBar _bananaBar = null!;
   private float _blurIntensity;
@@ -55,17 +55,18 @@ public partial class Hud : Control
   private void UpdateLeaderboard()
   {
     var players = _world.GetPlayers().OrderByDescending (player => player.Score).ThenBy (player => player.DisplayName);
-    _leaderboardEntries.Text = string.Join ("\n", players.Select ((player, index) => LeaderboardEntry (player, isLeader: index == 0)));
+    _leaderboardEntries.Text = string.Join ("\n", players.Select ((player, index) => LeaderboardEntry (player, rank: index + 1)));
     UpdateScoreLabel();
   }
 
   // 3+ streak entries glow & pulse so the hot player stands out (see issue #77); the
   // current leader wears the crown (issue #107) & every entry shows its ping (issue #100).
-  private static string LeaderboardEntry (players.Player player, bool isLeader)
+  // Entries are ranked by sorted position, ties keep list order (issue #126).
+  private static string LeaderboardEntry (players.Player player, int rank)
   {
-    var entry = $"{player.DisplayName}  {player.Score}  ({Mathf.Max (0, player.PingMs)}ms)";
+    var entry = $"{rank}. {player.DisplayName}  {player.Score}  ({Mathf.Max (0, player.PingMs)}ms)";
     if (player.IsOnStreak) entry = $"[pulse freq=1.5 color=#ffd24d ease=-2.0][wave amp=18.0 freq=4.0][b]{entry}[/b][/wave][/pulse]";
-    return isLeader ? $"\U0001F451 {entry}" : entry;
+    return rank == 1 ? $"\U0001F451 {entry}" : entry;
   }
 
   // Score can also drop (fall penalty), so the label reads the replicated value.
@@ -87,7 +88,7 @@ public partial class Hud : Control
     _blur = (ShaderMaterial)GetNode <ColorRect> ("Blur").Material;
     _splatter = (ShaderMaterial)GetNode <ColorRect> ("Splatter").Material;
     _shotBar = GetNode <ProgressBar> ("VBoxContainer/Cooldowns/Shot/Bar");
-    _punchBar = GetNode <ProgressBar> ("VBoxContainer/Cooldowns/Punch/Bar");
+    _slideBar = GetNode <ProgressBar> ("VBoxContainer/Cooldowns/Slide/Bar");
     _fullAutoBar = GetNode <ProgressBar> ("VBoxContainer/Cooldowns/FullAuto/Bar");
     _bananaBar = GetNode <ProgressBar> ("VBoxContainer/Cooldowns/Banana/Bar");
     _world.SelfPlayerPunched += OnSelfPlayerPunched;
@@ -147,7 +148,7 @@ public partial class Hud : Control
     var self = _world.SelfPlayer;
     if (self == null || !Visible) return;
     _shotBar.Value = self.ShotReadyFraction;
-    _punchBar.Value = self.PunchReadyFraction;
+    _slideBar.Value = self.SlideReadyFraction; // The slide bar replaced the punch bar (issue #127).
     _fullAutoBar.Value = self.FullAutoReadyFraction;
     _bananaBar.Value = self.BananaReadyFraction;
   }

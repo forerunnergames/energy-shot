@@ -101,6 +101,7 @@ public partial class Player
     HeldWeapon |= type;
     SelectedWeapon = type == HeldWeapon.Banana ? SelectedWeapon.Banana : SelectedWeapon.Laser; // Every pickup auto-equips (issue #128).
     RememberTheft (type, previousOwner);
+    _weaponPickupSound.Play(); // Satisfying pickup chime, owner-local only (issue #123).
     GD.Print ($"{DisplayName}: I picked up a {type}!");
   }
 

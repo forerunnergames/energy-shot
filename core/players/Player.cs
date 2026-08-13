@@ -253,6 +253,9 @@ public partial class Player : CharacterBody3D
   private float _punchCooldownLeft;
   private float _cameraKickRemaining;
   private AudioStreamPlayer _punchSound = null!;
+  private AudioStreamPlayer _punchWhiffSound = null!;
+  private AudioStreamPlayer _punchThudSound = null!;
+  private AudioStreamPlayer _weaponPickupSound = null!;
   private AudioStreamPlayer _throughWallZapSound = null!;
   private AudioStreamPlayer _hitmarkerSound = null!;
   private AudioStreamPlayer _damageSound = null!;
@@ -301,6 +304,9 @@ public partial class Player : CharacterBody3D
     _streakLight = GetNode <OmniLight3D> ("StreakLight");
     _healthBar = GetNode <ProgressBar> ("SubViewport/HealthBar");
     _punchSound = GetNode <AudioStreamPlayer> ("PunchSound");
+    _punchWhiffSound = GetNode <AudioStreamPlayer> ("PunchWhiffSound");
+    _punchThudSound = GetNode <AudioStreamPlayer> ("PunchThudSound");
+    _weaponPickupSound = GetNode <AudioStreamPlayer> ("WeaponPickupSound");
     _throughWallZapSound = GetNode <AudioStreamPlayer> ("ThroughWallZapSound");
     _hitmarkerSound = GetNode <AudioStreamPlayer> ("HitmarkerSound");
     _damageSound = GetNode <AudioStreamPlayer> ("DamageSound");
