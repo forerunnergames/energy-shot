@@ -97,6 +97,11 @@ popup/item_1/id = 1
 popup/item_2/text = "Expert (1x health)"
 popup/item_2/id = 2
 
+[node name="PlayerColor" type="OptionButton" parent="PanelContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 90
+alignment = 1
+
 [node name="MaxPlayersLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 50

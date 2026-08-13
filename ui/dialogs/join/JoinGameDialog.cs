@@ -1,3 +1,4 @@
+using com.forerunnergames.energyshot.players;
 using com.forerunnergames.energyshot.utilities;
 using Godot;
 
@@ -5,7 +6,7 @@ namespace com.forerunnergames.energyshot.ui.dialogs;
 
 public partial class JoinGameDialog : Control
 {
-  [Signal] public delegate void JoinGameSuccessEventHandler (string playerName, int difficulty, string password);
+  [Signal] public delegate void JoinGameSuccessEventHandler (string playerName, int difficulty, string password, int colorIndex);
   [Signal] public delegate void ClosedEventHandler();
   // Hands the join attempt off to the animated joining screen (issue #91).
   [Signal] public delegate void ConnectStartedEventHandler (string address);
@@ -14,6 +15,7 @@ public partial class JoinGameDialog : Control
   private Button _joinGameButton = null!;
   private LineEdit _playerName = null!;
   private OptionButton _difficulty = null!;
+  private OptionButton _playerColor = null!;
   private LineEdit _password = null!;
   private LineEdit _serverAddress = null!;
   private Label _middleText = null!;
@@ -43,6 +45,9 @@ public partial class JoinGameDialog : Control
     _difficulty = GetNode <OptionButton> ("PanelContainer/MarginContainer/VBoxContainer/Difficulty");
     // The dropdown's popup items don't inherit the button's font size override.
     _difficulty.GetPopup().AddThemeFontSizeOverride ("font_size", 90);
+    _playerColor = GetNode <OptionButton> ("PanelContainer/MarginContainer/VBoxContainer/PlayerColor");
+    _playerColor.GetPopup().AddThemeFontSizeOverride ("font_size", 90);
+    PlayerColors.Populate (_playerColor); // Selectable body color (issue #43).
     _password = GetNode <LineEdit> ("PanelContainer/MarginContainer/VBoxContainer/Password");
     _serverAddress = GetNode <LineEdit> ("PanelContainer/MarginContainer/VBoxContainer/ServerAddress");
     _middleText = GetNode <Label> ("PanelContainer/MarginContainer/VBoxContainer/MiddleText");
@@ -66,6 +71,7 @@ public partial class JoinGameDialog : Control
     if (string.IsNullOrEmpty (_password.Text)) _password.Text = Settings.LastJoinPassword;
     if (string.IsNullOrEmpty (_serverAddress.Text)) _serverAddress.Text = Settings.LastJoinAddress;
     _difficulty.Selected = Settings.Difficulty;
+    _playerColor.Selected = PlayerColors.NormalizeIndex (Settings.PlayerColor);
     UpdateJoinGameButtonState();
     Show();
   }
@@ -124,9 +130,10 @@ public partial class JoinGameDialog : Control
     Settings.PlayerName = _playerName.Text;
     Settings.LastJoinAddress = _serverAddress.Text;
     Settings.Difficulty = _difficulty.Selected;
+    Settings.PlayerColor = _playerColor.Selected;
     Settings.LastJoinPassword = _password.Text;
     GD.Print ($"Successfully connected to server at [{_serverAddress.Text}:{_serverPort}]");
-    EmitSignal (SignalName.JoinGameSuccess, _playerName.Text, _difficulty.Selected, _password.Text);
+    EmitSignal (SignalName.JoinGameSuccess, _playerName.Text, _difficulty.Selected, _password.Text, _playerColor.Selected);
   }
 
   // Failures return here from the joining screen, showing the error in this dialog as before (issue #91).

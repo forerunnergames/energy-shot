@@ -47,6 +47,7 @@ shadow_size = 10
 [sub_resource type="CapsuleMesh" id="CapsuleMesh_kwhax"]
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_tcox5"]
+resource_local_to_scene = true
 albedo_color = Color(0, 0.152941, 1, 1)
 
 [sub_resource type="ConvexPolygonShape3D" id="ConvexPolygonShape3D_di3dt"]
@@ -104,6 +105,9 @@ properties/15/replication_mode = 2
 properties/16/path = NodePath(".:PingMs")
 properties/16/spawn = true
 properties/16/replication_mode = 2
+properties/17/path = NodePath(".:ColorIndex")
+properties/17/spawn = true
+properties/17/replication_mode = 2
 
 [node name="Player" type="CharacterBody3D"]
 collision_layer = 2
