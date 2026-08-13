@@ -20,7 +20,6 @@ public partial class MessageScroller : Control
   [Export] public Color LoadingCompleteMessageImportanceColor = Colors.White;
   [Export] public int MaxMessageHistoryLines = 1000;
   [Export] public int MessageHistoryPercentToRemoveWhenOverMax = 10;
-  [Export] public int MaxMessageHistoryContainerHeight = 900;
   private Label _messageLabel1 = null!;
   private Label _messageLabel2 = null!;
   private Label _messageLabel3 = null!;
@@ -78,7 +77,9 @@ public partial class MessageScroller : Control
     _messageLabel4 = GetNode <Label> ("MarginContainer/VBoxContainer/Label4");
     _messageContainer = GetNode <MarginContainer> ("MarginContainer");
     _messageHistoryContainer = GetNode <MarginContainer> ("History");
-    _messageHistoryLabel = GetNode <RichTextLabel> ("History/VBoxContainer/MarginContainer/RichTextLabel");
+    // Big comfortable history (issue #161): a near-fullscreen translucent panel with
+    // a font larger than the live scroller's.
+    _messageHistoryLabel = GetNode <RichTextLabel> ("History/Backdrop/MarginContainer/RichTextLabel");
     _messageTimer = GetNode <Timer> ("MessageTimer");
     _messageTimer.Timeout += _OnMessageTimerTimeout;
     Reset();
@@ -214,11 +215,8 @@ public partial class MessageScroller : Control
     // @formatter:on
   }
 
-  private void UpdateMessageHistory()
-  {
-    _messageHistoryLabel.Text = $"[center]{string.Join ("\n", _messageHistory)}[/center]";
-    _messageHistoryLabel.CustomMinimumSize = new Vector2 (_messageHistoryLabel.CustomMinimumSize.X, Mathf.Min (MaxMessageHistoryContainerHeight, _messageHistoryLabel.GetContentHeight()));
-  }
+  // The history fills its big backdrop panel (issue #161); no height clamp needed.
+  private void UpdateMessageHistory() => _messageHistoryLabel.Text = $"[center]{string.Join ("\n", _messageHistory)}[/center]";
 
   private void ShowMessageHistory()
   {
