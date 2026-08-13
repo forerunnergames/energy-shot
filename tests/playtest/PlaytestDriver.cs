@@ -168,6 +168,10 @@ public partial class PlaytestDriver : Node
     // replicate here so the on-fire glow & pulsing leaderboard entry appear.
     await WaitUntil (() => victim.ZapStreakCount == 3, 15, "victim's simulated 3-streak replicated to shooter");
 
+    // Dance emote (#103): the victim started dancing after its armor expired; the
+    // replicated state must animate this puppet copy too.
+    await WaitUntil (() => victim.Dancing, 15, "victim's dance replicated to shooter (#103)");
+
     // Punch phase: walk up to the victim & punch them; verify melee damage lands.
     // Fists are weapon slot 1 & punching requires them selected (issue #82); unarmed
     // players already default to fists, so this press is just a defensive re-select.
@@ -187,6 +191,8 @@ public partial class PlaytestDriver : Node
     }
 
     Assert (victim.Health < healthBeforePunch, $"punch damaged the victim ({healthBeforePunch} -> {victim.Health})");
+    // Damage cancels the dance (#103) & the cancel must replicate back here too.
+    await WaitUntil (() => !victim.Dancing, 5, "victim's dance cancel replicated to shooter (#103)");
     // Sync property index 14 (#88): the punch stun must replicate to the shooter's copy.
     await WaitUntil (() => victim.StunFactor > 0.0f, 2, "victim's punch stun replicated to shooter");
 
@@ -313,6 +319,17 @@ public partial class PlaytestDriver : Node
     ReleaseAction ("crouch");
     await WaitUntil (() => !Self.Crouching, 5, "stood back up after the canceled slide (#131)");
 
+    // Dance emote (#103): G starts the groove & any movement input cancels it,
+    // restoring the normal standing state.
+    PressAction ("dance");
+    await Task.Delay (100);
+    ReleaseAction ("dance");
+    await WaitUntil (() => Self.Dancing, 5, "own dance started on G (#103)");
+    Input.ActionPress ("move_forward");
+    await Task.Delay (300);
+    Input.ActionRelease ("move_forward");
+    await WaitUntil (() => !Self.Dancing, 5, "moving canceled the dance (#103)");
+
     // Boomerang (#98): collect the deterministic spawn-room pickup, throw it (aimed
     // away from everyone so no incidental steals), & watch it fly back into the hand.
     await WaitUntil (() => WalkedTo (WeaponSpawner.PlaytestBoomerangPosition), 45, "walked to the playtest boomerang pickup");
@@ -398,8 +415,15 @@ public partial class PlaytestDriver : Node
     // Streak replication (#88): simulate an active 3-streak on our own authority so
     // the shooter can verify it replicates - & that the death reset replicates too.
     Self.ZapStreakCount = 3;
+    // Dance emote (#103): groove on G; the shooter verifies the replicated state on
+    // its puppet copy, & the punch damage below must cancel the dance.
+    PressAction ("dance");
+    await Task.Delay (100);
+    ReleaseAction ("dance");
+    await WaitUntil (() => Self.Dancing, 5, "dance started on G (#103)");
     // The shooter opens fire once armor drops; verify damage & then a full respawn.
     await WaitUntil (() => Self.Health < Self.MaxHealth, 120, "took damage from shooter");
+    Assert (!Self.Dancing, "taking damage canceled the dance (#103)");
     // One-hit-kill (#93): after the punch phase, the shooter only fires full-charge
     // shots, & a full-charge shot is lethal on any target - so no partial-damage
     // health value may ever appear between the punch & the respawn reset.

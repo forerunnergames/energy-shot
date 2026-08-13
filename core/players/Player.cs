@@ -395,6 +395,7 @@ public partial class Player : CharacterBody3D
     UpdateBread();
     UpdateFullAuto (delta);
     UpdatePunch (delta);
+    UpdateDance (delta); // After the fire/punch updates, so a canceling press can't also attack (issue #103).
     UpdateHandBob (delta);
     UpdateAirBoost();
     UpdateStickyFlight (delta);
