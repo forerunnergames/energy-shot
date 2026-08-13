@@ -123,6 +123,10 @@ public partial class PlaytestDriver : Node
   {
     _world.StartClientSession (ShooterName, difficulty: 1, _address, Port, Password, ShooterColor);
     await WaitUntil (() => _world.GetPlayers().Count() == 3, 60, "all 3 players visible");
+    // DisplayName is an on-change sync that can land a beat after the spawn itself
+    // under CI load (issue #78): wait for both names before dereferencing the
+    // lookups, or FindPlayer returns null right here.
+    await WaitUntil (() => FindPlayer (VictimName) != null && FindPlayer (HostName) != null, 30, "victim's & host's names replicated to shooter");
     var victim = FindPlayer (VictimName)!;
     var host = FindPlayer (HostName)!;
     Assert (victim.MaxHealth == 400, $"victim MaxHealth replicated as Beginner 400, got {victim.MaxHealth}");
