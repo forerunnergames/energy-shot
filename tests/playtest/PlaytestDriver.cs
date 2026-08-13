@@ -30,6 +30,7 @@ public partial class PlaytestDriver : Node
   private string _address = "127.0.0.1";
   private int _boltsSpawned;
   private int _boomerangsSpawned;
+  private int _stonesSpawned;
   private Player? _self;
   private Player Self => _self ??= _world.GetPlayers().First (player => player.IsMultiplayerAuthority());
   private MusicManager Music => _world.GetNode <MusicManager> ("MusicManager");
@@ -43,6 +44,7 @@ public partial class PlaytestDriver : Node
     _world = GetNode <World> ("/root/World");
     _world.ChildEnteredTree += node => _boltsSpawned += node is LaserBolt ? 1 : 0;
     _world.ChildEnteredTree += node => _boomerangsSpawned += node is BoomerangProjectile ? 1 : 0;
+    _world.ChildEnteredTree += node => _stonesSpawned += node is SlingshotStone ? 1 : 0;
     var args = OS.GetCmdlineUserArgs();
     _role = ArgValue (args, "--playtest") ?? string.Empty;
     _address = ArgValue (args, "--address") ?? "127.0.0.1";
@@ -353,6 +355,27 @@ public partial class PlaytestDriver : Node
     // Still held + no longer in flight = the return trip ended in an auto-catch; a
     // lost boomerang would have cleared the held flag instead (#98).
     await WaitUntil (() => Self.Holds (HeldWeapon.Boomerang) && !Self.IsBoomerangInFlight, 30, "boomerang returned & was auto-caught (#98)");
+
+    // Slingshot (#99): collect the deterministic spawn-room pickup, then draw the
+    // band (hold shoot) & release - a stone projectile must spawn.
+    await WaitUntil (() => WalkedTo (WeaponSpawner.PlaytestSlingshotPosition), 45, "walked to the playtest slingshot pickup");
+    await WaitUntil (() => Self.Holds (HeldWeapon.Slingshot), 15, "collected the slingshot pickup (#99)");
+    PressAction ("weapon_5");
+    await Task.Delay (100);
+    ReleaseAction ("weapon_5");
+    Assert (Self.SelectedWeapon == SelectedWeapon.Slingshot, "slingshot selected in slot 5 (#99)");
+    AimAt (Self.GlobalPosition + new Vector3 (10, 1, 0)); // Aim away from everyone.
+    var stonesBefore = _stonesSpawned;
+
+    for (var attempt = 0; attempt < 10 && _stonesSpawned == stonesBefore; ++attempt)
+    {
+      PressAction ("shoot");
+      await Task.Delay (600); // Hold to draw (#99); release slings the stone.
+      ReleaseAction ("shoot");
+      await Task.Delay (300);
+    }
+
+    Assert (_stonesSpawned > stonesBefore, "slingshot draw & release fired a stone (#99)");
 
     // The toggle persists to the shared user settings (#119); restore the starting
     // view so a playtest run never flips the developer's real preference.

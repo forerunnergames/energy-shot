@@ -6,8 +6,9 @@ namespace com.forerunnergames.energyshot.players;
 
 // Weapon lifecycle & selection (issues #72 & #82): players spawn with fists only &
 // arm up from world pickups; death drops everything held at the death spot. Slot 1 =
-// fists (always available), slot 2 = laser, slot 3 = banana; guns are selectable only
-// while held. The server-side WeaponSpawner owns pickup spawning & the weapon caps.
+// fists (always available), slot 2 = laser, slot 3 = banana, slot 4 = boomerang (#98),
+// slot 5 = slingshot (#99); guns are selectable only while held. The server-side
+// WeaponSpawner owns pickup spawning & the weapon caps.
 public partial class Player
 {
   // Replicated like SpawnArmor so every peer knows what this player carries & renders
@@ -47,10 +48,12 @@ public partial class Player
   private bool HasLaser => Holds (HeldWeapon.Laser);
   private bool HasBanana => Holds (HeldWeapon.Banana);
   private bool HasBoomerang => Holds (HeldWeapon.Boomerang);
+  private bool HasSlingshot => Holds (HeldWeapon.Slingshot);
   private bool IsFistsSelected => _selectedWeapon == SelectedWeapon.Fists;
   private bool IsLaserSelected => _selectedWeapon == SelectedWeapon.Laser;
   private bool IsBananaSelected => _selectedWeapon == SelectedWeapon.Banana;
   private bool IsBoomerangSelected => _selectedWeapon == SelectedWeapon.Boomerang;
+  private bool IsSlingshotSelected => _selectedWeapon == SelectedWeapon.Slingshot;
   private WeaponSpawner Spawner => _weaponSpawner ??= GetNode <WeaponSpawner> ("/root/World/WeaponSpawner");
 
   // Falling off the world: held weapons return to the spawn pool via the caps instead
@@ -75,10 +78,11 @@ public partial class Player
   // Runs on every peer via the replicated HeldWeapon & SelectedWeapon properties.
   private void UpdateWeaponVisibility()
   {
-    if (_bananaLauncher == null || _boomerangHeld == null) return;
+    if (_bananaLauncher == null || _boomerangHeld == null || _slingshotHeld == null) return;
     _energyWeapon.Visible = IsLaserSelected && HasLaser;
     _bananaLauncher.Visible = IsBananaSelected && HasBanana;
     _boomerangHeld.Visible = IsBoomerangSelected && HasBoomerang && !IsBoomerangOut; // Empty hand while it's out flying (issue #98).
+    _slingshotHeld.Visible = IsSlingshotSelected && HasSlingshot; // Slot 5 (issue #99).
     UpdateHandsVisibility(); // Hands render only while fists are selected (issue #82).
   }
 
@@ -91,6 +95,7 @@ public partial class Player
     if (Input.IsActionJustPressed ("weapon_2") && HasLaser) SelectedWeapon = SelectedWeapon.Laser;
     if (Input.IsActionJustPressed ("weapon_3") && HasBanana) SelectedWeapon = SelectedWeapon.Banana;
     if (Input.IsActionJustPressed ("weapon_4") && HasBoomerang) SelectedWeapon = SelectedWeapon.Boomerang; // Slot 4 (issue #98).
+    if (Input.IsActionJustPressed ("weapon_5") && HasSlingshot) SelectedWeapon = SelectedWeapon.Slingshot; // Slot 5 (issue #99).
   }
 
   // A dropped or lost gun can't stay selected: fall back to fists (issue #82).
@@ -99,6 +104,7 @@ public partial class Player
     if (IsLaserSelected && !HasLaser) SelectedWeapon = SelectedWeapon.Fists;
     if (IsBananaSelected && !HasBanana) SelectedWeapon = SelectedWeapon.Fists;
     if (IsBoomerangSelected && !HasBoomerang) SelectedWeapon = SelectedWeapon.Fists;
+    if (IsSlingshotSelected && !HasSlingshot) SelectedWeapon = SelectedWeapon.Fists;
   }
 
   // Called back (via the WeaponSpawner's ConfirmPickup RPC) after the server despawns
@@ -106,8 +112,8 @@ public partial class Player
   public void GrantWeapon (HeldWeapon type, string previousOwner = "")
   {
     HeldWeapon |= type;
-    // Every pickup auto-equips (issue #128), boomerang included (issue #98).
-    SelectedWeapon = type switch { HeldWeapon.Banana => SelectedWeapon.Banana, HeldWeapon.Boomerang => SelectedWeapon.Boomerang, _ => SelectedWeapon.Laser };
+    // Every pickup auto-equips (issue #128), boomerang (#98) & slingshot (#99) included.
+    SelectedWeapon = type switch { HeldWeapon.Banana => SelectedWeapon.Banana, HeldWeapon.Boomerang => SelectedWeapon.Boomerang, HeldWeapon.Slingshot => SelectedWeapon.Slingshot, _ => SelectedWeapon.Laser };
     RememberTheft (type, previousOwner);
     _weaponPickupSound.Play(); // Satisfying pickup chime, owner-local only (issue #123).
     GD.Print ($"{DisplayName}: I picked up a {type}!");
@@ -136,10 +142,14 @@ public partial class Player
   {
     var type = PickDroppableWeapon();
     if (type == HeldWeapon.None) return;
+    // Request BEFORE clearing (CodeRabbit on #145): the server validates the drop
+    // mask against this player's replicated HeldWeapon, so the request must leave
+    // while the local flags (& therefore the server's replicated view) still show
+    // the weapon; clearing first would race the request with the clear delta.
+    Spawner.SendDropRequest (GlobalPosition, type);
     HeldWeapon &= ~type;
     ForgetTheft (type);
     DeselectUnheldWeapon();
-    Spawner.SendDropRequest (GlobalPosition, type);
     GD.Print ($"{DisplayName}: I dropped my {type}!");
   }
 
@@ -147,9 +157,9 @@ public partial class Player
   // isn't in the hand, so it can't be knocked loose or stolen from it (issue #98).
   private HeldWeapon PickDroppableWeapon()
   {
-    var preferred = _selectedWeapon switch { SelectedWeapon.Banana => HeldWeapon.Banana, SelectedWeapon.Boomerang => HeldWeapon.Boomerang, _ => HeldWeapon.Laser };
+    var preferred = _selectedWeapon switch { SelectedWeapon.Banana => HeldWeapon.Banana, SelectedWeapon.Boomerang => HeldWeapon.Boomerang, SelectedWeapon.Slingshot => HeldWeapon.Slingshot, _ => HeldWeapon.Laser };
 
-    foreach (var type in new[] { preferred, HeldWeapon.Laser, HeldWeapon.Banana, HeldWeapon.Boomerang })
+    foreach (var type in new[] { preferred, HeldWeapon.Laser, HeldWeapon.Banana, HeldWeapon.Boomerang, HeldWeapon.Slingshot })
     {
       if (!Holds (type)) continue;
       if (type == HeldWeapon.Boomerang && IsBoomerangInFlight) continue;
@@ -160,7 +170,9 @@ public partial class Player
   }
 
   // Death drops everything carried at the death spot (issue #72); a boomerang out
-  // flying drops where the boomerang is instead (issue #98).
+  // flying drops where the boomerang is instead (issue #98). Request before clear,
+  // same as DropHeldWeapon: the server validates the mask against the replicated
+  // HeldWeapon (CodeRabbit on #145).
   private void DropAllHeldWeapons()
   {
     ReleaseBoomerangInFlight();
@@ -178,6 +190,7 @@ public partial class Player
     ApplyOverlayMaterials (_energyWeapon);
     ApplyOverlayMaterials (_bananaLauncher);
     ApplyOverlayMaterials (_boomerangHeld);
+    ApplyOverlayMaterials (_slingshotHeld); // Slot 5 (issue #99).
   }
 
   private void ApplyOverlayMaterials (Node node)
