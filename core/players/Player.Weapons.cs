@@ -45,15 +45,18 @@ public partial class Player
   public bool Holds (HeldWeapon type) => (_heldWeapon & type) != 0;
   private bool HasLaser => Holds (HeldWeapon.Laser);
   private bool HasBanana => Holds (HeldWeapon.Banana);
+  private bool HasBoomerang => Holds (HeldWeapon.Boomerang);
   private bool IsFistsSelected => _selectedWeapon == SelectedWeapon.Fists;
   private bool IsLaserSelected => _selectedWeapon == SelectedWeapon.Laser;
   private bool IsBananaSelected => _selectedWeapon == SelectedWeapon.Banana;
+  private bool IsBoomerangSelected => _selectedWeapon == SelectedWeapon.Boomerang;
   private WeaponSpawner Spawner => _weaponSpawner ??= GetNode <WeaponSpawner> ("/root/World/WeaponSpawner");
 
   // Falling off the world: held weapons return to the spawn pool via the caps instead
   // of dropping as unreachable pickups below the map.
   private void ClearHeldWeapons()
   {
+    ReleaseBoomerangInFlight(); // A boomerang out flying still drops where it is (issue #98).
     ForgetTheft (_heldWeapon);
     HeldWeapon = HeldWeapon.None;
     SelectedWeapon = SelectedWeapon.Fists;
@@ -71,9 +74,10 @@ public partial class Player
   // Runs on every peer via the replicated HeldWeapon & SelectedWeapon properties.
   private void UpdateWeaponVisibility()
   {
-    if (_bananaLauncher == null) return;
+    if (_bananaLauncher == null || _boomerangHeld == null) return;
     _energyWeapon.Visible = IsLaserSelected && HasLaser;
     _bananaLauncher.Visible = IsBananaSelected && HasBanana;
+    _boomerangHeld.Visible = IsBoomerangSelected && HasBoomerang && !IsBoomerangOut; // Empty hand while it's out flying (issue #98).
     UpdateHandsVisibility(); // Hands render only while fists are selected (issue #82).
   }
 
@@ -85,6 +89,7 @@ public partial class Player
     if (Input.IsActionJustPressed ("weapon_1")) SelectedWeapon = SelectedWeapon.Fists;
     if (Input.IsActionJustPressed ("weapon_2") && HasLaser) SelectedWeapon = SelectedWeapon.Laser;
     if (Input.IsActionJustPressed ("weapon_3") && HasBanana) SelectedWeapon = SelectedWeapon.Banana;
+    if (Input.IsActionJustPressed ("weapon_4") && HasBoomerang) SelectedWeapon = SelectedWeapon.Boomerang; // Slot 4 (issue #98).
   }
 
   // A dropped or lost gun can't stay selected: fall back to fists (issue #82).
@@ -92,6 +97,7 @@ public partial class Player
   {
     if (IsLaserSelected && !HasLaser) SelectedWeapon = SelectedWeapon.Fists;
     if (IsBananaSelected && !HasBanana) SelectedWeapon = SelectedWeapon.Fists;
+    if (IsBoomerangSelected && !HasBoomerang) SelectedWeapon = SelectedWeapon.Fists;
   }
 
   // Called back (via the WeaponSpawner's ConfirmPickup RPC) after the server despawns
@@ -99,7 +105,8 @@ public partial class Player
   public void GrantWeapon (HeldWeapon type, string previousOwner = "")
   {
     HeldWeapon |= type;
-    SelectedWeapon = type == HeldWeapon.Banana ? SelectedWeapon.Banana : SelectedWeapon.Laser; // Every pickup auto-equips (issue #128).
+    // Every pickup auto-equips (issue #128), boomerang included (issue #98).
+    SelectedWeapon = type switch { HeldWeapon.Banana => SelectedWeapon.Banana, HeldWeapon.Boomerang => SelectedWeapon.Boomerang, _ => SelectedWeapon.Laser };
     RememberTheft (type, previousOwner);
     _weaponPickupSound.Play(); // Satisfying pickup chime, owner-local only (issue #123).
     GD.Print ($"{DisplayName}: I picked up a {type}!");
@@ -122,13 +129,12 @@ public partial class Player
     return true;
   }
 
-  // Drops the selected gun (or the other one while boxing) as a world pickup; the
-  // punch branch calls this with a drop chance when a player gets punched.
+  // Drops the selected gun (or another carried one while boxing) as a world pickup;
+  // the punch branch calls this with a drop chance when a player gets punched.
   public void DropHeldWeapon()
   {
-    var type = IsBananaSelected ? HeldWeapon.Banana : HeldWeapon.Laser;
-    if (!Holds (type)) type = type == HeldWeapon.Banana ? HeldWeapon.Laser : HeldWeapon.Banana;
-    if (!Holds (type)) return;
+    var type = PickDroppableWeapon();
+    if (type == HeldWeapon.None) return;
     HeldWeapon &= ~type;
     ForgetTheft (type);
     DeselectUnheldWeapon();
@@ -136,9 +142,27 @@ public partial class Player
     GD.Print ($"{DisplayName}: I dropped my {type}!");
   }
 
-  // Death drops everything carried at the death spot (issue #72).
+  // Selected gun first, then any other carried one. A boomerang that's out flying
+  // isn't in the hand, so it can't be knocked loose or stolen from it (issue #98).
+  private HeldWeapon PickDroppableWeapon()
+  {
+    var preferred = _selectedWeapon switch { SelectedWeapon.Banana => HeldWeapon.Banana, SelectedWeapon.Boomerang => HeldWeapon.Boomerang, _ => HeldWeapon.Laser };
+
+    foreach (var type in new[] { preferred, HeldWeapon.Laser, HeldWeapon.Banana, HeldWeapon.Boomerang })
+    {
+      if (!Holds (type)) continue;
+      if (type == HeldWeapon.Boomerang && IsBoomerangInFlight) continue;
+      return type;
+    }
+
+    return HeldWeapon.None;
+  }
+
+  // Death drops everything carried at the death spot (issue #72); a boomerang out
+  // flying drops where the boomerang is instead (issue #98).
   private void DropAllHeldWeapons()
   {
+    ReleaseBoomerangInFlight();
     if (_heldWeapon == HeldWeapon.None) return;
     Spawner.SendDropRequest (GlobalPosition, _heldWeapon);
     ClearHeldWeapons();
@@ -152,6 +176,7 @@ public partial class Player
   {
     ApplyOverlayMaterials (_energyWeapon);
     ApplyOverlayMaterials (_bananaLauncher);
+    ApplyOverlayMaterials (_boomerangHeld);
   }
 
   private static void ApplyOverlayMaterials (Node node)

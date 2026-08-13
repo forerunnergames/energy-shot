@@ -25,6 +25,7 @@ public partial class PlaytestDriver : Node
   private string _role = string.Empty;
   private string _address = "127.0.0.1";
   private int _boltsSpawned;
+  private int _boomerangsSpawned;
   private Player? _self;
   private Player Self => _self ??= _world.GetPlayers().First (player => player.IsMultiplayerAuthority());
   private MusicManager Music => _world.GetNode <MusicManager> ("MusicManager");
@@ -37,6 +38,7 @@ public partial class PlaytestDriver : Node
     Engine.MaxFps = 30;
     _world = GetNode <World> ("/root/World");
     _world.ChildEnteredTree += node => _boltsSpawned += node is LaserBolt ? 1 : 0;
+    _world.ChildEnteredTree += node => _boomerangsSpawned += node is BoomerangProjectile ? 1 : 0;
     var args = OS.GetCmdlineUserArgs();
     _role = ArgValue (args, "--playtest") ?? string.Empty;
     _address = ArgValue (args, "--address") ?? "127.0.0.1";
@@ -275,6 +277,32 @@ public partial class PlaytestDriver : Node
     await Task.Delay (100);
     ReleaseAction ("crouch");
     await WaitUntil (() => !Self.Crouching, 5, "stood back up after the canceled slide (#131)");
+
+    // Boomerang (#98): collect the deterministic spawn-room pickup, throw it (aimed
+    // away from everyone so no incidental steals), & watch it fly back into the hand.
+    await WaitUntil (() => WalkedTo (WeaponSpawner.PlaytestBoomerangPosition), 45, "walked to the playtest boomerang pickup");
+    await WaitUntil (() => Self.Holds (HeldWeapon.Boomerang), 15, "collected the boomerang pickup (#98)");
+    PressAction ("weapon_4");
+    await Task.Delay (100);
+    ReleaseAction ("weapon_4");
+    Assert (Self.SelectedWeapon == SelectedWeapon.Boomerang, "boomerang selected in slot 4 (#98)");
+    AimAt (Self.GlobalPosition + new Vector3 (10, 1, 0));
+    // The spawn-room round trip can finish faster than a poll, so count spawned
+    // projectiles (like bolts) instead of sampling the transient in-flight state.
+    var boomerangsBefore = _boomerangsSpawned;
+
+    for (var attempt = 0; attempt < 10 && _boomerangsSpawned == boomerangsBefore; ++attempt)
+    {
+      PressAction ("shoot");
+      await Task.Delay (80);
+      ReleaseAction ("shoot");
+      await Task.Delay (300);
+    }
+
+    Assert (_boomerangsSpawned > boomerangsBefore, "boomerang thrown (#98)");
+    // Still held + no longer in flight = the return trip ended in an auto-catch; a
+    // lost boomerang would have cleared the held flag instead (#98).
+    await WaitUntil (() => Self.Holds (HeldWeapon.Boomerang) && !Self.IsBoomerangInFlight, 30, "boomerang returned & was auto-caught (#98)");
   }
 
   private async Task RunVictim()

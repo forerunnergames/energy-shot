@@ -8,5 +8,6 @@ public enum DamageKind
   Laser,
   FullAuto,
   Punch,
-  Banana
+  Banana,
+  Boomerang
 }
