@@ -32,7 +32,7 @@ Slot keys select what's in your hands. You spawn with fists only; everything els
 | F | Full-auto laser burst (3s of rapid low-power shots, 15s cooldown; needs the laser) |
 | B | Eat bread - full heal, once per life |
 | G | Dance. Blocks your weapons while grooving; any movement or taking a hit cancels it |
-| Shoot the ground beneath you | Rocket boost upward (scales with charge; works once per airtime in the air) |
+| Shoot the ground beneath you | Rocket boost upward, scaling with charge. Unlimited from the ground; while airborne it works once per airtime, re-armed when you land |
 
 ## Communication & music
 
