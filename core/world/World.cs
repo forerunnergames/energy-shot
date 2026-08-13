@@ -17,6 +17,8 @@ public partial class World : Node3D
   [Signal] public delegate void SelfPlayerHealthChangedEventHandler (string playerName, int health);
   [Signal] public delegate void SelfPlayerPunchedEventHandler();
   [Signal] public delegate void SelfPlayerSplatteredEventHandler();
+  // Someone caught our own thrown paper airplane (issue #102); the thrower's HUD announces it.
+  [Signal] public delegate void SelfPlayerAirplaneCaughtEventHandler (string catcherName, string throwerName);
   [Signal] public delegate void RemoteMessageReceivedEventHandler (string message);
   [Signal] public delegate void KickedFromServerEventHandler (string reason);
   [Signal] public delegate void ServerShutDownEventHandler();
@@ -296,6 +298,7 @@ public partial class World : Node3D
     selfPlayer.HealthChanged += value => EmitSignal (SignalName.SelfPlayerHealthChanged, selfPlayer.DisplayName, value);
     selfPlayer.Punched += () => EmitSignal (SignalName.SelfPlayerPunched);
     selfPlayer.Splattered += () => EmitSignal (SignalName.SelfPlayerSplattered);
+    selfPlayer.AirplaneCaught += catcherName => EmitSignal (SignalName.SelfPlayerAirplaneCaught, catcherName, selfPlayer.DisplayName); // Issue #102.
     selfPlayer.Scored += (playerName, shotPlayerName) => EmitSignal (SignalName.PlayerScored, ++_score, playerName, shotPlayerName);
     GD.Print ($"{_selfPlayer.NetworkId}: Registered my player {_selfPlayer.DisplayName}");
     EmitSignal (SignalName.NewGameStarted, _selfPlayer.DisplayName, _selfPlayer.MaxHealth);

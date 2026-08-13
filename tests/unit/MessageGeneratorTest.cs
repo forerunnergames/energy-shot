@@ -12,13 +12,14 @@ public class MessageGeneratorTest
   private static DeathContext Laser (float energy = 0.5f) => new() { Kind = DamageKind.Laser, Energy = energy };
 
   [TestCase]
-  public void ExactlyOneHundredElevenUniqueMessageTemplates()
+  public void ExactlyOneHundredEighteenUniqueMessageTemplates()
   {
     // 100 from the content wave (issue #84) + 3 through-wall zaps (issue #94)
-    // + 4 boomerang zap-outs (issue #98) + 4 slingshot zap-outs (issue #99).
+    // + 4 boomerang zap-outs (issue #98) + 4 slingshot zap-outs (issue #99)
+    // + 4 paper airplane zap-outs & 3 airplane catches (issue #102).
     var templates = MessagePools.All.SelectMany (pool => pool).ToList();
-    AssertInt (templates.Count).IsEqual (111);
-    AssertInt (templates.Distinct().Count()).IsEqual (111);
+    AssertInt (templates.Count).IsEqual (118);
+    AssertInt (templates.Distinct().Count()).IsEqual (118);
   }
 
   [TestCase]
@@ -33,8 +34,8 @@ public class MessageGeneratorTest
   [TestCase]
   public void EveryPoolIsInTheRegistry()
   {
-    // 25 scenario pools registered, none empty.
-    AssertInt (MessagePools.All.Count).IsEqual (25);
+    // 27 scenario pools registered, none empty.
+    AssertInt (MessagePools.All.Count).IsEqual (27);
     foreach (var pool in MessagePools.All) AssertBool (pool.Count > 0).IsTrue();
   }
 
@@ -75,6 +76,22 @@ public class MessageGeneratorTest
   {
     // Slingshot zap-outs get their own flavor (issue #99).
     AssertObject (MessageGenerator.SelectZappedPool (new DeathContext { Kind = DamageKind.Slingshot, Energy = 0.6f })).IsSame (MessagePools.Slingshot);
+  }
+
+  [TestCase]
+  public void PaperAirplanePoolSelectedByDamageKind()
+  {
+    // Paper airplane zap-outs get their own flavor (issue #102).
+    AssertObject (MessageGenerator.SelectZappedPool (new DeathContext { Kind = DamageKind.PaperAirplane, Energy = 0.3f })).IsSame (MessagePools.PaperAirplane);
+  }
+
+  [TestCase]
+  public void AirplaneCatchMessagesMentionBothPlayers()
+  {
+    // The catch announcement (issue #102): {z} = the catcher, {v} = the thrower.
+    var message = MessageGenerator.OnAirplaneCatch ("Alice", "Bob");
+    AssertBool (message.Contains ("Alice")).IsTrue();
+    AssertBool (message.Contains ("Bob")).IsTrue();
   }
 
   [TestCase]

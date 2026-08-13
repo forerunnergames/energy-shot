@@ -10,5 +10,6 @@ public enum DamageKind
   Punch,
   Banana,
   Boomerang,
-  Slingshot
+  Slingshot,
+  PaperAirplane
 }

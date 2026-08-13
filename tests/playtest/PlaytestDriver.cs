@@ -31,6 +31,7 @@ public partial class PlaytestDriver : Node
   private int _boltsSpawned;
   private int _boomerangsSpawned;
   private int _stonesSpawned;
+  private int _airplanesSpawned;
   private Player? _self;
   private Player Self => _self ??= _world.GetPlayers().First (player => player.IsMultiplayerAuthority());
   private MusicManager Music => _world.GetNode <MusicManager> ("MusicManager");
@@ -45,6 +46,7 @@ public partial class PlaytestDriver : Node
     _world.ChildEnteredTree += node => _boltsSpawned += node is LaserBolt ? 1 : 0;
     _world.ChildEnteredTree += node => _boomerangsSpawned += node is BoomerangProjectile ? 1 : 0;
     _world.ChildEnteredTree += node => _stonesSpawned += node is SlingshotStone ? 1 : 0;
+    _world.ChildEnteredTree += node => _airplanesSpawned += node is PaperAirplaneProjectile ? 1 : 0;
     var args = OS.GetCmdlineUserArgs();
     _role = ArgValue (args, "--playtest") ?? string.Empty;
     _address = ArgValue (args, "--address") ?? "127.0.0.1";
@@ -120,8 +122,9 @@ public partial class PlaytestDriver : Node
     await WaitUntil (() => FindPlayer (VictimName)?.SpawnArmor == true, 30, "victim respawn armor replicated to host");
     // The victim's fall at score 0 goes negative & replicates (issue #108).
     await WaitUntil (() => FindPlayer (VictimName)?.Score == -1, 60, "victim's fall penalty (-1) replicated to host");
-    // Stay up until both clients have finished & disconnected.
-    await WaitUntil (() => _world.GetPlayers().Count() == 1, 120, "clients disconnected");
+    // Stay up until both clients have finished & disconnected (the shooter's solo
+    // phases now end with the paper airplane throw & catch, issue #102).
+    await WaitUntil (() => _world.GetPlayers().Count() == 1, 180, "clients disconnected");
   }
 
   private async Task RunShooter()
@@ -377,6 +380,36 @@ public partial class PlaytestDriver : Node
 
     Assert (_stonesSpawned > stonesBefore, "slingshot draw & release fired a stone (#99)");
 
+    // Paper airplane (#102): collect the deterministic spawn-room pickup, walk near
+    // the victim, & throw with them locked under the crosshair; the victim
+    // punch-catches the incoming glider & the handoff swaps it into their hands.
+    await WaitUntil (() => WalkedTo (WeaponSpawner.PlaytestAirplanePosition), 45, "walked to the playtest paper airplane pickup");
+    await WaitUntil (() => Self.Holds (HeldWeapon.PaperAirplane), 15, "collected the paper airplane pickup (#102)");
+    PressAction ("weapon_6");
+    await Task.Delay (100);
+    ReleaseAction ("weapon_6");
+    Assert (Self.SelectedWeapon == SelectedWeapon.PaperAirplane, "paper airplane selected in slot 6 (#102)");
+    // The victim fell & respawned earlier; wait for it to be back in the spawn room,
+    // then throw from close by so the host can't wander into the flight path.
+    await WaitUntil (() => victim.GlobalPosition.Y > 20.0f, 60, "victim back in the spawn room for the catch phase (#102)");
+    await WaitUntil (() => WalkedTo (victim.GlobalPosition, reach: 6.0f), 45, "walked near the victim for the airplane throw (#102)");
+    var airplanesBefore = _airplanesSpawned;
+
+    for (var attempt = 0; attempt < 10 && _airplanesSpawned == airplanesBefore; ++attempt)
+    {
+      AimAt (victim.GlobalPosition + Vector3.Up);
+      PressAction ("shoot");
+      await Task.Delay (80);
+      ReleaseAction ("shoot");
+      await Task.Delay (300);
+    }
+
+    Assert (_airplanesSpawned > airplanesBefore, "paper airplane thrown at the victim (#102)");
+    // The victim's punch-catch (or a landing beside them) hands the airplane over:
+    // our replicated held flag clears & theirs sets (#102).
+    await WaitUntil (() => !Self.Holds (HeldWeapon.PaperAirplane), 30, "airplane left our hands after the flight (#102)");
+    await WaitUntil (() => victim.Holds (HeldWeapon.PaperAirplane), 60, "victim holds the caught paper airplane (#102)");
+
     // The toggle persists to the shared user settings (#119); restore the starting
     // view so a playtest run never flips the developer's real preference.
     await ToggleViewUntil (startedThirdPerson);
@@ -442,9 +475,50 @@ public partial class PlaytestDriver : Node
     Assert (Self.Score == 0, $"own score is 0 before the fall, got {Self.Score}");
     Self.Position = new Vector3 (120.0f, 5.0f, 120.0f); // Beyond the arena: nothing below but the kill boundary.
     await WaitUntil (() => Self.Score == -1, 60, "fall at score 0 dropped own score to -1");
-    // Give the shooter time to finish its solo phases (fire-rate & full-auto) before we vanish.
-    await Task.Delay (8000);
+    // Respawned from the fall; the shooter's paper airplane phase needs us standing
+    // in the spawn room (#102).
+    await WaitUntil (() => Self.GlobalPosition.Y > 20.0f, 30, "respawned in the spawn room after the fall");
+    // The throw replicates (#102): the shooter's flying airplane must appear here as
+    // a visual copy before there's anything to catch.
+    await WaitUntil (() => _world.GetChildren().OfType <PaperAirplaneProjectile>().Any(), 150, "shooter's thrown airplane replicated as a flying copy (#102)");
+    // The signature catch (#102): watch the shooter's incoming airplane & punch it
+    // out of the air once it's in reach; the handoff must land in our own hands.
+    await PunchCatchAirplane();
+    Assert (Self.Holds (HeldWeapon.PaperAirplane), "punch-caught the incoming paper airplane & it was granted (#102)");
+    Assert (Self.SelectedWeapon == SelectedWeapon.PaperAirplane, "the caught paper airplane auto-equipped (#128)");
+    // Give the shooter time to observe the handoff before we vanish.
+    await Task.Delay (3000);
   }
+
+  // Poll the incoming airplane & punch once it's within catch reach (#102).
+  // Recovery path: if a timing hiccup let it hit or land instead, it becomes a
+  // pickup right beside us, so walking to it still ends the loop with it in hand -
+  // but never the deterministic spawn-room pickup, which belongs to the shooter.
+  private async Task PunchCatchAirplane()
+  {
+    var deadline = Time.GetTicksMsec() + 60_000;
+
+    while (!Self.Holds (HeldWeapon.PaperAirplane) && Time.GetTicksMsec() < deadline)
+    {
+      var airplane = _world.GetChildren().OfType <PaperAirplaneProjectile>().FirstOrDefault();
+      var pickup = _world.GetChildren().OfType <WeaponPickup>().FirstOrDefault (IsCatchRecoveryPickup);
+
+      if (airplane != null && airplane.GlobalPosition.DistanceTo (Self.GlobalPosition + Vector3.Up) <= 2.2f)
+      {
+        PressAction ("punch");
+        await Task.Delay (60);
+        ReleaseAction ("punch");
+      }
+      else if (airplane == null && pickup != null) WalkedTo (pickup.GlobalPosition);
+
+      await Task.Delay (40);
+    }
+  }
+
+  private bool IsCatchRecoveryPickup (WeaponPickup pickup) =>
+    pickup.Weapon == HeldWeapon.PaperAirplane
+    && pickup.GlobalPosition.DistanceTo (Self.GlobalPosition) < 15.0f
+    && pickup.GlobalPosition.DistanceTo (WeaponSpawner.PlaytestAirplanePosition) > 1.5f;
 
   // Negative password check (issue #109): join with a bogus password, expect the
   // server to kick us with exactly "Wrong password.", then wait out the disconnect

@@ -22,6 +22,7 @@ public static class MessageGenerator
   public static string OnZappedStreak (string victimName) => Fill (Pick (MessagePools.ZappedStreak), victimName, "");
   public static string OnFallStreak (string victimName) => Fill (Pick (MessagePools.FallStreak), victimName, "");
   public static string OnTheftRevenge (string victimName, string zapperName) => Fill (Pick (MessagePools.TheftRevenge), victimName, zapperName);
+  public static string OnAirplaneCatch (string throwerName, string catcherName) => Fill (Pick (MessagePools.AirplaneCatch), throwerName, catcherName);
   public static string OnZapped (string victimName, string zapperName, DeathContext context) => Fill (Pick (SelectZappedPool (context)), victimName, zapperName);
   private static string Fill (string template, string victimName, string zapperName) => Capitalize (template.Replace ("{v}", victimName).Replace ("{z}", zapperName));
   private static string Capitalize (string message) => char.ToUpper (message[0]) + message[1..];
@@ -53,6 +54,7 @@ public static class MessageGenerator
     if (context.Kind == DamageKind.Punch) return MessagePools.Punch;
     if (context.Kind == DamageKind.Boomerang) return MessagePools.Boomerang; // Issue #98.
     if (context.Kind == DamageKind.Slingshot) return MessagePools.Slingshot; // Issue #99.
+    if (context.Kind == DamageKind.PaperAirplane) return MessagePools.PaperAirplane; // Issue #102.
     if (context.VictimHeldBananaGun) return MessagePools.HoldingBananaGun;
     if (context.Kind == DamageKind.Laser && context.ThroughBarrier) return MessagePools.ThroughWall; // Pierced a wall/floor first (issue #94).
     if (context.KillerSliding) return MessagePools.SlideShotKiller;

@@ -8,8 +8,9 @@ using Godot;
 namespace com.forerunnergames.energyshot.weapons;
 
 // Server-authoritative weapon lifecycle manager (issue #72): keeps at most 3 lasers,
-// 1 banana, 1 boomerang (issue #98), & 1 slingshot (issue #99) existing in the level
-// (held + dropped + pickups + boomerang escrow), spawning pickups at the building-top
+// 1 banana, 1 boomerang (issue #98), 1 slingshot (issue #99), & 1 paper airplane
+// (issue #102) existing in the level (held + dropped + pickups + boomerang escrow +
+// the airplane catch handoff), spawning pickups at the building-top
 // & banana-platform spawn points. Spawns replicate to every peer through the World's MultiplayerSpawner,
 // same as players.
 public partial class WeaponSpawner : Node3D
@@ -18,6 +19,7 @@ public partial class WeaponSpawner : Node3D
   [Export] public int MaxBananas = 1;
   [Export] public int MaxBoomerangs = 1;
   [Export] public int MaxSlingshots = 1;
+  [Export] public int MaxPaperAirplanes = 1;
   [Export] public float ReconcileIntervalSeconds = 1.0f;
   [Export] public float PickupHoverHeight = 0.9f;
   // Playtest-only (#72): a laser pickup is kept at this fixed spawn-room spot so the
@@ -28,6 +30,9 @@ public partial class WeaponSpawner : Node3D
   public static readonly Vector3 PlaytestBoomerangPosition = new(3.0f, 31.1f, 5.0f);
   // Playtest-only (#99): same idea for the slingshot draw/release phase.
   public static readonly Vector3 PlaytestSlingshotPosition = new(-3.0f, 31.1f, 5.0f);
+  // Playtest-only (#102): same idea for the paper airplane throw/catch phase, on the
+  // opposite z = -5 row so it stays clear of the +/-4 random spawn scatter too.
+  public static readonly Vector3 PlaytestAirplanePosition = new(0.0f, 31.1f, -5.0f);
   private const float OccupiedRadius = 1.0f;
   // Cargo riding a boomerang home (issue #98): stolen & scooped weapons live here
   // between the grab & the thrower's catch, so the caps still count them.
@@ -49,8 +54,15 @@ public partial class WeaponSpawner : Node3D
   private IEnumerable <Player> Players() => GetParent().GetChildren().OfType <Player>();
   private static bool IsFree (Vector3 point, IEnumerable <WeaponPickup> pickups) => pickups.All (pickup => pickup.Position.DistanceTo (point) > OccupiedRadius);
   // Escrowed boomerang cargo counts too (issue #98), or a reconcile pass mid-flight
-  // would over-spawn the weapon the boomerang is carrying.
-  private int Count (HeldWeapon type, List <WeaponPickup> pickups, List <Player> players) => pickups.Count (pickup => pickup.Weapon == type) + players.Count (player => player.Holds (type)) + _escrow.Count (cargo => cargo.Type == type);
+  // would over-spawn the weapon the boomerang is carrying; so does an airplane in
+  // its brief catch handoff between two players' replicated hands (issue #102).
+  private int Count (HeldWeapon type, List <WeaponPickup> pickups, List <Player> players) => pickups.Count (pickup => pickup.Weapon == type) + players.Count (player => player.Holds (type)) + _escrow.Count (cargo => cargo.Type == type) + (type == HeldWeapon.PaperAirplane && Time.GetTicksMsec() < _airplaneHandoffGraceUntilMs ? 1 : 0);
+  // Exactly-one invariant across the catch (issue #102): between the thrower's
+  // HeldWeapon clear replicating & the catcher's grant replicating back, neither
+  // hand shows the airplane; this grace keeps the reconcile pass from spawning a
+  // second one in that window. Overcounting is harmless - it only suppresses spawns.
+  private const ulong AirplaneHandoffGraceMs = 3000;
+  private ulong _airplaneHandoffGraceUntilMs;
   private void GrantToSelf (int type, string previousOwner) => (GetParent() as World)?.SelfPlayer?.GrantWeapon ((HeldWeapon)type, previousOwner);
   [Rpc] private void ConfirmPickup (int type, string previousOwner) => GrantToSelf (type, previousOwner);
   // A direct (non-RPC) call means the host itself sent it, so there's no remote sender.
@@ -131,6 +143,7 @@ public partial class WeaponSpawner : Node3D
     if (candidates.Count > 0 && Count (HeldWeapon.Banana, pickups, players) < MaxBananas) Spawn (HeldWeapon.Banana, TakeRandom (candidates), expires: false);
     if (candidates.Count > 0 && Count (HeldWeapon.Boomerang, pickups, players) < MaxBoomerangs) Spawn (HeldWeapon.Boomerang, TakeRandom (candidates), expires: false);
     if (candidates.Count > 0 && Count (HeldWeapon.Slingshot, pickups, players) < MaxSlingshots) Spawn (HeldWeapon.Slingshot, TakeRandom (candidates), expires: false);
+    if (candidates.Count > 0 && Count (HeldWeapon.PaperAirplane, pickups, players) < MaxPaperAirplanes) Spawn (HeldWeapon.PaperAirplane, TakeRandom (candidates), expires: false); // Exactly 1 in the game (issue #102).
   }
 
   // Playtest-only (#72 & #98): keeps deterministic pickups available in the spawn
@@ -141,6 +154,7 @@ public partial class WeaponSpawner : Node3D
     EnsurePlaytestPickup (HeldWeapon.Laser, PlaytestLaserPosition, pickups);
     EnsurePlaytestPickup (HeldWeapon.Boomerang, PlaytestBoomerangPosition, pickups);
     EnsurePlaytestPickup (HeldWeapon.Slingshot, PlaytestSlingshotPosition, pickups); // Issue #99.
+    EnsurePlaytestPickup (HeldWeapon.PaperAirplane, PlaytestAirplanePosition, pickups); // Issue #102.
   }
 
   private void EnsurePlaytestPickup (HeldWeapon type, Vector3 position, List <WeaponPickup> pickups)
@@ -234,6 +248,7 @@ public partial class WeaponSpawner : Node3D
     if (dropped.HasFlag (HeldWeapon.Banana)) Spawn (HeldWeapon.Banana, spot + Vector3.Right * 0.8f, expires: true, dropperName);
     if (dropped.HasFlag (HeldWeapon.Boomerang)) Spawn (HeldWeapon.Boomerang, spot + Vector3.Left * 0.8f, expires: true, dropperName); // Issue #98.
     if (dropped.HasFlag (HeldWeapon.Slingshot)) Spawn (HeldWeapon.Slingshot, spot + Vector3.Back * 0.8f, expires: true, dropperName); // Issue #99.
+    if (dropped.HasFlag (HeldWeapon.PaperAirplane)) Spawn (HeldWeapon.PaperAirplane, spot + Vector3.Forward * 0.8f, expires: true, dropperName); // Issue #102.
   }
 
   // ------------------------------------------------ boomerang cargo (issue #98)
@@ -333,6 +348,47 @@ public partial class WeaponSpawner : Node3D
     }
 
     RpcId (throwerId, MethodName.ConfirmPickup, (int)cargo.Type, cargo.PreviousOwner);
+  }
+
+  // ------------------------------------------------ paper airplane catch (issue #102)
+
+  // Client -> server entry point; when this peer already is the server, skip the RPC.
+  public void SendAirplaneCatchRequest (int catcherId)
+  {
+    if (Multiplayer.IsServer()) { RequestAirplaneCatch (catcherId); return; }
+    RpcId (1, MethodName.RequestAirplaneCatch, catcherId);
+  }
+
+  // Someone punched the thrower's airplane out of the air (issue #102): the thrower
+  // (the flight's authority) reports the catch & the server hands the airplane to
+  // the catcher through the ConfirmPickup path, so auto-equip (#128) & theft-revenge
+  // (#84) apply. Validated against the sender's replicated HeldWeapon - throwers
+  // send the request BEFORE clearing their flags (#145/#167) - so a forged catch
+  // can't mint a second airplane.
+  [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
+  private void RequestAirplaneCatch (int catcherId)
+  {
+    if (!Multiplayer.IsServer()) return;
+    var throwerId = SenderOrSelf();
+    var thrower = Players().FirstOrDefault (player => player.NetworkId == throwerId);
+
+    if (thrower == null || !thrower.Holds (HeldWeapon.PaperAirplane))
+    {
+      ServerLog.Event (throwerId, "airplane catch deny: sender's replicated hands show no paper airplane");
+      return;
+    }
+
+    _airplaneHandoffGraceUntilMs = Time.GetTicksMsec() + AirplaneHandoffGraceMs; // Exactly-one invariant across the handoff.
+    ServerLog.Event (throwerId, $"airplane catch: handed to peer {catcherId}");
+
+    if (catcherId == Multiplayer.GetUniqueId())
+    {
+      GrantToSelf ((int)HeldWeapon.PaperAirplane, thrower.DisplayName);
+      return;
+    }
+
+    if (Players().All (player => player.NetworkId != catcherId)) return; // Catcher vanished mid-catch; the caps respawn it.
+    RpcId (catcherId, MethodName.ConfirmPickup, (int)HeldWeapon.PaperAirplane, thrower.DisplayName);
   }
 
   // The boomerang dropped out of the sky (thrower zapped out mid-flight, or the

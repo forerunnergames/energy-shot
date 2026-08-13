@@ -95,6 +95,7 @@ public partial class Hud : Control
     _bananaBar = GetNode <ProgressBar> ("VBoxContainer/Cooldowns/Banana/Bar");
     _world.SelfPlayerPunched += OnSelfPlayerPunched;
     _world.SelfPlayerSplattered += OnSelfPlayerSplattered;
+    _world.SelfPlayerAirplaneCaught += OnSelfPlayerAirplaneCaught;
     GetNode <Timer> ("LeaderboardTimer").Timeout += UpdateLeaderboard;
     _quitDialog = GetNode <ConfirmationDialog2> ("QuitDialog");
     _quitDialog.Confirmed += () => EmitSignal (SignalName.GameQuit);
@@ -161,6 +162,10 @@ public partial class Hud : Control
     _blurIntensity = Mathf.Min (1.0f, _blurIntensity + 0.4f);
     _blur.SetShaderParameter ("intensity", _blurIntensity);
   }
+
+  // The thrower saw its own airplane get punch-caught (issue #102): it picks the
+  // line once & broadcasts it, so every peer sees the same text (#53).
+  private void OnSelfPlayerAirplaneCaught (string catcherName, string throwerName) => Announce (MessageGenerator.OnAirplaneCatch (throwerName, catcherName));
 
   private void OnSelfPlayerSplattered()
   {

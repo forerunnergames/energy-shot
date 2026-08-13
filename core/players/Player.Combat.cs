@@ -138,6 +138,7 @@ public partial class Player
     CancelSpawnArmorIfFired(); // Punching drops your spawn armor, same as firing.
     var hand = ChooseRandomPunchHand();
     AnimatePunch (hand); // Local swing feedback for the puncher...
+    if (TryCatchPaperAirplane()) return; // The grab consumes the swing (issue #102).
     var target = FindAimedCollider (PunchRange);
 
     if (target is not Player victim)

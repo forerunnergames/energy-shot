@@ -42,6 +42,7 @@ public partial class WeaponPickup : Area3D
   private MeshInstance3D _bananaVisual = null!;
   private Node3D _boomerangVisual = null!;
   private Node3D _slingshotVisual = null!;
+  private Node3D _airplaneVisual = null!;
   private WeaponSpawner _spawner = null!;
   private float _ageSeconds;
   private float _retryCooldownLeft;
@@ -60,6 +61,8 @@ public partial class WeaponPickup : Area3D
     _visual.AddChild (_boomerangVisual);
     _slingshotVisual = SlingshotStone.CreateSlingshotVisual(); // Code-built, shared with the held model (issue #99).
     _visual.AddChild (_slingshotVisual);
+    _airplaneVisual = PaperAirplaneProjectile.CreateVisual(); // Code-built, shared with the projectile (issue #102).
+    _visual.AddChild (_airplaneVisual);
     _spawner = GetNode <WeaponSpawner> ("/root/World/WeaponSpawner");
     _expiryLeft = ExpirySeconds;
     UpdateVisuals();
@@ -119,10 +122,11 @@ public partial class WeaponPickup : Area3D
 
   private void UpdateVisuals()
   {
-    if (_laserVisual == null || _boomerangVisual == null || _slingshotVisual == null) return;
+    if (_laserVisual == null || _boomerangVisual == null || _slingshotVisual == null || _airplaneVisual == null) return;
     _laserVisual.Visible = Weapon == HeldWeapon.Laser;
     _bananaVisual.Visible = Weapon == HeldWeapon.Banana;
     _boomerangVisual.Visible = Weapon == HeldWeapon.Boomerang;
     _slingshotVisual.Visible = Weapon == HeldWeapon.Slingshot; // Issue #99.
+    _airplaneVisual.Visible = Weapon == HeldWeapon.PaperAirplane; // Issue #102.
   }
 }
