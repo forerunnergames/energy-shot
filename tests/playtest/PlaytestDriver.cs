@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using com.forerunnergames.energyshot.core.audio;
@@ -25,6 +26,10 @@ public partial class PlaytestDriver : Node
   private const int HostColor = 1;
   private const int ShooterColor = 3;
   private const int VictimColor = 5;
+  // Admin messages (issue #158): announcement text written into the host's operator
+  // file mid-run; the version must match run-playtest.sh's version file content.
+  private const string AdminAnnouncement = "Playtest admin announcement";
+  private const string ServerVersion = "v9.9.9-playtest";
   private World _world = null!;
   private string _role = string.Empty;
   private string _address = "127.0.0.1";
@@ -33,6 +38,7 @@ public partial class PlaytestDriver : Node
   private int _stonesSpawned;
   private int _airplanesSpawned;
   private Player? _self;
+  private readonly List <string> _adminMessages = new();
   private Player Self => _self ??= _world.GetPlayers().First (player => player.IsMultiplayerAuthority());
   private MusicManager Music => _world.GetNode <MusicManager> ("MusicManager");
   private Player? FindPlayer (string name) => _world.GetPlayers().FirstOrDefault (player => player.DisplayName == name);
@@ -43,6 +49,7 @@ public partial class PlaytestDriver : Node
     // ENet, dilating in-game time far behind the wall clock this driver waits on.
     Engine.MaxFps = 30;
     _world = GetNode <World> ("/root/World");
+    _world.AdminMessageReceived += message => _adminMessages.Add (message);
     _world.ChildEnteredTree += node => _boltsSpawned += node is LaserBolt ? 1 : 0;
     _world.ChildEnteredTree += node => _boomerangsSpawned += node is BoomerangProjectile ? 1 : 0;
     _world.ChildEnteredTree += node => _stonesSpawned += node is SlingshotStone ? 1 : 0;
@@ -115,6 +122,13 @@ public partial class PlaytestDriver : Node
     // vote came back through the server tally.
     await WaitUntil (() => Music.CurrentTrackTitle.Length > 0, 15, "music track started on the server");
     await WaitUntil (() => Music.CurrentUpVotes == 1, 30, "shooter's music vote tallied on host");
+    // Admin messages (issue #158): drop an announcement into the operator file; the
+    // 1s poller must broadcast it to every peer (host included) & consume the file
+    // (claimed atomically by rename) so the same text can be re-sent later.
+    var adminFile = ArgValue (OS.GetCmdlineUserArgs(), "--admin-message-file")!;
+    System.IO.File.WriteAllText (adminFile, AdminAnnouncement);
+    await WaitUntil (() => _adminMessages.Contains (AdminAnnouncement), 15, "admin announcement broadcast from the message file (#158)");
+    await WaitUntil (() => !System.IO.File.Exists (adminFile), 10, "admin message file consumed after broadcast (#158)");
     // Shooter kills victim once (plus possibly the host itself in the line of
     // fire); wait to observe the replicated score.
     await WaitUntil (() => FindPlayer (ShooterName)?.Score >= 1, 120, "shooter's kill replicated to host");
@@ -125,12 +139,19 @@ public partial class PlaytestDriver : Node
     // Stay up until both clients have finished & disconnected (the shooter's solo
     // phases now end with the paper airplane throw & catch, issue #102).
     await WaitUntil (() => _world.GetPlayers().Count() == 1, 180, "clients disconnected");
+    // The version line goes only to joining clients, never broadcast (#158), so the
+    // host must never have seen one.
+    Assert (_adminMessages.All (message => !message.Contains ("Running")), "version line was not broadcast to the host (#158)");
   }
 
   private async Task RunShooter()
   {
     _world.StartClientSession (ShooterName, difficulty: 1, _address, Port, Password, ShooterColor);
     await WaitUntil (() => _world.GetPlayers().Count() == 3, 60, "all 3 players visible");
+    // Forged admin RPC (issue #158): a client impersonating the server must be
+    // dropped by the server's peer-1 check; every role asserts the text never
+    // arrives. Sent by name: the RPC is private to NetworkManager on purpose.
+    _world.GetNode <Node> ("NetworkManager").Rpc ("OnAdminMessageReceived", "FORGED announcement");
     // DisplayName is an on-change sync that can land a beat after the spawn itself
     // under CI load (issue #78): wait for both names before dereferencing the
     // lookups, or FindPlayer returns null right here.
@@ -176,13 +197,15 @@ public partial class PlaytestDriver : Node
     await WaitUntil (() => victim.Dancing, 15, "victim's dance replicated to shooter (#103)");
 
     // Punch phase: walk up to the victim & punch them; verify melee damage lands.
-    // Fists are weapon slot 1 & punching requires them selected (issue #82); unarmed
-    // players already default to fists, so this press is just a defensive re-select.
+    var healthBeforePunch = victim.Health;
+    await WaitUntil (() => ApproachedVictim (victim), 30, "walked into punch range of victim");
+    // Fists are weapon slot 1 & punching requires them selected (issue #82). The
+    // re-select happens AFTER the walk: a pickup auto-claimed en route auto-equips
+    // itself (#128) & would otherwise deselect the fists (seen with the paper
+    // airplane pickup, #102).
     PressAction ("weapon_1");
     await Task.Delay (100);
     ReleaseAction ("weapon_1");
-    var healthBeforePunch = victim.Health;
-    await WaitUntil (() => ApproachedVictim (victim), 30, "walked into punch range of victim");
 
     for (var attempt = 0; attempt < 10 && victim.Health >= healthBeforePunch; ++attempt)
     {
@@ -413,6 +436,15 @@ public partial class PlaytestDriver : Node
     // The toggle persists to the shared user settings (#119); restore the starting
     // view so a playtest run never flips the developer's real preference.
     await ToggleViewUntil (startedThirdPerson);
+
+    // Admin messages (issue #158), asserted here so the waits don't stall the
+    // timing-sensitive phases above: the join-time version line reached only us
+    // (targeted send) & the host's file-driven announcement reached everyone.
+    await WaitUntil (() => _adminMessages.Contains ($"Running {ServerVersion}"), 30, "version line received on join (#158)");
+    await WaitUntil (() => _adminMessages.Contains (AdminAnnouncement), 30, "admin announcement received from the server (#158)");
+    // Our forged admin RPC from the start of the run was dropped by the server:
+    // it never echoed back here through any relay (#158).
+    Assert (_adminMessages.All (message => !message.Contains ("FORGED")), "forged admin RPC was rejected (#158)");
   }
 
   // Presses V until the view matches; the toggle only persists on a real key press,
@@ -430,6 +462,11 @@ public partial class PlaytestDriver : Node
 
   private async Task RunVictim()
   {
+    // Version enforcement (issue #170): a pre-#170 client joining via the legacy
+    // versionless RPC, & a client with a mismatched version, must each get kicked
+    // with the update-required reason before anything else is checked.
+    await AssertLegacyJoinIsKicked();
+    await AssertWrongVersionIsKicked();
     // Password enforcement (issue #109): a wrong password must get kicked with
     // "Wrong password." before the real join succeeds.
     await AssertWrongPasswordIsKicked();
@@ -444,6 +481,10 @@ public partial class PlaytestDriver : Node
     // propagated here through the server broadcast.
     await WaitUntil (() => Music.CurrentTrackTitle.Length > 0, 15, "current music track synced from server");
     await WaitUntil (() => Music.CurrentUpVotes == 1, 30, "shooter's music vote visible to victim");
+    // Admin messages (issue #158): the join-time version line & the host's
+    // file-driven announcement both arrive as admin messages here too.
+    await WaitUntil (() => _adminMessages.Contains ($"Running {ServerVersion}"), 30, "version line received on join (#158)");
+    await WaitUntil (() => _adminMessages.Contains (AdminAnnouncement), 30, "admin announcement received from the server (#158)");
     await WaitUntil (() => !Self.SpawnArmor, 15, "spawn armor expired on its own");
     // Streak replication (#88): simulate an active 3-streak on our own authority so
     // the shooter can verify it replicates - & that the death reset replicates too.
@@ -483,11 +524,50 @@ public partial class PlaytestDriver : Node
     await WaitUntil (() => _world.GetChildren().OfType <PaperAirplaneProjectile>().Any(), 150, "shooter's thrown airplane replicated as a flying copy (#102)");
     // The signature catch (#102): watch the shooter's incoming airplane & punch it
     // out of the air once it's in reach; the handoff must land in our own hands.
+    // Catching requires fists out - re-select in case a wandering auto-claim ever
+    // auto-equipped something else (#128).
+    PressAction ("weapon_1");
+    await Task.Delay (100);
+    ReleaseAction ("weapon_1");
     await PunchCatchAirplane();
     Assert (Self.Holds (HeldWeapon.PaperAirplane), "punch-caught the incoming paper airplane & it was granted (#102)");
     Assert (Self.SelectedWeapon == SelectedWeapon.PaperAirplane, "the caught paper airplane auto-equipped (#128)");
     // Give the shooter time to observe the handoff before we vanish.
     await Task.Delay (3000);
+    // The shooter's forged admin RPC must never have been relayed to us: the
+    // server drops admin messages from any sender but peer 1 (#158).
+    Assert (_adminMessages.All (message => !message.Contains ("FORGED")), "forged admin RPC never relayed to the victim (#158)");
+  }
+
+  // Legacy-client check (issue #170): join the way a pre-#170 client does (the
+  // 4-argument RequestPlayerSlot RPC with no version), expect the server to kick
+  // us with the exact update-required reason old clients can already display
+  // (#109), then wait out the disconnect so the next join starts clean.
+  private async Task AssertLegacyJoinIsKicked()
+  {
+    var kickReason = string.Empty;
+    _world.KickedFromServer += reason => kickReason = reason;
+    _world.StartLegacyClientSession (VictimName, difficulty: 0, _address, Port, Password);
+    await WaitUntil (() => kickReason.Length > 0, 30, "legacy versionless join was kicked");
+    var expected = $"Update required: server is v{World.GameVersion}, you have an older version.";
+    Assert (kickReason == expected, $"kick reason is \"{expected}\", got \"{kickReason}\"");
+    await WaitUntil (() => Multiplayer.MultiplayerPeer.GetConnectionStatus() != MultiplayerPeer.ConnectionStatus.Connected, 15, "kicked connection fully closed");
+    await Task.Delay (500); // Let the peer teardown settle before reconnecting.
+  }
+
+  // Negative version check (issue #170): join with a spoofed version & the right
+  // password, expect the server to kick us with the exact update-required reason,
+  // then wait out the disconnect so the next join starts clean.
+  private async Task AssertWrongVersionIsKicked()
+  {
+    var kickReason = string.Empty;
+    _world.KickedFromServer += reason => kickReason = reason;
+    _world.StartClientSession (VictimName, difficulty: 0, _address, Port, Password, version: "0.0.0-spoofed");
+    await WaitUntil (() => kickReason.Length > 0, 30, "wrong-version join was kicked");
+    var expected = $"Update required: server is v{World.GameVersion}, you have v0.0.0-spoofed.";
+    Assert (kickReason == expected, $"kick reason is \"{expected}\", got \"{kickReason}\"");
+    await WaitUntil (() => Multiplayer.MultiplayerPeer.GetConnectionStatus() != MultiplayerPeer.ConnectionStatus.Connected, 15, "kicked connection fully closed");
+    await Task.Delay (500); // Let the peer teardown settle before reconnecting.
   }
 
   // Poll the incoming airplane & punch once it's within catch reach (#102).
@@ -503,7 +583,10 @@ public partial class PlaytestDriver : Node
       var airplane = _world.GetChildren().OfType <PaperAirplaneProjectile>().FirstOrDefault();
       var pickup = _world.GetChildren().OfType <WeaponPickup>().FirstOrDefault (IsCatchRecoveryPickup);
 
-      if (airplane != null && airplane.GlobalPosition.DistanceTo (Self.GlobalPosition + Vector3.Up) <= 2.2f)
+      // Punch just outside the catch radius: input processing eats a frame or two
+      // while the glider closes ~0.4m/frame, & the catch RPC still needs a few
+      // more frames to reach the thrower before the hit lands.
+      if (airplane != null && airplane.GlobalPosition.DistanceTo (Self.GlobalPosition + Vector3.Up) <= 3.4f)
       {
         PressAction ("punch");
         await Task.Delay (60);
@@ -511,7 +594,7 @@ public partial class PlaytestDriver : Node
       }
       else if (airplane == null && pickup != null) WalkedTo (pickup.GlobalPosition);
 
-      await Task.Delay (40);
+      await Task.Delay (25);
     }
   }
 

@@ -51,6 +51,24 @@ jobs:
           # Checkout the entire commit history.
           fetch-depth: 0
 
+      # Stamp the release tag into the project version (issue #170) so every exported
+      # build carries it: the server compares client versions at join & blocks
+      # mismatched (usually outdated) clients with an update-required message.
+      # The canonical form is the tag without the leading "v" (e.g. 0.8.15);
+      # dev builds keep project.godot's "-dev" value.
+      - name: Stamp release version
+        env:
+          # Passed as an environment value (never interpolated into the script)
+          # so a hostile ref name can't inject shell commands.
+          TAG: ${{ github.ref_name }}
+        run: |
+          # Refuse to stamp anything that isn't a release version tag: a malformed
+          # tag would ship builds whose versions never match & lock everyone out.
+          echo "$TAG" | grep -Eq '^v?[0-9]+\.[0-9]+\.[0-9]+([-.].+)?$' || { echo "Refusing to stamp non-version tag [$TAG]"; exit 1; }
+          VERSION="${TAG#v}"
+          sed -i "s|^config/version=.*|config/version=\"$VERSION\"|" project.godot
+          grep "^config/version=" project.godot
+
       # Remove the addons directory before the build, to avoid failing the
       # build with this error:
       # "Error: The process '.../Godot_v4.7.1-stable_mono_linux.x86_64' failed with exit code null"
@@ -195,6 +213,18 @@ jobs:
           unzip -oq server.zip && rm server.zip
           test -f energy-shot-server.x86_64 || { echo "server binary missing from archive"; exit 1; }
           chmod +x energy-shot-server.x86_64
+          # Warn players in-game before the swap (issue #158): the running server
+          # polls this file once a second (--admin-message-file on the systemd unit)
+          # & broadcasts new content as a gold admin announcement, consuming the
+          # file (claimed by rename in the game user's home directory).
+          echo "Server updating to $TAG - back in about a minute!" > /home/game/admin-message
+          chown game:game /home/game/admin-message
+          # Record the running version (issue #158): the new build reads this at
+          # startup (--version-file) & shows each joining player "Running <tag>".
+          echo "$TAG" > /home/game/server-version
+          chown game:game /home/game/server-version
+          # Give players a moment to see the warning before the restart.
+          sleep 15
           # Swap in the validated build & restart.
           rm -rf /opt/energy-shot/build
           mv /opt/energy-shot/staging /opt/energy-shot/build

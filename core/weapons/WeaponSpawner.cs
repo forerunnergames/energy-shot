@@ -54,15 +54,15 @@ public partial class WeaponSpawner : Node3D
   private IEnumerable <Player> Players() => GetParent().GetChildren().OfType <Player>();
   private static bool IsFree (Vector3 point, IEnumerable <WeaponPickup> pickups) => pickups.All (pickup => pickup.Position.DistanceTo (point) > OccupiedRadius);
   // Escrowed boomerang cargo counts too (issue #98), or a reconcile pass mid-flight
-  // would over-spawn the weapon the boomerang is carrying; so does an airplane in
-  // its brief catch handoff between two players' replicated hands (issue #102).
-  private int Count (HeldWeapon type, List <WeaponPickup> pickups, List <Player> players) => pickups.Count (pickup => pickup.Weapon == type) + players.Count (player => player.Holds (type)) + _escrow.Count (cargo => cargo.Type == type) + (type == HeldWeapon.PaperAirplane && Time.GetTicksMsec() < _airplaneHandoffGraceUntilMs ? 1 : 0);
-  // Exactly-one invariant across the catch (issue #102): between the thrower's
-  // HeldWeapon clear replicating & the catcher's grant replicating back, neither
-  // hand shows the airplane; this grace keeps the reconcile pass from spawning a
-  // second one in that window. Overcounting is harmless - it only suppresses spawns.
-  private const ulong AirplaneHandoffGraceMs = 3000;
-  private ulong _airplaneHandoffGraceUntilMs;
+  // would over-spawn the weapon the boomerang is carrying.
+  // Players count via HeldOrRecentlyHeld (CodeRabbit on #168): a weapon inside its
+  // drop-grace window (cleared from HeldWeapon, drop RPC not yet processed) still
+  // exists, & counting only current holds let a reconcile pass over-spawn it. The
+  // union per player counts once - recently-held includes any still-held flags.
+  // The paper airplane's catch handoff (issue #102) rides the same grace: between
+  // the thrower's replicated clear & the catcher's replicated grant, the thrower
+  // still counts it, so the exactly-one invariant holds across the handoff.
+  private int Count (HeldWeapon type, List <WeaponPickup> pickups, List <Player> players) => pickups.Count (pickup => pickup.Weapon == type) + players.Count (player => (player.HeldOrRecentlyHeld & type) != 0) + _escrow.Count (cargo => cargo.Type == type);
   private void GrantToSelf (int type, string previousOwner) => (GetParent() as World)?.SelfPlayer?.GrantWeapon ((HeldWeapon)type, previousOwner);
   [Rpc] private void ConfirmPickup (int type, string previousOwner) => GrantToSelf (type, previousOwner);
   // A direct (non-RPC) call means the host itself sent it, so there's no remote sender.
@@ -225,7 +225,9 @@ public partial class WeaponSpawner : Node3D
     if (!Multiplayer.IsServer()) return;
     var senderId = SenderOrSelf();
     var dropper = Players().FirstOrDefault (player => player.NetworkId == senderId);
-    var dropped = (HeldWeapon)droppedMask & (dropper?.HeldWeapon ?? HeldWeapon.None);
+    // Current-or-recently-held (issue #167): the death-drop clear can replicate ahead
+    // of this RPC, so a strict current-held check denied every kill's weapon drop.
+    var dropped = (HeldWeapon)droppedMask & (dropper?.HeldOrRecentlyHeld ?? HeldWeapon.None);
 
     if (dropped == HeldWeapon.None)
     {
@@ -362,9 +364,10 @@ public partial class WeaponSpawner : Node3D
   // Someone punched the thrower's airplane out of the air (issue #102): the thrower
   // (the flight's authority) reports the catch & the server hands the airplane to
   // the catcher through the ConfirmPickup path, so auto-equip (#128) & theft-revenge
-  // (#84) apply. Validated against the sender's replicated HeldWeapon - throwers
-  // send the request BEFORE clearing their flags (#145/#167) - so a forged catch
-  // can't mint a second airplane.
+  // (#84) apply. Validated against the sender's current-or-recently-held flags
+  // (issue #167): throwers send the request BEFORE clearing (#145), but the clear
+  // delta can still beat this RPC to the server - the drop grace covers that race
+  // while keeping a forged catch from minting a second airplane.
   [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
   private void RequestAirplaneCatch (int catcherId)
   {
@@ -372,13 +375,12 @@ public partial class WeaponSpawner : Node3D
     var throwerId = SenderOrSelf();
     var thrower = Players().FirstOrDefault (player => player.NetworkId == throwerId);
 
-    if (thrower == null || !thrower.Holds (HeldWeapon.PaperAirplane))
+    if (thrower == null || (thrower.HeldOrRecentlyHeld & HeldWeapon.PaperAirplane) == 0)
     {
       ServerLog.Event (throwerId, "airplane catch deny: sender's replicated hands show no paper airplane");
       return;
     }
 
-    _airplaneHandoffGraceUntilMs = Time.GetTicksMsec() + AirplaneHandoffGraceMs; // Exactly-one invariant across the handoff.
     ServerLog.Event (throwerId, $"airplane catch: handed to peer {catcherId}");
 
     if (catcherId == Multiplayer.GetUniqueId())

@@ -15,7 +15,10 @@ public partial class Player
   [Export] public float PaperAirplaneEnergy = 0.3f;
   [Export] public float PaperAirplaneKnockbackScale = 0.5f;
   // Punch-catch reach (issue #102): the swing grabs any airplane this close.
-  [Export] public float AirplaneCatchRadiusMeters = 2.0f;
+  // Generous on purpose but still shorter than PunchRange (4m, issue #71): the
+  // catch is the fun part, & the incoming glider closes this gap in ~0.25s, so a
+  // tight radius made well-timed catches lose the race to the hit.
+  [Export] public float AirplaneCatchRadiusMeters = 3.0f;
   // Server-side-of-the-thrower slack for the catch check: the catcher's punch was
   // validated on their own peer; this only rejects wildly stale/forged requests.
   [Export] public float AirplaneCatchSlackMeters = 6.0f;
