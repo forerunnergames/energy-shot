@@ -11,6 +11,9 @@ public partial class Player
   // Bolts spawn this far ahead of the camera; the first sweep still starts at the
   // camera so nearer geometry isn't skipped (issue #112).
   private const float MuzzleOffsetMeters = 0.9f;
+  // Punching a wall stings a bit (issue #122): small self-inflicted dent, clamped
+  // above zero so it can never zap you out.
+  private const int GeometryPunchSelfDamage = 5;
 
   // Combat reports for the server log (issue #111): the attacker->victim damage RPCs
   // never execute on the server, so the attacker also files a tiny report the server
@@ -48,16 +51,18 @@ public partial class Player
   private static int CalculateHealthDecrease (float energyShot) => Mathf.Min (200, Mathf.RoundToInt (energyShot * 100.0f));
 
   // Casts a ray from the camera along the aim direction, ignoring ourselves, &
-  // returns the player it hits (or null).
-  private Player? FindAimedPlayer (float range)
+  // returns whatever it hits (or null); punches need to know geometry from air (issue #122).
+  private GodotObject? FindAimedCollider (float range)
   {
     var from = _camera.GlobalPosition;
     var to = from + -_camera.GlobalTransform.Basis.Z * range;
     var query = PhysicsRayQueryParameters3D.Create (from, to, exclude: new Godot.Collections.Array <Rid> { GetRid() });
     var hit = GetWorld3D().DirectSpaceState.IntersectRay (query);
     if (hit.Count == 0) return null;
-    return hit["collider"].AsGodotObject() as Player;
+    return hit["collider"].AsGodotObject();
   }
+
+  private Player? FindAimedPlayer (float range) => FindAimedCollider (range) as Player;
 
   // Crosshair stays white until it's actually over another player; the full-charge
   // pulse (issue #113) briefly owns the tint.
@@ -130,14 +135,36 @@ public partial class Player
     _punchCooldownLeft = PunchCooldownSeconds;
     CancelSpawnArmorIfFired(); // Punching drops your spawn armor, same as firing.
     var hand = ChooseRandomPunchHand();
-    AnimatePunch (hand); // Local whiff feedback for the puncher...
-    var victim = FindAimedPlayer (PunchRange);
-    if (victim == null) return;
+    AnimatePunch (hand); // Local swing feedback for the puncher...
+    var target = FindAimedCollider (PunchRange);
+
+    if (target is not Player victim)
+    {
+      PlayMissedPunchFeedback (target);
+      return;
+    }
+
     Rpc (MethodName.PlayRemotePunch, hand); // ...but peers only ever see real connects (issue #82).
     _punchSound.Play(); // Puncher-only, connect-only (issue #82): the victim hears the damage sound instead.
     GD.Print ($"{DisplayName}: I punched {victim.DisplayName}!");
     ReportToServer ($"punch: {DisplayName} punched {victim.DisplayName}");
     victim.RpcId (victim.NetworkId, MethodName.ReceivePunch, DisplayName);
+  }
+
+  // Missed punches are puncher-only feedback (issues #121 & #122): peers still only
+  // ever see real connects (issue #82). Hitting air whiffs; hitting level geometry
+  // thuds & stings the puncher a little - self-inflicted, no killer, never lethal.
+  private void PlayMissedPunchFeedback (GodotObject? target)
+  {
+    if (target == null)
+    {
+      _punchWhiffSound.Play(); // Swing & a miss (issue #121).
+      return;
+    }
+
+    _punchThudSound.Play(); // Knuckles vs. wall (issue #122).
+    Health = Mathf.Max (1, Health - GeometryPunchSelfDamage);
+    EmitSignal (SignalName.HealthChanged, Health);
   }
 
   private void UpdateCameraKick (double delta)

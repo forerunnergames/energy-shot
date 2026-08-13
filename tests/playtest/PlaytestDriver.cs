@@ -171,9 +171,10 @@ public partial class PlaytestDriver : Node
     // laser pickup the WeaponSpawner keeps in the spawn room in --playtest mode.
     await WaitUntil (() => WalkedTo (WeaponSpawner.PlaytestLaserPosition), 45, "walked to the playtest laser pickup");
     await WaitUntil (() => Self.Holds (HeldWeapon.Laser), 15, "collected the laser pickup");
+    Assert (Self.SelectedWeapon == SelectedWeapon.Laser, "pickup auto-equipped the laser (#128)");
 
-    // The laser is weapon slot 2 (issue #82); the first pickup auto-equips, so this
-    // press is just a defensive re-select before the shooting phases.
+    // The laser is weapon slot 2 (issue #82); every pickup auto-equips (#128), so
+    // this press is just a defensive re-select before the shooting phases.
     PressAction ("weapon_2");
     await Task.Delay (100);
     ReleaseAction ("weapon_2");
@@ -245,6 +246,35 @@ public partial class PlaytestDriver : Node
     await Task.Delay (1300);
     ReleaseAction ("shoot");
     Assert (_boltsSpawned - boltsBefore >= 3, $"full-auto fired a burst, got {_boltsSpawned - boltsBefore} bolts");
+
+    // Slide cancels (#131): with the slide key still held (simulating a wedged
+    // pressed state), switch weapons mid-slide, then press crouch - the crouch must
+    // cancel the slide into a crouch, the slide must not restart, & a final crouch
+    // press must stand the player back up.
+    for (var attempt = 0; attempt < 10 && !Self.Sliding; ++attempt)
+    {
+      ReleaseAction ("slide");
+      await Task.Delay (100);
+      PressAction ("slide");
+      await Task.Delay (200);
+    }
+
+    Assert (Self.Sliding, "slide started (#131)");
+    PressAction ("weapon_1");
+    await Task.Delay (100);
+    ReleaseAction ("weapon_1");
+    Assert (Self.Sliding, "weapon switch mid-slide left the slide intact (#131)");
+    PressAction ("crouch");
+    await Task.Delay (100);
+    ReleaseAction ("crouch");
+    await WaitUntil (() => !Self.Sliding && Self.Crouching, 5, "crouch press canceled the slide into a crouch (#131)");
+    ReleaseAction ("slide");
+    await Task.Delay (200);
+    Assert (!Self.Sliding, "canceled slide did not restart from the held key (#131)");
+    PressAction ("crouch");
+    await Task.Delay (100);
+    ReleaseAction ("crouch");
+    await WaitUntil (() => !Self.Crouching, 5, "stood back up after the canceled slide (#131)");
   }
 
   private async Task RunVictim()

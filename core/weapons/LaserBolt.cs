@@ -10,7 +10,9 @@ namespace com.forerunnergames.energyshot.weapons;
 // still stops sub-threshold shots (issue #112).
 public partial class LaserBolt : Node3D
 {
-  [Export] public float Speed = 90.0f;
+  // Doubled from 90 (issue #129): the per-frame ray sweep below keeps hit detection
+  // exact at any speed, so faster bolts can't tunnel.
+  [Export] public float Speed = 180.0f;
   // Drop at zero charge; the curve scales it down as charge rises (issue #106).
   [Export] public float DropAcceleration = 24.0f;
   // Drop multiplier by charge (issue #106): full-charge bolts fly nearly flat for
@@ -20,6 +22,11 @@ public partial class LaserBolt : Node3D
   public const float PierceEnergyThreshold = EnergyWeapon.FullChargeEnergyThreshold;
   // How far past the entry point the exit-side burn mark is searched for (issue #94).
   [Export] public float MaxPierceDepthMeters = 4.0f;
+  // Burn marks only where the bolt slams into a face at speed (issue #125): the
+  // incidence-scaled impact speed must be this fraction of the launch speed, so a
+  // bolt drooping onto the ground at the end of its arc leaves nothing, while
+  // deliberately shooting at the ground still scorches it.
+  [Export] public float BurnMarkMinImpactSpeedFraction = 0.5f;
   [Signal] public delegate void HitPlayerEventHandler (CharacterBody3D player, float energy, bool throughBarrier);
   // Baseline bright red at every charge level (issue #92); charge only makes it hotter.
   private static readonly Color LowEnergyColor = new(3.0f, 0.12f, 0.1f);
@@ -109,10 +116,19 @@ public partial class LaserBolt : Node3D
   private void Pierce (Godot.Collections.Dictionary hit)
   {
     _piercedBarrier = true;
-    var entry = hit["position"].AsVector3();
-    BurnMark.Spawn (GetParent(), entry, hit["normal"].AsVector3());
-    SpawnExitBurnMark (hit["rid"].AsRid(), entry);
+    SpawnBurnMarks (hit);
     _exclusions.Add (hit["rid"].AsRid());
+  }
+
+  // Velocity/angle gate (issue #125): marks spawn only when the bolt pierces the
+  // face at speed, not where it merely lands after its ballistic drop.
+  private void SpawnBurnMarks (Godot.Collections.Dictionary hit)
+  {
+    var normal = hit["normal"].AsVector3();
+    if (-_velocity.Dot (normal) < Speed * BurnMarkMinImpactSpeedFraction) return;
+    var entry = hit["position"].AsVector3();
+    BurnMark.Spawn (GetParent(), entry, normal);
+    SpawnExitBurnMark (hit["rid"].AsRid(), entry);
   }
 
   // Finds the far face of the pierced collider by casting back toward the entry
@@ -133,8 +149,10 @@ public partial class LaserBolt : Node3D
     LookAt (GlobalPosition + direction, direction.Abs().IsEqualApprox (Vector3.Up) ? Vector3.Forward : Vector3.Up);
   }
 
-  // Thick, bright, & strongly emissive even at minimum charge (issue #92), with some
-  // charge scaling kept on top.
+  // Thin elongated tracer (issue #129), bright & strongly emissive even at minimum
+  // charge (issue #92), with some charge scaling kept on top. The mesh's local Y is
+  // the capsule's long axis & points along the flight direction (kept there by
+  // Orient() each frame), so Y stretches the tracer & X/Z set its thickness.
   private void ApplyEnergyVisuals()
   {
     var mesh = GetNode <MeshInstance3D> ("Mesh");
@@ -144,7 +162,7 @@ public partial class LaserBolt : Node3D
     material.AlbedoColor = color;
     material.Emission = color;
     material.EmissionEnergyMultiplier = 3.0f + _energy * 2.0f;
-    var thickness = 1.5f + _energy * 1.5f;
-    mesh.Scale = new Vector3 (thickness, thickness, 1.0f + _energy * 2.0f);
+    var thickness = 1.0f + _energy * 0.6f;
+    mesh.Scale = new Vector3 (thickness, 1.0f + _energy, thickness);
   }
 }
