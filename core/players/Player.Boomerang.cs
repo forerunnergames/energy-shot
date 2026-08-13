@@ -32,7 +32,7 @@ public partial class Player
 
   private void UpdateBoomerang()
   {
-    if (!IsBoomerangSelected || !HasBoomerang || !_isInputEnabled) return;
+    if (!IsBoomerangSelected || !HasBoomerang || !_isInputEnabled || Dancing) return; // Dancing blocks throwing (issue #103).
     if (IsBoomerangOut || !Input.IsActionJustPressed ("shoot")) return;
     ThrowBoomerang();
   }
