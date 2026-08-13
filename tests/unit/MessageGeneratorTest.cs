@@ -12,13 +12,13 @@ public class MessageGeneratorTest
   private static DeathContext Laser (float energy = 0.5f) => new() { Kind = DamageKind.Laser, Energy = energy };
 
   [TestCase]
-  public void ExactlyOneHundredSevenUniqueMessageTemplates()
+  public void ExactlyOneHundredElevenUniqueMessageTemplates()
   {
     // 100 from the content wave (issue #84) + 3 through-wall zaps (issue #94)
-    // + 4 boomerang zap-outs (issue #98).
+    // + 4 boomerang zap-outs (issue #98) + 4 slingshot zap-outs (issue #99).
     var templates = MessagePools.All.SelectMany (pool => pool).ToList();
-    AssertInt (templates.Count).IsEqual (107);
-    AssertInt (templates.Distinct().Count()).IsEqual (107);
+    AssertInt (templates.Count).IsEqual (111);
+    AssertInt (templates.Distinct().Count()).IsEqual (111);
   }
 
   [TestCase]
@@ -33,8 +33,8 @@ public class MessageGeneratorTest
   [TestCase]
   public void EveryPoolIsInTheRegistry()
   {
-    // 24 scenario pools registered, none empty.
-    AssertInt (MessagePools.All.Count).IsEqual (24);
+    // 25 scenario pools registered, none empty.
+    AssertInt (MessagePools.All.Count).IsEqual (25);
     foreach (var pool in MessagePools.All) AssertBool (pool.Count > 0).IsTrue();
   }
 
@@ -68,6 +68,13 @@ public class MessageGeneratorTest
   {
     // Boomerang zap-outs get their own flavor (issue #98).
     AssertObject (MessageGenerator.SelectZappedPool (new DeathContext { Kind = DamageKind.Boomerang, Energy = 0.4f })).IsSame (MessagePools.Boomerang);
+  }
+
+  [TestCase]
+  public void SlingshotPoolSelectedByDamageKind()
+  {
+    // Slingshot zap-outs get their own flavor (issue #99).
+    AssertObject (MessageGenerator.SelectZappedPool (new DeathContext { Kind = DamageKind.Slingshot, Energy = 0.6f })).IsSame (MessagePools.Slingshot);
   }
 
   [TestCase]

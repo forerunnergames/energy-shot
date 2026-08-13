@@ -310,6 +310,7 @@ public partial class Player : CharacterBody3D
     _bananaLauncher = GetNode <BananaLauncher> ("Camera3D/BananaLauncher");
     _launcherRestPosition = _bananaLauncher.Position;
     CreateBoomerangHeld(); // Code-built held model, no scene asset (issue #98).
+    CreateSlingshotHeld(); // Same, for the slot-5 slingshot (issue #99).
     UpdateWeaponVisibility();
     CreateHands();
     _crossHairs = GetNode <Sprite3D> ("Camera3D/Crosshairs");
@@ -390,6 +391,7 @@ public partial class Player : CharacterBody3D
     UpdateWeaponSelection();
     UpdateBananaLauncher();
     UpdateBoomerang();
+    UpdateSlingshot (delta); // Draw-&-release stones (issue #99).
     UpdateBread();
     UpdateFullAuto (delta);
     UpdatePunch (delta);

@@ -7,5 +7,6 @@ public enum SelectedWeapon
   Fists = 0,
   Laser = 1,
   Banana = 2,
-  Boomerang = 3
+  Boomerang = 3,
+  Slingshot = 4
 }

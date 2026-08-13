@@ -41,6 +41,7 @@ public partial class WeaponPickup : Area3D
   private Node3D _laserVisual = null!;
   private MeshInstance3D _bananaVisual = null!;
   private Node3D _boomerangVisual = null!;
+  private Node3D _slingshotVisual = null!;
   private WeaponSpawner _spawner = null!;
   private float _ageSeconds;
   private float _retryCooldownLeft;
@@ -57,6 +58,8 @@ public partial class WeaponPickup : Area3D
     _bananaVisual.MaterialOverride = new StandardMaterial3D { AlbedoColor = BananaYellow, Roughness = 0.6f };
     _boomerangVisual = BoomerangProjectile.CreateVisual(); // Code-built, shared with the projectile (issue #98).
     _visual.AddChild (_boomerangVisual);
+    _slingshotVisual = SlingshotStone.CreateSlingshotVisual(); // Code-built, shared with the held model (issue #99).
+    _visual.AddChild (_slingshotVisual);
     _spawner = GetNode <WeaponSpawner> ("/root/World/WeaponSpawner");
     _expiryLeft = ExpirySeconds;
     UpdateVisuals();
@@ -116,9 +119,10 @@ public partial class WeaponPickup : Area3D
 
   private void UpdateVisuals()
   {
-    if (_laserVisual == null || _boomerangVisual == null) return;
+    if (_laserVisual == null || _boomerangVisual == null || _slingshotVisual == null) return;
     _laserVisual.Visible = Weapon == HeldWeapon.Laser;
     _bananaVisual.Visible = Weapon == HeldWeapon.Banana;
     _boomerangVisual.Visible = Weapon == HeldWeapon.Boomerang;
+    _slingshotVisual.Visible = Weapon == HeldWeapon.Slingshot; // Issue #99.
   }
 }
