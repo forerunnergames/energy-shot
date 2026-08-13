@@ -16,7 +16,13 @@ echo "== Importing & building =="
 dotnet build "$DIR" > "$LOGS/build.log" 2>&1 || { echo "BUILD FAILED"; tail -20 "$LOGS/build.log"; exit 1; }
 
 echo "== Launching host + 2 clients =="
-"$GODOT_BIN" --headless --path "$DIR" -- --playtest host --port "$PORT" > "$LOGS/host.log" 2>&1 &
+# Admin messages (issue #158): the host runs with the operator file channel & a
+# version file; the driver writes an announcement mid-run & every role asserts it.
+ADMIN_FILE="$LOGS/admin-message"
+VERSION_FILE="$LOGS/server-version"
+: > "$ADMIN_FILE"
+echo "v9.9.9-playtest" > "$VERSION_FILE"
+"$GODOT_BIN" --headless --path "$DIR" -- --playtest host --port "$PORT" --admin-message-file "$ADMIN_FILE" --version-file "$VERSION_FILE" > "$LOGS/host.log" 2>&1 &
 HOST=$!
 sleep 5
 "$GODOT_BIN" --headless --path "$DIR" -- --playtest victim --port "$PORT" > "$LOGS/victim.log" 2>&1 &
