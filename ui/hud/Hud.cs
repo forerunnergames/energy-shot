@@ -141,7 +141,7 @@ public partial class Hud : Control
   private void AddCrouchModeToggleToPauseDialog()
   {
     var container = GetNodeOrNull <BoxContainer> ("QuitDialog/VBoxContainer/HBoxContainer");
-    if (container == null) return;
+    if (container == null) { GD.PushWarning ("Pause-dialog container missing: the hold-to-crouch toggle (issue #147) was not added."); return; }
     var toggle = new CheckButton { Text = "Hold to crouch", ButtonPressed = Settings.HoldToCrouch };
     toggle.AddThemeFontSizeOverride ("font_size", 40);
     toggle.Toggled += OnHoldToCrouchToggled;

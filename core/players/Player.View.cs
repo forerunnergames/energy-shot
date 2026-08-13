@@ -83,7 +83,10 @@ public partial class Player
   {
     if (!_deathView) return;
     var target = GlobalPosition + Vector3.Up * 0.5f;
-    if (target.IsEqualApprox (_thirdPersonCamera!.GlobalPosition)) return;
+    var toTarget = target - _thirdPersonCamera!.GlobalPosition;
+    // A collapsed spring arm can leave the camera directly above the body; a
+    // near-vertical LookAt has no valid up & spams warnings (CodeRabbit on #185).
+    if (toTarget.IsZeroApprox() || toTarget.Cross (Vector3.Up).IsZeroApprox()) return;
     _thirdPersonCamera.LookAt (target, Vector3.Up);
   }
 

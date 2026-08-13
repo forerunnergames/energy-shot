@@ -160,12 +160,17 @@ public partial class Player
     if (Dancing) return;
     if (Fallen) return; // Same for the death tip-over tween (issue #152).
     var rotation = Sliding ? new Vector3 (-90.0f, 0.0f, 0.0f) : Vector3.Zero;
-    var position = new Vector3 (0.0f, Sliding ? 0.5f : _crouching ? CrouchHeightScale : 1.0f, 0.0f);
+    var position = BodyPoseOffset();
     _mesh.RotationDegrees = rotation;
     _mesh.Position = position;
     _collisionShape.RotationDegrees = rotation;
     _collisionShape.Position = position;
   }
+
+  // Where the mesh & collision nodes sit for the current stance: slide-height while
+  // sliding, dropped to keep the FEET planted while crouched (issue #171), standing
+  // center otherwise. Shared by both pose helpers so they can never disagree.
+  private Vector3 BodyPoseOffset() => new(0.0f, Sliding ? 0.5f : _crouching ? CrouchHeightScale : 1.0f, 0.0f);
 
   // Runs on every peer via the replicated Crouching property. The shape scales about
   // its center, so the node also drops to keep the FEET planted (issue #171): the old
@@ -177,7 +182,7 @@ public partial class Player
     if (Dancing) return; // Same ALWAYS-sync reason as ApplySlidePose (issue #103).
     if (Fallen) return; // The death tip-over tween owns the mesh (issue #152).
     var scale = new Vector3 (1.0f, _crouching ? CrouchHeightScale : 1.0f, 1.0f);
-    var position = new Vector3 (0.0f, Sliding ? 0.5f : _crouching ? CrouchHeightScale : 1.0f, 0.0f);
+    var position = BodyPoseOffset();
     _mesh.Scale = scale;
     _mesh.Position = position;
     _collisionShape.Scale = scale;
@@ -237,6 +242,9 @@ public partial class Player
     DropAllHeldWeapons(); // Death drops everything carried at the death spot (issue #72).
     EmitSignal (SignalName.RespawnedShot, DisplayName, shotByPlayerName); // Message shows during the wait (issue #152).
     await LieFallen();
+    // A disconnect can free this node mid-lie-down (CodeRabbit on #185): a freed
+    // node has nothing left to respawn.
+    if (!IsInstanceValid (this) || !IsInsideTree()) return;
     Respawn();
   }
 
@@ -306,6 +314,7 @@ public partial class Player
     _respawnSound.Play();
     GD.Print ($"{DisplayName}: I respawned!");
     await ToSignal (GetTree().CreateTimer (RespawnInputLockSeconds), SceneTreeTimer.SignalName.Timeout);
+    if (!IsInstanceValid (this) || !IsInsideTree()) return; // Same disconnect guard as the death sequence (CodeRabbit on #185).
     SetInputEnabled (isEnabled: true);
   }
 

@@ -58,7 +58,9 @@ public partial class PlaytestDriver : Node
     var args = OS.GetCmdlineUserArgs();
     _role = ArgValue (args, "--playtest") ?? string.Empty;
     _address = ArgValue (args, "--address") ?? "127.0.0.1";
-    _port = int.TryParse (ArgValue (args, "--port"), out var port) ? port : DefaultPort;
+    // Sanity-check the override (CodeRabbit on #185): anything outside the sane
+    // unprivileged range falls back to the default instead of failing the bind.
+    _port = int.TryParse (ArgValue (args, "--port"), out var port) && port is >= 1024 and <= 65535 ? port : DefaultPort;
     GD.Print ($"PLAYTEST: starting role [{_role}]");
     RunScenario();
   }
@@ -441,6 +443,13 @@ public partial class PlaytestDriver : Node
     Self.Position = new Vector3 (40.0f, 1.0f, -40.0f); // Open corner: no buildings, pillars, or platforms nearby.
     await Task.Delay (300); // Settle onto the ground.
 
+    // The crouch phases must not depend on whatever crouch mode the developer's
+    // real settings.cfg persists (CodeRabbit on #185): force each mode explicitly
+    // & restore the real preference at the end.
+    var startedHoldToCrouch = Settings.HoldToCrouch;
+    Settings.HoldToCrouch = false;
+    Self.RefreshCrouchMode();
+
     // Crouch un-stick (#171): a plain toggle on the thin arena ground must go down
     // AND back up, with the feet staying planted - the old center-scale sank the
     // body ~0.4m, so the overhead probe started under the slab, saw its underside,
@@ -457,16 +466,14 @@ public partial class PlaytestDriver : Node
     ReleaseAction ("crouch");
     await WaitUntil (() => !Self.Crouching, 5, "crouch toggled back up (#171)");
 
-    // Hold-to-crouch (#147): flip the persisted setting, hold = crouch, release =
-    // stand; the developer's real preference is restored afterward.
-    var startedHoldToCrouch = Settings.HoldToCrouch;
+    // Hold-to-crouch (#147): switch to hold mode - hold = crouch, release = stand.
     Settings.HoldToCrouch = true;
     Self.RefreshCrouchMode();
     PressAction ("crouch");
     await WaitUntil (() => Self.Crouching, 5, "hold mode: crouched while held (#147)");
     ReleaseAction ("crouch");
     await WaitUntil (() => !Self.Crouching, 5, "hold mode: stood up on release (#147)");
-    Settings.HoldToCrouch = startedHoldToCrouch;
+    Settings.HoldToCrouch = startedHoldToCrouch; // The developer's real preference survives the run.
     Self.RefreshCrouchMode();
 
     // Slide-jump chaining (#149): jumping out of a slide keeps its momentum in the
@@ -495,6 +502,28 @@ public partial class PlaytestDriver : Node
     ReleaseAction ("slide");
     Input.ActionRelease ("move_forward");
     await WaitUntil (() => !Self.Sliding, 2, "chained slide released");
+
+    // Chain window expiry (#149): outliving the landing window forfeits the chain -
+    // the next slide runs at base speed again (CodeRabbit on #185).
+    await WaitUntil (() => Self.SlideReadyFraction >= 1.0f, 15, "slide cooldown ready for the window-expiry test (#149)");
+    AimAt (Self.GlobalPosition + new Vector3 (-20.0f, 0.0f, 0.0f)); // Same clear -X lane.
+    Input.ActionPress ("move_forward");
+    PressAction ("slide");
+    await WaitUntil (() => Self.Sliding, 5, "slide started for the window-expiry test (#149)");
+    await Task.Delay (200);
+    PressAction ("jump");
+    await Task.Delay (100);
+    ReleaseAction ("jump");
+    await WaitUntil (() => !Self.Sliding, 2, "jump ended the window-expiry slide (#149)");
+    ReleaseAction ("slide");
+    await WaitUntil (() => Self.IsOnFloor(), 5, "landed from the window-expiry slide-jump (#149)");
+    Input.ActionRelease ("move_forward");
+    await Task.Delay (2000); // Far past the 0.5s window; generous because it counts (slower) physics time.
+    PressAction ("slide");
+    await WaitUntil (() => Self.Sliding, 2, "post-window slide started (#149)");
+    Assert (Self.CurrentSlideSpeed <= Self.Speed * Self.SlideSpeedMultiplier + 0.01f, $"expired chain window: slide back at base speed (#149), speed {Self.CurrentSlideSpeed:0.0}");
+    ReleaseAction ("slide");
+    await WaitUntil (() => !Self.Sliding, 2, "post-window slide released");
 
     // Slide TIMER expiry (#148/#150): the lengthened slide runs its full duration &
     // ends STANDING in the open - no more forced crouch on expiry. Stationary (no

@@ -35,10 +35,14 @@ public partial class Player
     Crouching = false;
     Dancing = false;
     Fallen = true;
+    _slideJumpCarrying = false; // A corpse (& the next life) inherits no slide-jump momentum (issue #149).
     SetInputEnabled (isEnabled: false);
     EnterDeathView(); // Watch the aftermath from above (issue #152).
     GD.Print ($"{DisplayName}: I'm down for {DeathSequenceSeconds}s...");
     await ToSignal (GetTree().CreateTimer (DeathSequenceSeconds), SceneTreeTimer.SignalName.Timeout);
+    // A disconnect can free this node mid-wait (CodeRabbit on #185): never touch
+    // disposed children after the await, same as the sticky-banana fuse.
+    if (!IsInstanceValid (this) || !IsInsideTree()) return;
     Fallen = false;
     ExitDeathView();
   }
