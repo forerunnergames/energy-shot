@@ -24,6 +24,7 @@ Slot keys select what's in your hands. You spawn with fists only; everything els
 | 3 | Banana launcher | Left-click to fire an arcing banana. Direct hits stick, launch the victim, & detonate. Massive recoil - it can also rocket-jump you |
 | 4 | Boomerang | Left-click to throw. Curves out & returns; steals weapons from anyone it clips & scoops pickups it passes; auto-catches on return |
 | 5 | Slingshot | Hold left-click to draw, release to fling a stone. Longer draw = faster, flatter, harder (never a one-hit). A quick tap just relaxes the band - stones need a minimum draw, & a short cooldown separates shots |
+| 6 | Paper airplane | Left-click to throw. Locks onto whoever's under your crosshair & glides slowly after them; punch an incoming one (fists out) to catch it & throw it back. Only one exists in the whole game |
 
 ## Abilities & extras
 

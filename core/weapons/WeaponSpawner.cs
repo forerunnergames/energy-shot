@@ -8,8 +8,9 @@ using Godot;
 namespace com.forerunnergames.energyshot.weapons;
 
 // Server-authoritative weapon lifecycle manager (issue #72): keeps at most 3 lasers,
-// 1 banana, 1 boomerang (issue #98), & 1 slingshot (issue #99) existing in the level
-// (held + dropped + pickups + boomerang escrow), spawning pickups at the building-top
+// 1 banana, 1 boomerang (issue #98), 1 slingshot (issue #99), & 1 paper airplane
+// (issue #102) existing in the level (held + dropped + pickups + boomerang escrow +
+// the airplane catch handoff), spawning pickups at the building-top
 // & banana-platform spawn points. Spawns replicate to every peer through the World's MultiplayerSpawner,
 // same as players.
 public partial class WeaponSpawner : Node3D
@@ -18,6 +19,7 @@ public partial class WeaponSpawner : Node3D
   [Export] public int MaxBananas = 1;
   [Export] public int MaxBoomerangs = 1;
   [Export] public int MaxSlingshots = 1;
+  [Export] public int MaxPaperAirplanes = 1;
   [Export] public float ReconcileIntervalSeconds = 1.0f;
   [Export] public float PickupHoverHeight = 0.9f;
   // Playtest-only (#72): a laser pickup is kept at this fixed spawn-room spot so the
@@ -28,6 +30,11 @@ public partial class WeaponSpawner : Node3D
   public static readonly Vector3 PlaytestBoomerangPosition = new(3.0f, 31.1f, 5.0f);
   // Playtest-only (#99): same idea for the slingshot draw/release phase.
   public static readonly Vector3 PlaytestSlingshotPosition = new(-3.0f, 31.1f, 5.0f);
+  // Playtest-only (#102): same idea for the paper airplane throw/catch phase, on
+  // the opposite wall at z = -5.8: far enough from the +/-4 random spawn scatter
+  // that no unlucky spawn can auto-claim it - only a deliberate walk reaches it,
+  // which matters because the airplane pickup is capped at exactly one (#102).
+  public static readonly Vector3 PlaytestAirplanePosition = new(0.0f, 31.1f, -5.8f);
   // Playtest-only (#169): the victim arms up here before the kill phase, so the death
   // drop has something to drop - RequestDrop's death path had no coverage at all,
   // which is how the #167 vanishing-weapon regression reached players. Down in the
@@ -70,6 +77,9 @@ public partial class WeaponSpawner : Node3D
   // drop-grace window (cleared from HeldWeapon, drop RPC not yet processed) still
   // exists, & counting only current holds let a reconcile pass over-spawn it. The
   // union per player counts once - recently-held includes any still-held flags.
+  // The paper airplane's catch handoff (issue #102) rides the same grace: between
+  // the thrower's replicated clear & the catcher's replicated grant, the thrower
+  // still counts it, so the exactly-one invariant holds across the handoff.
   // Pending grants bridge the award->replication window the same way (issue #154).
   private int Count (HeldWeapon type, List <WeaponPickup> pickups, List <Player> players) => pickups.Count (pickup => pickup.Weapon == type) + players.Count (player => (player.HeldOrRecentlyHeld & type) != 0) + _escrow.Count (cargo => cargo.Type == type) + _pendingGrants.Count (grant => grant.Type == type);
   private void TrackPendingGrant (int collectorId, HeldWeapon type) => _pendingGrants.Add (new PendingGrant (collectorId, type, Time.GetTicksMsec() + (ulong)(PendingGrantTimeoutSeconds * 1000.0f))); // Issue #154.
@@ -133,6 +143,8 @@ public partial class WeaponSpawner : Node3D
     var players = Players().ToList();
     // Cargo whose thrower vanished mid-flight goes back to the spawn pool via the caps (issue #98).
     _escrow.RemoveAll (cargo => players.All (player => player.NetworkId != cargo.OwnerId));
+    // Same for airplane flights whose thrower disconnected (CodeRabbit on #180).
+    _airplaneFlights.RemoveWhere (throwerId => players.All (player => player.NetworkId != throwerId));
     PrunePendingGrants (players); // Delivered or expired award bridges stop counting (issue #154).
     var freePoints = _laserPoints.Where (point => IsFree (point, pickups)).ToList();
     var laserCount = Count (HeldWeapon.Laser, pickups, players);
@@ -144,7 +156,7 @@ public partial class WeaponSpawner : Node3D
     }
 
     SpawnSpecialsIfMissing (pickups, players, freePoints);
-    EnsurePlaytestPickups (pickups);
+    EnsurePlaytestPickups (pickups, players);
   }
 
   // The banana, boomerang (issue #98), & slingshot (issue #99) respawn at random free
@@ -157,17 +169,26 @@ public partial class WeaponSpawner : Node3D
     if (candidates.Count > 0 && Count (HeldWeapon.Banana, pickups, players) < MaxBananas) Spawn (HeldWeapon.Banana, TakeRandom (candidates), expires: false);
     if (candidates.Count > 0 && Count (HeldWeapon.Boomerang, pickups, players) < MaxBoomerangs) Spawn (HeldWeapon.Boomerang, TakeRandom (candidates), expires: false);
     if (candidates.Count > 0 && Count (HeldWeapon.Slingshot, pickups, players) < MaxSlingshots) Spawn (HeldWeapon.Slingshot, TakeRandom (candidates), expires: false);
+    // Exactly 1 airplane in the game (issue #102). In playtest mode the deterministic
+    // spawn-room pickup (EnsurePlaytestPickups) is the airplane's ONLY spawn path, or
+    // the two paths together could mint a second one (CodeRabbit on #180).
+    if (!_isPlaytest && candidates.Count > 0 && Count (HeldWeapon.PaperAirplane, pickups, players) < MaxPaperAirplanes) Spawn (HeldWeapon.PaperAirplane, TakeRandom (candidates), expires: false);
   }
 
   // Playtest-only (#72 & #98): keeps deterministic pickups available in the spawn
   // room for the driver's collection, shooting, throw/catch, & death-drop phases.
-  private void EnsurePlaytestPickups (List <WeaponPickup> pickups)
+  private void EnsurePlaytestPickups (List <WeaponPickup> pickups, List <Player> players)
   {
     if (!_isPlaytest) return;
     EnsurePlaytestPickup (HeldWeapon.Laser, PlaytestLaserPosition, pickups);
     EnsurePlaytestPickup (HeldWeapon.Boomerang, PlaytestBoomerangPosition, pickups);
     EnsurePlaytestPickup (HeldWeapon.Slingshot, PlaytestSlingshotPosition, pickups); // Issue #99.
-    EnsurePlaytestPickup (HeldWeapon.Banana, PlaytestBananaPosition, pickups); // Issue #169.
+    // The airplane respects its exactly-one cap even in playtest mode (CodeRabbit on
+    // #180): while someone holds it (or it sits landed somewhere), no respawn here.
+    if (Count (HeldWeapon.PaperAirplane, pickups, players) < MaxPaperAirplanes) EnsurePlaytestPickup (HeldWeapon.PaperAirplane, PlaytestAirplanePosition, pickups); // Issue #102.
+    // Same cap guard for the banana (CodeRabbit on #180): respawning it here while
+    // someone already carries one would put two in a level capped at one.
+    if (Count (HeldWeapon.Banana, pickups, players) < MaxBananas) EnsurePlaytestPickup (HeldWeapon.Banana, PlaytestBananaPosition, pickups); // Issue #169.
   }
 
   private void EnsurePlaytestPickup (HeldWeapon type, Vector3 position, List <WeaponPickup> pickups)
@@ -259,6 +280,9 @@ public partial class WeaponSpawner : Node3D
     if (!Multiplayer.IsServer()) return;
     var senderId = SenderOrSelf();
     var dropper = Players().FirstOrDefault (player => player.NetworkId == senderId);
+    // A landing airplane ends its flight (CodeRabbit on #180): consume the sender's
+    // flight record so a late or replayed catch request can't also grant it.
+    if (((HeldWeapon)droppedMask & HeldWeapon.PaperAirplane) != 0 && _airplaneFlights.Remove (senderId)) ServerLog.Event (senderId, "airplane landing: flight consumed");
     // Current-or-recently-held (issue #167): the death-drop clear can replicate ahead
     // of this RPC, so a strict current-held check denied every kill's weapon drop.
     var dropped = (HeldWeapon)droppedMask & (dropper?.HeldOrRecentlyHeld ?? HeldWeapon.None);
@@ -284,6 +308,7 @@ public partial class WeaponSpawner : Node3D
     if (dropped.HasFlag (HeldWeapon.Banana)) Spawn (HeldWeapon.Banana, spot + Vector3.Right * 0.8f, expires: true, dropperName);
     if (dropped.HasFlag (HeldWeapon.Boomerang)) Spawn (HeldWeapon.Boomerang, spot + Vector3.Left * 0.8f, expires: true, dropperName); // Issue #98.
     if (dropped.HasFlag (HeldWeapon.Slingshot)) Spawn (HeldWeapon.Slingshot, spot + Vector3.Back * 0.8f, expires: true, dropperName); // Issue #99.
+    if (dropped.HasFlag (HeldWeapon.PaperAirplane)) Spawn (HeldWeapon.PaperAirplane, spot + Vector3.Forward * 0.8f, expires: true, dropperName); // Issue #102.
   }
 
   // ------------------------------------------------ boomerang cargo (issue #98)
@@ -416,6 +441,90 @@ public partial class WeaponSpawner : Node3D
 
     TrackPendingGrant (throwerId, cargo.Type); // Bridge until the thrower's HeldWeapon replicates back (issue #154).
     RpcId (throwerId, MethodName.ConfirmPickup, (int)cargo.Type, cargo.PreviousOwner);
+  }
+
+  // ------------------------------------------------ paper airplane catch (issue #102)
+
+  // Active airplane flights by thrower id (CodeRabbit on #180): registered when the
+  // throw starts, consumed exactly once - by the catch handoff OR by the landing
+  // drop - so a replayed or forged catch request can never grant a second airplane.
+  private readonly HashSet <int> _airplaneFlights = new();
+
+  // Client -> server entry points; when this peer already is the server, skip the RPC.
+  public void SendAirplaneThrowRequest()
+  {
+    if (Multiplayer.IsServer()) { RequestAirplaneThrow(); return; }
+    RpcId (1, MethodName.RequestAirplaneThrow);
+  }
+
+  public void SendAirplaneCatchRequest (int catcherId)
+  {
+    if (Multiplayer.IsServer()) { RequestAirplaneCatch (catcherId); return; }
+    RpcId (1, MethodName.RequestAirplaneCatch, catcherId);
+  }
+
+  // The throw starts a server-side flight record (CodeRabbit on #180): only a player
+  // whose replicated hands show the airplane can open one, & each thrower has at
+  // most one. The record is the single-use ticket the catch handoff consumes.
+  [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
+  private void RequestAirplaneThrow()
+  {
+    if (!Multiplayer.IsServer()) return;
+    var throwerId = SenderOrSelf();
+    var thrower = Players().FirstOrDefault (player => player.NetworkId == throwerId);
+
+    if (thrower == null || !thrower.Holds (HeldWeapon.PaperAirplane))
+    {
+      ServerLog.Event (throwerId, "airplane throw deny: sender's replicated hands show no paper airplane");
+      return;
+    }
+
+    _airplaneFlights.Add (throwerId);
+    ServerLog.Event (throwerId, "airplane throw: flight registered");
+  }
+
+  // Someone punched the thrower's airplane out of the air (issue #102): the thrower
+  // (the flight's authority) reports the catch & the server hands the airplane to
+  // the catcher through the ConfirmPickup path, so auto-equip (#128) & theft-revenge
+  // (#84) apply. Single-use & server-authoritative (CodeRabbit on #180): the throw's
+  // flight record is consumed atomically before any grant, so a duplicate, replayed,
+  // or post-landing request finds no record & grants nothing. The catcher may be any
+  // connected player - anyone in the flight path can punch-catch (issue #102); the
+  // thrower's authority already validated the catch proximity against the live
+  // flight before reporting it here.
+  [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
+  private void RequestAirplaneCatch (int catcherId)
+  {
+    if (!Multiplayer.IsServer()) return;
+    var throwerId = SenderOrSelf();
+    var thrower = Players().FirstOrDefault (player => player.NetworkId == throwerId);
+
+    if (thrower == null || !_airplaneFlights.Remove (throwerId))
+    {
+      ServerLog.Event (throwerId, "airplane catch deny: no active flight registered for sender");
+      return;
+    }
+
+    // Belt & braces on top of the consumed record (issue #167): the sender's
+    // replicated hands must still show the airplane, current-or-recently-held -
+    // throwers send the catch BEFORE clearing (#145), but the clear delta can
+    // beat this RPC to the server.
+    if ((thrower.HeldOrRecentlyHeld & HeldWeapon.PaperAirplane) == 0)
+    {
+      ServerLog.Event (throwerId, "airplane catch deny: sender's replicated hands show no paper airplane");
+      return;
+    }
+
+    ServerLog.Event (throwerId, $"airplane catch: handed to peer {catcherId}");
+
+    if (catcherId == Multiplayer.GetUniqueId())
+    {
+      GrantToSelf ((int)HeldWeapon.PaperAirplane, thrower.DisplayName);
+      return;
+    }
+
+    if (Players().All (player => player.NetworkId != catcherId)) return; // Catcher vanished mid-catch; the caps respawn it.
+    RpcId (catcherId, MethodName.ConfirmPickup, (int)HeldWeapon.PaperAirplane, thrower.DisplayName);
   }
 
   // The boomerang dropped out of the sky (thrower zapped out mid-flight, or the
