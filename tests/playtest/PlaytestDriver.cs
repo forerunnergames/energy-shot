@@ -416,6 +416,10 @@ public partial class PlaytestDriver : Node
     // then throw from close by so the host can't wander into the flight path.
     await WaitUntil (() => victim.GlobalPosition.Y > 20.0f, 60, "victim back in the spawn room for the catch phase (#102)");
     await WaitUntil (() => WalkedTo (victim.GlobalPosition, reach: 6.0f), 45, "walked near the victim for the airplane throw (#102)");
+    // A genuine punch-catch fires our own AirplaneCaught signal when the handoff is
+    // validated (CodeRabbit on #180): a landing must NOT pass this phase.
+    var airplaneCaught = false;
+    Self.AirplaneCaught += _ => airplaneCaught = true;
     var airplanesBefore = _airplanesSpawned;
 
     for (var attempt = 0; attempt < 10 && _airplanesSpawned == airplanesBefore; ++attempt)
@@ -428,10 +432,11 @@ public partial class PlaytestDriver : Node
     }
 
     Assert (_airplanesSpawned > airplanesBefore, "paper airplane thrown at the victim (#102)");
-    // The victim's punch-catch (or a landing beside them) hands the airplane over:
-    // our replicated held flag clears & theirs sets (#102).
-    await WaitUntil (() => !Self.Holds (HeldWeapon.PaperAirplane), 30, "airplane left our hands after the flight (#102)");
-    await WaitUntil (() => victim.Holds (HeldWeapon.PaperAirplane), 60, "victim holds the caught paper airplane (#102)");
+    // The victim punch-catches it mid-air: the thrower-side catch signal is the
+    // observable handoff transition - a landing would never fire it (#102).
+    await WaitUntil (() => airplaneCaught, 30, "victim's punch-catch confirmed by own catch signal (#102)");
+    await WaitUntil (() => !Self.Holds (HeldWeapon.PaperAirplane), 15, "caught airplane left our hands (#102)");
+    await WaitUntil (() => victim.Holds (HeldWeapon.PaperAirplane), 30, "victim holds the caught paper airplane (#102)");
 
     // The toggle persists to the shared user settings (#119); restore the starting
     // view so a playtest run never flips the developer's real preference.
@@ -532,11 +537,48 @@ public partial class PlaytestDriver : Node
     await PunchCatchAirplane();
     Assert (Self.Holds (HeldWeapon.PaperAirplane), "punch-caught the incoming paper airplane & it was granted (#102)");
     Assert (Self.SelectedWeapon == SelectedWeapon.PaperAirplane, "the caught paper airplane auto-equipped (#128)");
-    // Give the shooter time to observe the handoff before we vanish.
+    // Give the shooter time to observe the handoff before the recovery scenario.
     await Task.Delay (3000);
+    // Landing & recovery (#102), a separate scenario from the catch (CodeRabbit on
+    // #180): throw the caught airplane into the floor nearby (nobody under the
+    // crosshair), let it land as a ray-grounded expiring pickup, & reclaim it.
+    await RecoverLandedAirplane();
     // The shooter's forged admin RPC must never have been relayed to us: the
     // server drops admin messages from any sender but peer 1 (#158).
     Assert (_adminMessages.All (message => !message.Contains ("FORGED")), "forged admin RPC never relayed to the victim (#158)");
+  }
+
+  // Landing lifecycle (#102): the airplane glides into the floor, becomes a grounded
+  // pickup where it stopped, & walking over reclaims it before the 5s expiry.
+  private async Task RecoverLandedAirplane()
+  {
+    var shooterPlayer = FindPlayer (ShooterName);
+    var awayFromShooter = shooterPlayer == null ? Vector3.Right : (Self.GlobalPosition - shooterPlayer.GlobalPosition).Normalized();
+    AimAt (Self.GlobalPosition + awayFromShooter * 3.0f + Vector3.Down * 1.0f); // Floor a few meters away, aimed at nobody.
+
+    for (var attempt = 0; attempt < 10 && !Self.IsAirplaneInFlight && Self.Holds (HeldWeapon.PaperAirplane); ++attempt)
+    {
+      PressAction ("shoot");
+      await Task.Delay (80);
+      ReleaseAction ("shoot");
+      await Task.Delay (200);
+    }
+
+    await WaitUntil (() => !Self.Holds (HeldWeapon.PaperAirplane), 15, "thrown airplane landed & left our hands (#102)");
+    await WaitUntil (() => _world.GetChildren().OfType <WeaponPickup>().Any (IsCatchRecoveryPickup), 15, "landed airplane became a grounded pickup (#102)");
+    await WaitUntil (WalkedToRecoveryPickup, 30, "landed airplane pickup was reclaimed by a player (#102)");
+  }
+
+  // We walk to the landed pickup, but any player claiming it proves the same thing:
+  // the landing produced a real, claimable pickup. There's exactly one airplane in
+  // the game (#102), so whoever is nearest legitimately wins the race - a bystander
+  // beating us to it must not fail the phase.
+  private bool WalkedToRecoveryPickup()
+  {
+    if (_world.GetPlayers().Any (player => player.Holds (HeldWeapon.PaperAirplane))) return true;
+    var pickup = _world.GetChildren().OfType <WeaponPickup>().FirstOrDefault (IsCatchRecoveryPickup);
+    if (pickup != null) WalkedTo (pickup.GlobalPosition);
+    return false;
   }
 
   // Legacy-client check (issue #170): join the way a pre-#170 client does (the
@@ -570,34 +612,35 @@ public partial class PlaytestDriver : Node
     await Task.Delay (500); // Let the peer teardown settle before reconnecting.
   }
 
-  // Poll the incoming airplane & punch once it's within catch reach (#102).
-  // Recovery path: if a timing hiccup let it hit or land instead, it becomes a
-  // pickup right beside us, so walking to it still ends the loop with it in hand -
-  // but never the deterministic spawn-room pickup, which belongs to the shooter.
+  // Poll the incoming airplane & punch once it's within catch reach (#102). Strict
+  // catch-only coverage (CodeRabbit on #180): a landed airplane (visible as a fresh
+  // grounded pickup) fails this phase immediately instead of masquerading as a
+  // catch - the landing lifecycle has its own recovery scenario.
   private async Task PunchCatchAirplane()
   {
     var deadline = Time.GetTicksMsec() + 60_000;
 
     while (!Self.Holds (HeldWeapon.PaperAirplane) && Time.GetTicksMsec() < deadline)
     {
+      if (_world.GetChildren().OfType <WeaponPickup>().Any (IsCatchRecoveryPickup)) throw new Exception ("assertion failed: the airplane landed instead of being punch-caught (#102)");
       var airplane = _world.GetChildren().OfType <PaperAirplaneProjectile>().FirstOrDefault();
-      var pickup = _world.GetChildren().OfType <WeaponPickup>().FirstOrDefault (IsCatchRecoveryPickup);
 
       // Punch just outside the catch radius: input processing eats a frame or two
       // while the glider closes ~0.4m/frame, & the catch RPC still needs a few
       // more frames to reach the thrower before the hit lands.
-      if (airplane != null && airplane.GlobalPosition.DistanceTo (Self.GlobalPosition + Vector3.Up) <= 3.4f)
+      if (airplane != null && airplane.GlobalPosition.DistanceTo (Self.GlobalPosition + Vector3.Up) <= 4.4f)
       {
         PressAction ("punch");
         await Task.Delay (60);
         ReleaseAction ("punch");
       }
-      else if (airplane == null && pickup != null) WalkedTo (pickup.GlobalPosition);
 
       await Task.Delay (25);
     }
   }
 
+  // A freshly landed airplane pickup (#102): near us & NOT the deterministic
+  // spawn-room pickup, which belongs to the shooter's collection phase.
   private bool IsCatchRecoveryPickup (WeaponPickup pickup) =>
     pickup.Weapon == HeldWeapon.PaperAirplane
     && pickup.GlobalPosition.DistanceTo (Self.GlobalPosition) < 15.0f

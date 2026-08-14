@@ -15,10 +15,11 @@ public partial class Player
   [Export] public float PaperAirplaneEnergy = 0.3f;
   [Export] public float PaperAirplaneKnockbackScale = 0.5f;
   // Punch-catch reach (issue #102): the swing grabs any airplane this close.
-  // Generous on purpose but still shorter than PunchRange (4m, issue #71): the
-  // catch is the fun part, & the incoming glider closes this gap in ~0.25s, so a
-  // tight radius made well-timed catches lose the race to the hit.
-  [Export] public float AirplaneCatchRadiusMeters = 3.0f;
+  // Matches PunchRange (issue #71): if your fist reaches a player at 4m it reaches
+  // an airplane at 4m. The catch is the fun part & the glider closes a meter every
+  // ~0.1s, so anything tighter made well-timed catches lose the race to the hit -
+  // at the old 3m a catch had to land inside a single frame's worth of travel.
+  [Export] public float AirplaneCatchRadiusMeters = 4.0f;
   // Server-side-of-the-thrower slack for the catch check: the catcher's punch was
   // validated on their own peer; this only rejects wildly stale/forged requests.
   [Export] public float AirplaneCatchSlackMeters = 6.0f;
@@ -55,6 +56,9 @@ public partial class Player
     var target = FindAimedPlayer (200.0f);
     var direction = -_camera.GlobalTransform.Basis.Z;
     var origin = _camera.GlobalPosition + direction * MuzzleOffsetMeters;
+    // The server registers the flight (CodeRabbit on #180): the single-use record a
+    // later catch handoff must consume, so replays can't mint extra airplanes.
+    Spawner.SendAirplaneThrowRequest();
     _liveAirplane = SpawnAirplane (origin, direction, isLive: true, target);
     Rpc (MethodName.SpawnVisualAirplane, origin, direction, target?.NetworkId ?? 0);
     UpdateWeaponVisibility(); // The hand empties while the airplane is out.
