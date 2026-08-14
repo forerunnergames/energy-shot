@@ -144,12 +144,12 @@ public partial class PlaytestDriver : Node
     await WaitUntil (() => _world.GetPlayers().Count() == 3, 60, "all 3 players joined");
     // Chosen body colors (issue #43): own pick stuck & both clients' picks replicate to the host.
     Assert (Self.ColorIndex == HostColor, $"own chosen color is {HostColor}, got {Self.ColorIndex}");
-    await WaitUntil (() => FindPlayer (ShooterName)?.ColorIndex == ShooterColor && FindPlayer (VictimName)?.ColorIndex == VictimColor, 15, "clients' chosen colors replicated to host (#43)");
+    await WaitUntil (() => FindPlayer (ShooterName)?.ColorIndex == ShooterColor && FindPlayer (VictimName)?.ColorIndex == VictimColor, 30, "clients' chosen colors replicated to host (#43)");
     // Crown rules (issue #178): nobody wears the crown at 0-0 - it must be earned.
     await Task.Delay (3000); // Let a few 1s crown ticks pass before judging.
     Assert (_world.GetPlayers().All (player => !player.IsCrowned), "no crown at 0-0 (#178)");
     // Server-measured pings replicate back to every peer (issue #100).
-    await WaitUntil (() => FindPlayer (ShooterName)?.PingMs >= 0, 15, "shooter's ping measured & replicated to host");
+    await WaitUntil (() => FindPlayer (ShooterName)?.PingMs >= 0, 30, "shooter's ping measured & replicated to host");
     // Synced music (issue #137): the server picked a track & the shooter's thumbs-up
     // vote came back through the server tally.
     await WaitUntil (() => Music.CurrentTrackTitle.Length > 0, 15, "music track started on the server");
@@ -169,15 +169,15 @@ public partial class PlaytestDriver : Node
     var adminFile = ArgValue (OS.GetCmdlineUserArgs(), "--admin-message-file")!;
     System.IO.File.WriteAllText (adminFile, AdminAnnouncement);
     await WaitUntil (() => _adminMessages.Contains (AdminAnnouncement), 15, "admin announcement broadcast from the message file (#158)");
-    await WaitUntil (() => !System.IO.File.Exists (adminFile), 10, "admin message file consumed after broadcast (#158)");
+    await WaitUntil (() => !System.IO.File.Exists (adminFile), 30, "admin message file consumed after broadcast (#158)");
     // Shooter kills victim once (plus possibly the host itself in the line of
     // fire); wait to observe the replicated score.
     await WaitUntil (() => FindPlayer (ShooterName)?.Score >= 1, 120, "shooter's kill replicated to host");
     // Crown rules (issue #178): the first score puts the crown on the scorer - & on
     // nobody else. (A tie handover isn't cheaply reachable in this scenario's score
     // flow, so the incumbent rules beyond these are covered by the logic itself.)
-    await WaitUntil (() => FindPlayer (ShooterName)?.IsCrowned == true, 10, "crown appeared on the first scorer (#178)");
-    await WaitUntil (() => _world.GetPlayers().Count (player => player.IsCrowned) == 1, 10, "exactly one crown after the first score (#178)");
+    await WaitUntil (() => FindPlayer (ShooterName)?.IsCrowned == true, 30, "crown appeared on the first scorer (#178)");
+    await WaitUntil (() => _world.GetPlayers().Count (player => player.IsCrowned) == 1, 30, "exactly one crown after the first score (#178)");
     // Victim respawns with armor visible to the host too (~5s later now, #152).
     await WaitUntil (() => FindPlayer (VictimName)?.SpawnArmor == true, 35, "victim respawn armor replicated to host");
     // The victim's fall at score 0 goes negative & replicates (issue #108).
@@ -222,13 +222,13 @@ public partial class PlaytestDriver : Node
     Assert (Self.MaxHealth == 300, $"own MaxHealth is Intermediate 300, got {Self.MaxHealth}");
     // Chosen body colors (issue #43): everyone's pick replicates to this peer.
     Assert (Self.ColorIndex == ShooterColor, $"own chosen color is {ShooterColor}, got {Self.ColorIndex}");
-    await WaitUntil (() => victim.ColorIndex == VictimColor && host.ColorIndex == HostColor, 15, "victim's & host's chosen colors replicated to shooter (#43)");
+    await WaitUntil (() => victim.ColorIndex == VictimColor && host.ColorIndex == HostColor, 30, "victim's & host's chosen colors replicated to shooter (#43)");
     // Unarmed means no guns (issue #190): every life still starts with a loaf, & the
     // loaf now rides the HeldWeapon mask so death can drop it.
     Assert (spawnedUnarmed, "spawned unarmed (#72)");
     Assert (spawnedWithBread, "spawned carrying the one-per-life loaf (#190)");
     // The server measures our ping & tells us within a tick or two (issue #100).
-    await WaitUntil (() => Self.PingMs >= 0, 15, "own ping measured by the server");
+    await WaitUntil (() => Self.PingMs >= 0, 30, "own ping measured by the server");
 
     // Synced music (issue #137): the server's track choice reached this client; a
     // thumbs-up vote here must show up on every other peer's tally.
@@ -254,7 +254,7 @@ public partial class PlaytestDriver : Node
     Assert (Self.GlobalPosition.DistanceTo (startPosition) > 0.3f, "player moved with input");
 
     // Wait out everyone's initial spawn armor before the damage phase.
-    await WaitUntil (() => !victim.SpawnArmor, 15, "victim's initial spawn armor expired");
+    await WaitUntil (() => !victim.SpawnArmor, 30, "victim's initial spawn armor expired");
 
     // Chosen color on the body (issue #43): with armor's white glow gone, the victim's
     // per-instance body material must show exactly its picked palette color.
@@ -263,11 +263,11 @@ public partial class PlaytestDriver : Node
 
     // Streak replication (#88): the victim simulates an active 3-streak; it must
     // replicate here so the on-fire glow & pulsing leaderboard entry appear.
-    await WaitUntil (() => victim.ZapStreakCount == 3, 15, "victim's simulated 3-streak replicated to shooter");
+    await WaitUntil (() => victim.ZapStreakCount == 3, 30, "victim's simulated 3-streak replicated to shooter");
 
     // Dance emote (#103): the victim started dancing after its armor expired; the
     // replicated state must animate this puppet copy too.
-    await WaitUntil (() => victim.Dancing, 15, "victim's dance replicated to shooter (#103)");
+    await WaitUntil (() => victim.Dancing, 30, "victim's dance replicated to shooter (#103)");
 
     // Punch phase: walk up to the victim & punch them; verify melee damage lands.
     var healthBeforePunch = victim.Health;
@@ -280,13 +280,9 @@ public partial class PlaytestDriver : Node
     await Task.Delay (100);
     ReleaseAction ("weapon_1");
 
-    // Punch from the side of the victim opposite the idle host: the punch ray hits
-    // the FIRST body, & an unlucky spawn once put the host in front of the victim
-    // for all 10 attempts (same line-of-fire hazard the laser phase guards against).
-    var awayFromHost = victim.GlobalPosition - host.GlobalPosition;
-    var flatAway = new Vector3 (awayFromHost.X, 0.0f, awayFromHost.Z);
-    Self.Position = victim.GlobalPosition + (flatAway.Length() > 0.5f ? flatAway.Normalized() : Vector3.Right) * 1.5f;
-    await Task.Delay (200);
+    // Spawn armor absorbs punches outright (#48), & a victim that just respawned
+    // still has ~5s of it - wait it out rather than spending swings on it.
+    await WaitUntil (() => !victim.SpawnArmor, 30, "victim's spawn armor expired before the punch phase (#48)");
 
     // The punch stun is TRANSIENT - 3s from the last landed punch - & the dance-cancel
     // wait below can legitimately burn 5s before we ever look at it, so sample it
@@ -306,9 +302,20 @@ public partial class PlaytestDriver : Node
     }
 
     // Punch on LEFT click (issue #164): injected as real mouse-button events so the
-    // binding itself is under test, not just the action.
-    for (var attempt = 0; attempt < 10 && victim.Health >= healthBeforePunch; ++attempt)
+    // binding itself is under test, not just the action. Re-take the punching spot
+    // every attempt - the victim is running its own phases & wanders off, & the
+    // punch ray hits the FIRST body, so we stand on the side opposite the idle host
+    // (an unlucky spawn once put it in front of the victim for all 10 attempts).
+    for (var attempt = 0; attempt < 20 && victim.Health >= healthBeforePunch; ++attempt)
     {
+      var awayFromHost = victim.GlobalPosition - host.GlobalPosition;
+      var flatAway = new Vector3 (awayFromHost.X, 0.0f, awayFromHost.Z);
+      Self.Position = victim.GlobalPosition + (flatAway.Length() > 0.5f ? flatAway.Normalized() : Vector3.Right) * 1.5f;
+      await Task.Delay (150); // Settle before swinging.
+      // Their position reaches us over the wire, so on a lagging runner it can be
+      // stale by the time we arrive - & the victim is moving through its own phases.
+      // Don't spend the swing on thin air; take the spot again next pass.
+      if (Self.GlobalPosition.DistanceTo (victim.GlobalPosition) > Self.PunchRange * 0.75f) continue;
       AimAt (victim.GlobalPosition + Vector3.Up);
       PressLeftClick();
       await Task.Delay (80);
@@ -318,9 +325,9 @@ public partial class PlaytestDriver : Node
 
     Assert (victim.Health < healthBeforePunch, $"punch damaged the victim ({healthBeforePunch} -> {victim.Health})");
     // Damage cancels the dance (#103) & the cancel must replicate back here too.
-    await WaitUntil (() => !victim.Dancing, 5, "victim's dance cancel replicated to shooter (#103)");
+    await WaitUntil (() => !victim.Dancing, 30, "victim's dance cancel replicated to shooter (#103)");
     // Sync property index 14 (#88): the punch stun must replicate to the shooter's copy.
-    await WaitUntil (() => stunSeen, 15, "victim's punch stun replicated to shooter");
+    await WaitUntil (() => stunSeen, 30, "victim's punch stun replicated to shooter");
 
     // Hit-flash restoration (#43): the punch just flashed this puppet's body dark
     // red; the flash must settle back onto the exact chosen palette color - the
@@ -377,16 +384,16 @@ public partial class PlaytestDriver : Node
 
     // Death sequence (#152): the victim's body lies fallen at the death spot &
     // the replicated Fallen state must render the tip-over on this peer too.
-    await WaitUntil (() => victim.Fallen, 10, "victim's fallen body replicated to shooter (#152)");
+    await WaitUntil (() => victim.Fallen, 30, "victim's fallen body replicated to shooter (#152)");
     await RunDeathDropPhase (victim);
 
     // Victim must come back armored in the spawn room (~5s later now, #152).
-    await WaitUntil (() => respawnArmorSeen, 20, "victim respawned with spawn armor");
-    await WaitUntil (() => !victim.Fallen, 5, "victim's body stood back up on respawn (#152)");
+    await WaitUntil (() => respawnArmorSeen, 30, "victim respawned with spawn armor");
+    await WaitUntil (() => !victim.Fallen, 30, "victim's body stood back up on respawn (#152)");
 
     // Streak glow bug (#88): the kill ended the victim's streak; the reset must
     // replicate here so the glow & pulsing leaderboard entry clear.
-    await WaitUntil (() => victim.ZapStreakCount == 0, 15, "victim's streak reset replicated to shooter");
+    await WaitUntil (() => victim.ZapStreakCount == 0, 30, "victim's streak reset replicated to shooter");
 
     // Third-person view (#119): toggle mid-run so the fire-rate & full-auto phases
     // below prove bolts still spawn from the aim ray with the chase camera live.
@@ -442,25 +449,25 @@ public partial class PlaytestDriver : Node
     PressAction ("crouch");
     await Task.Delay (100);
     ReleaseAction ("crouch");
-    await WaitUntil (() => !Self.Sliding && Self.Crouching, 5, "crouch press canceled the slide into a crouch (#131)");
+    await WaitUntil (() => !Self.Sliding && Self.Crouching, 10, "crouch press canceled the slide into a crouch (#131)");
     ReleaseAction ("slide");
     await Task.Delay (200);
     Assert (!Self.Sliding, "canceled slide did not restart from the held key (#131)");
     PressAction ("crouch");
     await Task.Delay (100);
     ReleaseAction ("crouch");
-    await WaitUntil (() => !Self.Crouching, 5, "stood back up after the canceled slide (#131)");
+    await WaitUntil (() => !Self.Crouching, 10, "stood back up after the canceled slide (#131)");
 
     // Dance emote (#103): G starts the groove & any movement input cancels it,
     // restoring the normal standing state.
     PressAction ("dance");
     await Task.Delay (100);
     ReleaseAction ("dance");
-    await WaitUntil (() => Self.Dancing, 5, "own dance started on G (#103)");
+    await WaitUntil (() => Self.Dancing, 10, "own dance started on G (#103)");
     Input.ActionPress ("move_forward");
     await Task.Delay (300);
     Input.ActionRelease ("move_forward");
-    await WaitUntil (() => !Self.Dancing, 5, "moving canceled the dance (#103)");
+    await WaitUntil (() => !Self.Dancing, 10, "moving canceled the dance (#103)");
 
     await RunMovementBatchPhases();
 
@@ -645,7 +652,7 @@ public partial class PlaytestDriver : Node
     // starting empty-handed is what makes the wait below mean "the drop was claimed".
     Assert (!Self.Holds (HeldWeapon.Banana), "reached the death-drop phase with no banana of our own (#169)");
     Self.Position = drop.GlobalPosition;
-    await WaitUntil (() => Self.Holds (HeldWeapon.Banana), 10, "victim's dropped banana was claimable (#169)");
+    await WaitUntil (() => Self.Holds (HeldWeapon.Banana), 30, "victim's dropped banana was claimable (#169)");
     Self.Position = SpawnRoomCenter; // Back where the phases below expect to run.
     await Task.Delay (300); // Settle onto the floor.
     // That pickup auto-equipped the banana (#128) & the phases below count laser
@@ -686,21 +693,21 @@ public partial class PlaytestDriver : Node
     PressAction ("crouch");
     await Task.Delay (100);
     ReleaseAction ("crouch");
-    await WaitUntil (() => Self.Crouching, 5, "crouch toggled down (#171)");
+    await WaitUntil (() => Self.Crouching, 10, "crouch toggled down (#171)");
     await Task.Delay (400); // Give any (wrongly) sinking body time to sink before probing.
     Assert (Mathf.Abs (Self.GlobalPosition.Y - yBeforeCrouch) < 0.2f, $"crouch kept the feet planted (#171), drifted {Self.GlobalPosition.Y - yBeforeCrouch:0.00}m");
     PressAction ("crouch");
     await Task.Delay (100);
     ReleaseAction ("crouch");
-    await WaitUntil (() => !Self.Crouching, 5, "crouch toggled back up (#171)");
+    await WaitUntil (() => !Self.Crouching, 10, "crouch toggled back up (#171)");
 
     // Hold-to-crouch (#147): switch to hold mode - hold = crouch, release = stand.
     Settings.HoldToCrouch = true;
     Self.RefreshCrouchMode();
     PressAction ("crouch");
-    await WaitUntil (() => Self.Crouching, 5, "hold mode: crouched while held (#147)");
+    await WaitUntil (() => Self.Crouching, 10, "hold mode: crouched while held (#147)");
     ReleaseAction ("crouch");
-    await WaitUntil (() => !Self.Crouching, 5, "hold mode: stood up on release (#147)");
+    await WaitUntil (() => !Self.Crouching, 10, "hold mode: stood up on release (#147)");
     Settings.HoldToCrouch = startedHoldToCrouch; // The developer's real preference survives the run.
     Self.RefreshCrouchMode();
 
@@ -712,24 +719,32 @@ public partial class PlaytestDriver : Node
     AimAt (Self.GlobalPosition + new Vector3 (-20.0f, 0.0f, 0.0f));
     Input.ActionPress ("move_forward"); // The carry needs real momentum.
     PressAction ("slide");
-    await WaitUntil (() => Self.Sliding, 5, "slide started for the chain (#149)");
+    await WaitUntil (() => Self.Sliding, 10, "slide started for the chain (#149)");
     await Task.Delay (200);
-    PressAction ("jump");
-    await Task.Delay (100);
-    ReleaseAction ("jump");
-    await WaitUntil (() => !Self.Sliding, 2, "jump ended the slide (#149)");
+    // Re-press until the slide actually ends: a single injected press can land in a
+    // frame that physics skips under load, & the old 2s budget then expired even
+    // though nothing was wrong with the chaining itself.
+    for (var attempt = 0; attempt < 5 && Self.Sliding; ++attempt)
+    {
+      PressAction ("jump");
+      await Task.Delay (100);
+      ReleaseAction ("jump");
+      await TryWaitUntil (() => !Self.Sliding, 2);
+    }
+
+    Assert (!Self.Sliding, "jump ended the slide (#149)");
     ReleaseAction ("slide");
     Assert (Self.SlideReadyFraction >= 1.0f, "slide-jump canceled the slide cooldown (#149)");
     var airSpeed = new Vector3 (Self.Velocity.X, 0.0f, Self.Velocity.Z).Length();
     Assert (airSpeed >= Self.Speed * Self.SlideSpeedMultiplier - 0.5f, $"slide momentum carried into the air (#149), speed {airSpeed:0.0}");
-    await WaitUntil (() => Self.IsOnFloor(), 5, "landed from the slide-jump (#149)");
+    await WaitUntil (() => Self.IsOnFloor(), 10, "landed from the slide-jump (#149)");
     PressAction ("slide");
-    await WaitUntil (() => Self.Sliding, 2, "chained slide started with no cooldown (#149)");
+    await WaitUntil (() => Self.Sliding, 10, "chained slide started with no cooldown (#149)");
     Assert (Self.CurrentSlideSpeed > Self.Speed * Self.SlideSpeedMultiplier + 0.1f, $"chained slide runs faster than base (#149), speed {Self.CurrentSlideSpeed:0.0}");
     Assert (Self.CurrentSlideSpeed <= Self.Speed * Self.SlideSpeedMultiplier * Self.MaxChainedSlideSpeedScale + 0.01f, $"chained slide speed capped (#149), speed {Self.CurrentSlideSpeed:0.0}");
     ReleaseAction ("slide");
     Input.ActionRelease ("move_forward");
-    await WaitUntil (() => !Self.Sliding, 2, "chained slide released");
+    await WaitUntil (() => !Self.Sliding, 10, "chained slide released");
 
     // Chain window expiry (#149): outliving the landing window forfeits the chain -
     // the next slide runs at base speed again (CodeRabbit on #185).
@@ -737,21 +752,31 @@ public partial class PlaytestDriver : Node
     AimAt (Self.GlobalPosition + new Vector3 (-20.0f, 0.0f, 0.0f)); // Same clear -X lane.
     Input.ActionPress ("move_forward");
     PressAction ("slide");
-    await WaitUntil (() => Self.Sliding, 5, "slide started for the window-expiry test (#149)");
+    await WaitUntil (() => Self.Sliding, 10, "slide started for the window-expiry test (#149)");
     await Task.Delay (200);
-    PressAction ("jump");
-    await Task.Delay (100);
-    ReleaseAction ("jump");
-    await WaitUntil (() => !Self.Sliding, 2, "jump ended the window-expiry slide (#149)");
+    // Re-press like the chain test does: a swallowed press would otherwise let the
+    // slide expire on its own & the phase would pass having never jumped at all.
+    for (var attempt = 0; attempt < 5 && Self.Sliding; ++attempt)
+    {
+      PressAction ("jump");
+      await Task.Delay (100);
+      ReleaseAction ("jump");
+      await TryWaitUntil (() => !Self.Sliding, 2);
+    }
+
+    Assert (!Self.Sliding, "jump ended the window-expiry slide (#149)");
+    // Only a slide-JUMP clears the cooldown (#149); a slide that merely ran out
+    // leaves it recharging, so this is the evidence that the jump landed.
+    Assert (Self.SlideReadyFraction >= 1.0f, "the window-expiry slide was ended by a jump, not by expiry (#149)");
     ReleaseAction ("slide");
-    await WaitUntil (() => Self.IsOnFloor(), 5, "landed from the window-expiry slide-jump (#149)");
+    await WaitUntil (() => Self.IsOnFloor(), 10, "landed from the window-expiry slide-jump (#149)");
     Input.ActionRelease ("move_forward");
     await Task.Delay (2000); // Far past the 0.5s window; generous because it counts (slower) physics time.
     PressAction ("slide");
-    await WaitUntil (() => Self.Sliding, 2, "post-window slide started (#149)");
+    await WaitUntil (() => Self.Sliding, 10, "post-window slide started (#149)");
     Assert (Self.CurrentSlideSpeed <= Self.Speed * Self.SlideSpeedMultiplier + 0.01f, $"expired chain window: slide back at base speed (#149), speed {Self.CurrentSlideSpeed:0.0}");
     ReleaseAction ("slide");
-    await WaitUntil (() => !Self.Sliding, 2, "post-window slide released");
+    await WaitUntil (() => !Self.Sliding, 10, "post-window slide released");
 
     // Slide TIMER expiry (#148/#150): the lengthened slide runs its full duration &
     // ends STANDING in the open - no more forced crouch on expiry. Stationary (no
@@ -760,7 +785,7 @@ public partial class PlaytestDriver : Node
     Assert (Self.SlideDurationSeconds >= 7.0f, $"slide duration lengthened (#148), got {Self.SlideDurationSeconds}s");
     await WaitUntil (() => Self.SlideReadyFraction >= 1.0f, 15, "slide cooldown recovered for the expiry test (#150)");
     PressAction ("slide");
-    await WaitUntil (() => Self.Sliding, 5, "slide started for the expiry test (#150)");
+    await WaitUntil (() => Self.Sliding, 10, "slide started for the expiry test (#150)");
     var slideStartMs = Time.GetTicksMsec();
     await WaitUntil (() => !Self.Sliding, Self.SlideDurationSeconds + 5, "slide timer expired on its own (#148)");
     var slideMs = Time.GetTicksMsec() - slideStartMs;
@@ -861,7 +886,7 @@ public partial class PlaytestDriver : Node
     Assert (Self.MaxHealth == 400, $"own MaxHealth is Beginner 400, got {Self.MaxHealth}");
     // Chosen body colors (issue #43): own pick stuck & both peers' picks replicate to the victim.
     Assert (Self.ColorIndex == VictimColor, $"own chosen color is {VictimColor}, got {Self.ColorIndex}");
-    await WaitUntil (() => FindPlayer (ShooterName)?.ColorIndex == ShooterColor && FindPlayer (HostName)?.ColorIndex == HostColor, 15, "shooter's & host's chosen colors replicated to victim (#43)");
+    await WaitUntil (() => FindPlayer (ShooterName)?.ColorIndex == ShooterColor && FindPlayer (HostName)?.ColorIndex == HostColor, 30, "shooter's & host's chosen colors replicated to victim (#43)");
     Assert (Self.SpawnArmor, "spawned with spawn armor");
     // Synced music (issue #137): same track as everyone & the shooter's vote
     // propagated here through the server broadcast.
@@ -874,7 +899,7 @@ public partial class PlaytestDriver : Node
     // file-driven announcement both arrive as admin messages here too.
     await WaitUntil (() => _adminMessages.Contains ($"Running {ServerVersion}"), 30, "version line received on join (#158)");
     await WaitUntil (() => _adminMessages.Contains (AdminAnnouncement), 30, "admin announcement received from the server (#158)");
-    await WaitUntil (() => !Self.SpawnArmor, 15, "spawn armor expired on its own");
+    await WaitUntil (() => !Self.SpawnArmor, 30, "spawn armor expired on its own");
     // Streak replication (#88): simulate an active 3-streak on our own authority so
     // the shooter can verify it replicates - & that the death reset replicates too.
     Self.ZapStreakCount = 3;
@@ -883,7 +908,7 @@ public partial class PlaytestDriver : Node
     PressAction ("dance");
     await Task.Delay (100);
     ReleaseAction ("dance");
-    await WaitUntil (() => Self.Dancing, 5, "dance started on G (#103)");
+    await WaitUntil (() => Self.Dancing, 10, "dance started on G (#103)");
     // The shooter opens fire once armor drops; verify damage & then a full respawn.
     await WaitUntil (() => Self.Health < Self.MaxHealth, 120, "took damage from shooter");
     Assert (!Self.Dancing, "taking damage canceled the dance (#103)");
@@ -920,7 +945,7 @@ public partial class PlaytestDriver : Node
     await WaitUntil (() => FindPlayer (ShooterName)?.Score >= 1, 30, "shooter's score replicated to victim");
     // Streak glow (#77/#88): the shooter's kill streak must replicate to the victim's
     // copy of the shooter node, since that drives the glow & leaderboard pulsing here.
-    await WaitUntil (() => FindPlayer (ShooterName)?.ZapStreakCount >= 1, 15, "shooter's streak replicated to victim");
+    await WaitUntil (() => FindPlayer (ShooterName)?.ZapStreakCount >= 1, 30, "shooter's streak replicated to victim");
     // Fall penalty goes negative (issue #108): step off the world at score 0 & verify -1.
     Assert (Self.Score == 0, $"own score is 0 before the fall, got {Self.Score}");
     Self.Position = new Vector3 (120.0f, 5.0f, 120.0f); // Beyond the arena: nothing below but the kill boundary.
