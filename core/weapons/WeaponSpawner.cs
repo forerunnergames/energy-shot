@@ -232,6 +232,17 @@ public partial class WeaponSpawner : Node3D
       return;
     }
 
+    // A body mid-death-sequence is scenery (issue #152), so it can't claim anything
+    // (CodeRabbit on #199): the collector's own peer already refuses, but the server
+    // is what actually awards, so it enforces the rule too.
+    var collector = Players().FirstOrDefault (player => player.NetworkId == collectorId);
+
+    if (collector is { Fallen: true })
+    {
+      ServerLog.Event (collectorId, $"weapon deny: pickup [{pickupName}] claimed while lying dead");
+      return;
+    }
+
     var pickup = GetParent().GetNodeOrNull <WeaponPickup> (pickupName);
     ServerLog.Event (collectorId, $"weapon claim: pickup [{pickupName}]");
 
@@ -556,13 +567,23 @@ public partial class WeaponSpawner : Node3D
   // ray was treating it as a floor - spawning unreachable pickups at y=-99 (issue
   // #172). No real level surface sits below this, so anything deeper is the void.
   private const float MinGroundY = -50.0f;
+  // A Player's origin sits at its feet, so the ground ray has to start above the
+  // drop point to see the surface underfoot at all (issue #196); roughly chest
+  // height clears the floor without reaching through a low ceiling.
+  private const float GroundRayLiftMeters = 1.0f;
 
   // Finds the first level surface beneath the point (hover height above it); false
   // over the void, where there's nothing for a pickup to rest on (issue #151) - the
   // kill boundary below the arena doesn't count (issue #172).
   private bool TryFindGround (Vector3 position, out Vector3 spot)
   {
-    var query = PhysicsRayQueryParameters3D.Create (position, position + Vector3.Down * 100.0f, collisionMask: WorldLayer);
+    // Start the cast above the drop point (issue #196): a Player's origin is at its
+    // FEET, so a standing player's death drop began exactly on the surface it stood
+    // on & the ray missed it - grounding spawn-room drops 30m below in the arena, &
+    // skipping arena-floor drops entirely (nothing under them but the kill boundary
+    // #172 rejects, so those weapons just vanished).
+    var from = position + Vector3.Up * GroundRayLiftMeters;
+    var query = PhysicsRayQueryParameters3D.Create (from, from + Vector3.Down * (100.0f + GroundRayLiftMeters), collisionMask: WorldLayer);
     var hit = GetWorld3D().DirectSpaceState.IntersectRay (query);
     var grounded = hit.Count > 0 && ((Vector3)hit["position"]).Y >= MinGroundY;
     spot = grounded ? (Vector3)hit["position"] + Vector3.Up * PickupHoverHeight : position;
