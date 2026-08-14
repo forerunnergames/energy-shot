@@ -288,6 +288,23 @@ public partial class PlaytestDriver : Node
     Self.Position = victim.GlobalPosition + (flatAway.Length() > 0.5f ? flatAway.Normalized() : Vector3.Right) * 1.5f;
     await Task.Delay (200);
 
+    // The punch stun is TRANSIENT - 3s from the last landed punch - & the dance-cancel
+    // wait below can legitimately burn 5s before we ever look at it, so sample it
+    // continuously from before the first swing instead of afterwards. Same watcher
+    // idiom as the respawn-armor window further down; this exact assert timed out on
+    // a loaded CI runner, having decayed back to zero before it was read.
+    var stunSeen = false;
+    WatchForPunchStun();
+
+    async void WatchForPunchStun()
+    {
+      while (!stunSeen && IsInsideTree())
+      {
+        stunSeen = victim.StunFactor > 0.0f;
+        await Task.Delay (50);
+      }
+    }
+
     // Punch on LEFT click (issue #164): injected as real mouse-button events so the
     // binding itself is under test, not just the action.
     for (var attempt = 0; attempt < 10 && victim.Health >= healthBeforePunch; ++attempt)
@@ -303,7 +320,7 @@ public partial class PlaytestDriver : Node
     // Damage cancels the dance (#103) & the cancel must replicate back here too.
     await WaitUntil (() => !victim.Dancing, 5, "victim's dance cancel replicated to shooter (#103)");
     // Sync property index 14 (#88): the punch stun must replicate to the shooter's copy.
-    await WaitUntil (() => victim.StunFactor > 0.0f, 2, "victim's punch stun replicated to shooter");
+    await WaitUntil (() => stunSeen, 15, "victim's punch stun replicated to shooter");
 
     // Hit-flash restoration (#43): the punch just flashed this puppet's body dark
     // red; the flash must settle back onto the exact chosen palette color - the
