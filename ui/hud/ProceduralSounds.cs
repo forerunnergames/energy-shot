@@ -37,6 +37,18 @@ public static class ProceduralSounds
     return FromSamples (samples);
   }
 
+  // The paper airplane's pop (issue #206): a dry papery burst - a bright noise crack
+  // that decays fast, with a short low thump under it. Deliberately NOT the banana
+  // blast: this is paper letting go, not fruit.
+  public static AudioStreamWav Pop()
+  {
+    var samples = new float[(int)(SampleRate * 0.4f)];
+    AddCrunch (samples, startSeconds: 0.0f, brightness: 0.75f);
+    AddCrunch (samples, startSeconds: 0.03f, brightness: 0.45f);
+    AddChime (samples, startSeconds: 0.0f, fromHz: 180.0f, toHz: 60.0f, seconds: 0.22f, amplitude: 0.35f);
+    return FromSamples (samples);
+  }
+
   // A short burst of low-passed noise with an exponential decay reads as a bread crunch.
   private static void AddCrunch (float[] samples, float startSeconds, float brightness)
   {

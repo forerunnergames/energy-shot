@@ -1,3 +1,4 @@
+using com.forerunnergames.energyshot.ui.hud;
 using Godot;
 
 namespace com.forerunnergames.energyshot.weapons;
@@ -14,7 +15,7 @@ public static class PaperAirplane
   // The mine going live under somebody's foot (issue #191): a quick, dry tick
   // everyone nearby can hear, so a triggered mine is never silent to bystanders -
   // they get the beat they need to back away from the player who set it off.
-  public static void Arm (Node parent, Vector3 origin) => PlayAt (parent, origin, "res://assets/sounds/punch-thud.wav", pitch: 2.4f, volumeDb: -6.0f);
+  public static void Arm (Node parent, Vector3 origin) => PlayAt (parent, origin, ResourceLoader.Load <AudioStream> ("res://assets/sounds/punch-thud.wav"), pitch: 2.4f, volumeDb: -6.0f);
 
   // The pop (issue #191): a brief warm flash & a burst of paper scraps, played
   // locally on every peer. No blast radius - the damage is strictly single-target.
@@ -27,17 +28,14 @@ public static class PaperAirplane
     fade.TweenProperty (flash, "light_energy", 0.0f, 0.35f);
     fade.Finished += flash.QueueFree;
     BananaDebris.Scatter (parent, origin, PaperWhite, isPaper: true); // Paper scraps, not fruit (issue #203).
-    // The banana blast replayed short & bright reads as a paper pop - reusing an
-    // existing sound instead of downloading one.
-    PlayAt (parent, origin, "res://assets/sounds/banana-explode.mp3", pitch: 1.9f, volumeDb: -4.0f);
+    // A code-generated papery burst (issue #206): the pitched-up banana blast still
+    // sounded like fruit going off, which is not what a paper airplane does.
+    PlayAt (parent, origin, ProceduralSounds.Pop(), pitch: 1.0f, volumeDb: -3.0f);
   }
 
-  // Load first (CodeRabbit): a stream that fails to load would leave a player that
-  // never plays, never emits Finished, & so never frees itself.
-  private static void PlayAt (Node parent, Vector3 origin, string streamPath, float pitch, float volumeDb)
+  private static void PlayAt (Node parent, Vector3 origin, AudioStream? stream, float pitch, float volumeDb)
   {
-    var stream = ResourceLoader.Load <AudioStream> (streamPath);
-    if (stream == null) { GD.PushWarning ($"Paper airplane sound [{streamPath}] failed to load; skipping it."); return; }
+    if (stream == null) { GD.PushWarning ("Paper airplane sound missing; skipping it."); return; }
     var sound = new AudioStreamPlayer3D { Stream = stream, PitchScale = pitch, VolumeDb = volumeDb };
     parent.AddChild (sound);
     sound.GlobalPosition = origin;
