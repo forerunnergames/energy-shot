@@ -120,6 +120,7 @@ public partial class Player
   {
     if (!IsMultiplayerAuthority()) return;
     if (SpawnArmor) return;
+    if (Fallen) return; // A body mid-death-sequence is scenery (issue #152).
     GD.Print ($"{DisplayName}: I was blasted by {firedByPlayerName}'s banana!");
     LastDamageKind = DamageKind.Banana; // Message context (issue #84).
     ApplyBananaStun(); // Flat 5s stun synced with the splatter overlay (issue #70).
@@ -191,6 +192,7 @@ public partial class Player
   {
     if (!IsMultiplayerAuthority()) return;
     if (SpawnArmor) return;
+    if (Fallen) return; // A body mid-death-sequence can't be launched (issue #152); a pre-death sticky still detonates on it harmlessly.
     var attackerId = Multiplayer.GetRemoteSenderId(); // Captured now - the RPC context is gone after the fuse.
     GD.Print ($"{DisplayName}: {firedByPlayerName}'s banana stuck to me!");
     ApplyBananaStun();

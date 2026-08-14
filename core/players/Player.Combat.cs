@@ -269,6 +269,7 @@ public partial class Player
   {
     if (!IsMultiplayerAuthority()) return;
     if (SpawnArmor) return;
+    if (Fallen) return; // A body mid-death-sequence is scenery (issue #152).
     GD.Print ($"{DisplayName}: I was hit by {shotByPlayerName}{(throughBarrier ? " through a barrier" : "")}!");
     // The fire mode travels with the hit (CodeRabbit on #96): a weak quick-tap
     // discharge must not be misread as full-auto by an energy threshold.
@@ -283,6 +284,7 @@ public partial class Player
   {
     if (!IsMultiplayerAuthority()) return;
     if (SpawnArmor) return;
+    if (Fallen) return; // A body mid-death-sequence is scenery (issue #152).
     GD.Print ($"{DisplayName}: I was punched by {punchedByPlayerName}!");
     LastDamageKind = DamageKind.Punch; // Message context (issue #84).
     // No punch sfx here (issue #82): the victim hears the damage sound via ApplyDamage.
@@ -339,6 +341,9 @@ public partial class Player
   // attacker id captured while the RPC context still existed (issue #83).
   private void ApplyDamageFrom (int attackerId, float energy, string attackerName, float knockbackScale, bool isSurvivableAtFullHealth = false, bool throughBarrier = false)
   {
+    // Already zapped out (issue #152): a body lying through its death sequence takes
+    // no further damage - late stickies, blasts, & punches land on scenery.
+    if (Fallen) return;
     // Difficulty damage handicap: lower-skill attackers hit higher-skill targets harder
     // (+50% per tier gap: Beginner->Intermediate 1.5x, Beginner->Expert 2x,
     // Intermediate->Expert 1.5x). Attacking downward is unchanged - the bigger health

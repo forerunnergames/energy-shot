@@ -19,6 +19,8 @@ public partial class Player
   // 0..1 for the HUD's slide cooldown bar, like PunchReadyFraction (issue #127).
   // Non-positive cooldown = always ready; clamped so the HUD bar never sees NaN or overshoot.
   public float SlideReadyFraction => SlideCooldownSeconds <= 0.0f ? 1.0f : Mathf.Clamp (1.0f - _slideCooldownLeft / SlideCooldownSeconds, 0.0f, 1.0f);
+  // Playtest-observable (issue #149): the current slide's speed - base, or higher when chained.
+  public float CurrentSlideSpeed => _currentSlideSpeed;
   private bool IsFalling() => !IsOnFloor();
   // Stun blocks jumping & sliding (issues #70 & #71).
   private bool IsJumping() => _isInputEnabled && !IsStunned && _jumpTimer.IsStopped() && Input.IsActionJustPressed ("jump") && IsOnFloor();
@@ -27,22 +29,29 @@ public partial class Player
   // Edge-triggered start (issue #131): a wedged pressed key state (e.g. a swallowed
   // Shift release on focus loss) can't auto-restart slides after every cooldown.
   private bool StartsSlide() => _isInputEnabled && !IsStunned && Input.IsActionJustPressed ("slide");
-  // Escape hatches (issue #131): while sliding, a fresh slide press always cancels, &
-  // a jump press cancels when there's room to stand; crouch cancels in UpdateCrouch.
-  private bool CanceledSlide() => _isInputEnabled && (Input.IsActionJustPressed ("slide") || (Input.IsActionJustPressed ("jump") && !IsOverheadBlocked()));
+  // Escape hatch (issue #131): while sliding, a fresh slide press always cancels;
+  // crouch cancels in UpdateCrouch & jump chains via SlideJump (issue #149).
+  private bool CanceledSlide() => _isInputEnabled && Input.IsActionJustPressed ("slide");
+  // Mirrors IsJumping plus the room-to-stand check (issue #149): the same press that
+  // makes Jump() fire this frame also ends the slide with its momentum & no cooldown.
+  private bool StartsSlideJump() => _isInputEnabled && !IsStunned && _jumpTimer.IsStopped() && Input.IsActionJustPressed ("jump") && IsOnFloor() && !IsOverheadBlocked();
   private bool ToggledCrouch() => _isInputEnabled && Input.IsActionJustPressed ("crouch");
-  private float MoveSpeed() => (Sliding ? Speed * SlideSpeedMultiplier : _crouching ? Speed * CrouchSpeedMultiplier : Speed) * StunSpeedMultiplier();
+  private float MoveSpeed() => (Sliding ? _currentSlideSpeed : _crouching ? Speed * CrouchSpeedMultiplier : Speed) * StunSpeedMultiplier();
 
   // Press to slide, hold to sustain: double speed & a horizontal pose, capped at
   // SlideDurationSeconds, then a cooldown before the next slide (see issue #41).
-  // Slide, crouch, & jump presses all cancel a slide mid-way (issue #131).
+  // Slide & crouch presses cancel a slide mid-way (issue #131); a jump press
+  // slide-jumps out with momentum & no cooldown (issue #149).
   private void UpdateSlide (double delta)
   {
     _slideCooldownLeft = Mathf.Max (0.0f, _slideCooldownLeft - (float)delta);
+    _slideChainWindowLeft = Mathf.Max (0.0f, _slideChainWindowLeft - (float)delta);
+    if (_slideJumpCarrying && IsOnFloor() && Velocity.Y <= 0.0f) LandSlideJump();
 
     if (Sliding)
     {
       _slideSecondsLeft -= (float)delta;
+      if (StartsSlideJump()) { SlideJump(); return; }
       if (WantsSlide() && !CanceledSlide() && _slideSecondsLeft > 0.0f) return;
       StopSlide();
       return;
@@ -55,25 +64,57 @@ public partial class Player
   private void StartSlide()
   {
     _slideSecondsLeft = SlideDurationSeconds;
+    _currentSlideSpeed = ChainedSlideSpeed();
     Sliding = true; // Setter re-poses the body; replicated so every peer sees it.
     ApplyCameraHeight();
+  }
+
+  // A slide chained within the landing window continues from the carried speed with
+  // a small boost (issue #149), capped so back-to-back chains can't diverge. The
+  // window counts physics time, immune to CI wall-clock dilation.
+  private float ChainedSlideSpeed()
+  {
+    var baseSpeed = Speed * SlideSpeedMultiplier;
+    if (_slideChainWindowLeft <= 0.0f) return baseSpeed;
+    return Mathf.Clamp (_slideChainLandingSpeed * SlideChainBoostMultiplier, baseSpeed, baseSpeed * MaxChainedSlideSpeedScale);
+  }
+
+  // Jumping out of a slide (issue #149): the air keeps the slide's momentum (see
+  // Move) & the cooldown is skipped entirely, so landing into another slide chains.
+  private void SlideJump()
+  {
+    Sliding = false;
+    _slideJumpCarrying = true;
+    ApplyCameraHeight();
+  }
+
+  // Touchdown ends the momentum carry & opens the chain window (issue #149).
+  private void LandSlideJump()
+  {
+    _slideJumpCarrying = false;
+    _slideChainWindowLeft = SlideChainWindowSeconds;
+    _slideChainLandingSpeed = new Vector3 (Velocity.X, 0.0f, Velocity.Z).Length();
   }
 
   private void StopSlide()
   {
     _slideCooldownLeft = SlideCooldownSeconds;
     Sliding = false;
-    if (IsOverheadBlocked()) Crouching = true; // Slid under something low: come up into a crouch, not the ceiling.
+    // Timer expiry & cancels end STANDING when there's room (issue #150); only a low
+    // ceiling forces the crouch so the head can't come up into it.
+    if (IsOverheadBlocked()) Crouching = true;
     ApplyCameraHeight();
   }
 
-  // Press C to crouch, press again to stand (issue #85): shorter profile & slower
-  // speed (see issue #51). Sliding cancels a crouch; a crouch press mid-slide cancels
-  // the slide into a crouch (issue #131); standing needs overhead clearance so the
-  // head can't clip into geometry above.
+  // Press C to crouch, press again to stand (issue #85) - or hold-to-crouch when the
+  // persisted setting says so (issue #147): shorter profile & slower speed (see issue
+  // #51). Sliding cancels a crouch; a crouch press mid-slide cancels the slide into a
+  // crouch (issue #131); standing needs overhead clearance so the head can't clip
+  // into geometry above.
   private void UpdateCrouch()
   {
     if (Sliding && _crouching) { Crouching = false; ApplyCameraHeight(); return; }
+    if (_holdToCrouch) { UpdateHeldCrouch(); return; }
     if (!ToggledCrouch()) return;
     if (Sliding) { StopSlide(); Crouching = true; ApplyCameraHeight(); return; }
     if (_crouching && IsOverheadBlocked()) return;
@@ -81,10 +122,30 @@ public partial class Player
     ApplyCameraHeight();
   }
 
+  // Hold mode (issue #147): crouched exactly while the key is held. The crouch-press
+  // slide cancel (issue #131) still applies; standing on release re-tries every frame
+  // until there's overhead room, so walking out from under a ledge stands you up.
+  private void UpdateHeldCrouch()
+  {
+    if (Sliding && ToggledCrouch()) { StopSlide(); Crouching = true; ApplyCameraHeight(); return; }
+    if (Sliding) return;
+    var wantsCrouch = _isInputEnabled && Input.IsActionPressed ("crouch");
+    if (wantsCrouch == _crouching) return;
+    if (!wantsCrouch && IsOverheadBlocked()) return;
+    Crouching = wantsCrouch;
+    ApplyCameraHeight();
+  }
+
+  // Root cause of issues #171 & #150: this ray used to start at the body ORIGIN,
+  // which the old crouch scale sank ~0.4m below the floor surface - under the
+  // paper-thin ground slab the upward ray then hit the slab's underside, reporting
+  // "blocked" everywhere, wedging the crouch toggle down & crouching every expired
+  // slide. Starting the probe above any possible floor-clip keeps it honest; real
+  // ceilings that matter sit well above 0.5m.
   private bool IsOverheadBlocked()
   {
-    var from = GlobalPosition;
-    var to = from + Vector3.Up * 2.1f; // Standing capsule head height + margin.
+    var from = GlobalPosition + Vector3.Up * 0.5f;
+    var to = GlobalPosition + Vector3.Up * 2.1f; // Standing capsule head height + margin.
     var query = PhysicsRayQueryParameters3D.Create (from, to, exclude: new Godot.Collections.Array <Rid> { GetRid() });
     return GetWorld3D().DirectSpaceState.IntersectRay (query).Count > 0;
   }
@@ -97,22 +158,35 @@ public partial class Player
     // The dance owns the mesh (issue #103): Sliding syncs ALWAYS, so this re-runs
     // every tick on puppets & would fight the dance tween; the dance's stop restores.
     if (Dancing) return;
+    if (Fallen) return; // Same for the death tip-over tween (issue #152).
     var rotation = Sliding ? new Vector3 (-90.0f, 0.0f, 0.0f) : Vector3.Zero;
-    var position = new Vector3 (0.0f, Sliding ? 0.5f : 1.0f, 0.0f);
+    var position = BodyPoseOffset();
     _mesh.RotationDegrees = rotation;
     _mesh.Position = position;
     _collisionShape.RotationDegrees = rotation;
     _collisionShape.Position = position;
   }
 
-  // Runs on every peer via the replicated Crouching property.
+  // Where the mesh & collision nodes sit for the current stance: slide-height while
+  // sliding, dropped to keep the FEET planted while crouched (issue #171), standing
+  // center otherwise. Shared by both pose helpers so they can never disagree.
+  private Vector3 BodyPoseOffset() => new(0.0f, Sliding ? 0.5f : _crouching ? CrouchHeightScale : 1.0f, 0.0f);
+
+  // Runs on every peer via the replicated Crouching property. The shape scales about
+  // its center, so the node also drops to keep the FEET planted (issue #171): the old
+  // center-scale lifted the shape bottom & sank the whole body ~0.4m into the floor,
+  // which broke the overhead probe (see IsOverheadBlocked).
   private void ApplyCrouchScale()
   {
     if (_mesh == null) return;
     if (Dancing) return; // Same ALWAYS-sync reason as ApplySlidePose (issue #103).
+    if (Fallen) return; // The death tip-over tween owns the mesh (issue #152).
     var scale = new Vector3 (1.0f, _crouching ? CrouchHeightScale : 1.0f, 1.0f);
+    var position = BodyPoseOffset();
     _mesh.Scale = scale;
+    _mesh.Position = position;
     _collisionShape.Scale = scale;
+    _collisionShape.Position = position;
   }
 
   private void ApplyCameraHeight()
@@ -131,6 +205,7 @@ public partial class Player
   private void Move (ref Vector3 velocity)
   {
     if (_stickyFlightSecondsLeft > 0.0f) return; // Banana-launched (issue #83): momentum owns the ride.
+    if (_slideJumpCarrying) return; // Slide-jump air (issue #149): the slide's momentum owns the ride until touchdown.
     var speed = MoveSpeed();
     var inputDir = Input.GetVector ("move_left", "move_right", "move_forward", "move_back");
     var inputDirection = (Transform.Basis * new Vector3 (inputDir.X, 0, inputDir.Y)).Normalized();
@@ -158,12 +233,19 @@ public partial class Player
     RespawnFell();
   }
 
-  private void RespawnShot (string shotByPlayerName)
+  // Zap-out deaths run the lie-down sequence (issue #152): weapon drops & the death
+  // message resolve at death time as before, then the body lies at the death spot
+  // for DeathSequenceSeconds before the usual respawn (spawn armor included).
+  private async void RespawnShot (string shotByPlayerName)
   {
     CaptureDeathSnapshot();
     DropAllHeldWeapons(); // Death drops everything carried at the death spot (issue #72).
+    EmitSignal (SignalName.RespawnedShot, DisplayName, shotByPlayerName); // Message shows during the wait (issue #152).
+    await LieFallen();
+    // A disconnect can free this node mid-lie-down (CodeRabbit on #185): a freed
+    // node has nothing left to respawn.
+    if (!IsInstanceValid (this) || !IsInsideTree()) return;
     Respawn();
-    EmitSignal (SignalName.RespawnedShot, DisplayName, shotByPlayerName);
   }
 
   private void CaptureDeathSnapshot()
@@ -198,6 +280,7 @@ public partial class Player
 
   private void RespawnFell()
   {
+    if (Fallen) return; // A dead body drifting past the boundary mid-lie-down already has a respawn scheduled (issue #152).
     --Score; // Falling off the world costs a point.
     ClearHeldWeapons(); // A drop below the world would be unreachable; the weapons respawn at spawn points instead (issue #72).
     Respawn();
@@ -221,13 +304,17 @@ public partial class Player
     Sliding = false;
     _slideSecondsLeft = 0.0f;
     _slideCooldownLeft = 0.0f;
+    _slideJumpCarrying = false; // No chain carry into a new life (issue #149).
+    _slideChainWindowLeft = 0.0f;
     Crouching = false;
     Dancing = false; // A new life starts with the pose fully restored on every peer (issue #103).
+    Fallen = false; // Belt & braces: the lie-down always ends before this runs (issue #152).
     ApplyCameraHeight();
     SetInputEnabled (isEnabled: false);
     _respawnSound.Play();
     GD.Print ($"{DisplayName}: I respawned!");
     await ToSignal (GetTree().CreateTimer (RespawnInputLockSeconds), SceneTreeTimer.SignalName.Timeout);
+    if (!IsInstanceValid (this) || !IsInsideTree()) return; // Same disconnect guard as the death sequence (CodeRabbit on #185).
     SetInputEnabled (isEnabled: true);
   }
 

@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using com.forerunnergames.energyshot.core.audio;
 using com.forerunnergames.energyshot.core.world;
 using com.forerunnergames.energyshot.players;
+using com.forerunnergames.energyshot.utilities;
 using com.forerunnergames.energyshot.weapons;
 using Godot;
 
@@ -16,7 +17,7 @@ namespace com.forerunnergames.energyshot.playtest;
 // Activated by launching with: godot --headless --path . -- --playtest <role> [--address a] [--port n]
 public partial class PlaytestDriver : Node
 {
-  private const int Port = 55599;
+  private const int DefaultPort = 55599;
   // Fixed, deterministic game password (issue #90): exercises the server-side check.
   private const string Password = "playtest-secret";
   private const string HostName = "Host";
@@ -33,6 +34,8 @@ public partial class PlaytestDriver : Node
   private World _world = null!;
   private string _role = string.Empty;
   private string _address = "127.0.0.1";
+  // Overridable so parallel local runs don't collide on one port (--port n).
+  private int _port = DefaultPort;
   private int _boltsSpawned;
   private int _boomerangsSpawned;
   private int _stonesSpawned;
@@ -60,6 +63,9 @@ public partial class PlaytestDriver : Node
     var args = OS.GetCmdlineUserArgs();
     _role = ArgValue (args, "--playtest") ?? string.Empty;
     _address = ArgValue (args, "--address") ?? "127.0.0.1";
+    // Sanity-check the override (CodeRabbit on #185): anything outside the sane
+    // unprivileged range falls back to the default instead of failing the bind.
+    _port = int.TryParse (ArgValue (args, "--port"), out var port) && port is >= 1024 and <= 65535 ? port : DefaultPort;
     GD.Print ($"PLAYTEST: starting role [{_role}]");
     RunScenario();
   }
@@ -112,7 +118,7 @@ public partial class PlaytestDriver : Node
 
   private async Task RunHost()
   {
-    _world.StartHostSession (HostName, difficulty: 2, Port, Password, HostColor);
+    _world.StartHostSession (HostName, difficulty: 2, _port, Password, HostColor);
     // Vote-memory transitions (#162): record every server-side tally change with
     // the authoritative all-time totals at that exact moment - votes only flow
     // through this instance, so hooking before any client joins misses nothing.
@@ -155,8 +161,8 @@ public partial class PlaytestDriver : Node
     // flow, so the incumbent rules beyond these are covered by the logic itself.)
     await WaitUntil (() => FindPlayer (ShooterName)?.IsCrowned == true, 10, "crown appeared on the first scorer (#178)");
     await WaitUntil (() => _world.GetPlayers().Count (player => player.IsCrowned) == 1, 10, "exactly one crown after the first score (#178)");
-    // Victim respawns with armor visible to the host too.
-    await WaitUntil (() => FindPlayer (VictimName)?.SpawnArmor == true, 30, "victim respawn armor replicated to host");
+    // Victim respawns with armor visible to the host too (~5s later now, #152).
+    await WaitUntil (() => FindPlayer (VictimName)?.SpawnArmor == true, 35, "victim respawn armor replicated to host");
     // The victim's fall at score 0 goes negative & replicates (issue #108).
     await WaitUntil (() => FindPlayer (VictimName)?.Score == -1, 60, "victim's fall penalty (-1) replicated to host");
     // Crown rules (issue #178): a lower score moving (the fall) never moves the crown.
@@ -170,7 +176,7 @@ public partial class PlaytestDriver : Node
 
   private async Task RunShooter()
   {
-    _world.StartClientSession (ShooterName, difficulty: 1, _address, Port, Password, ShooterColor);
+    _world.StartClientSession (ShooterName, difficulty: 1, _address, _port, Password, ShooterColor);
     await WaitUntil (() => _world.GetPlayers().Count() == 3, 60, "all 3 players visible");
     // Forged admin RPC (issue #158): a client impersonating the server must be
     // dropped by the server's peer-1 check; every role asserts the text never
@@ -239,6 +245,14 @@ public partial class PlaytestDriver : Node
     ReleaseAction ("weapon_1");
     var healthBeforePunch = victim.Health;
     await WaitUntil (() => ApproachedVictim (victim), 30, "walked into punch range of victim");
+
+    // Punch from the side of the victim opposite the idle host: the punch ray hits
+    // the FIRST body, & an unlucky spawn once put the host in front of the victim
+    // for all 10 attempts (same line-of-fire hazard the laser phase guards against).
+    var awayFromHost = victim.GlobalPosition - host.GlobalPosition;
+    var flatAway = new Vector3 (awayFromHost.X, 0.0f, awayFromHost.Z);
+    Self.Position = victim.GlobalPosition + (flatAway.Length() > 0.5f ? flatAway.Normalized() : Vector3.Right) * 1.5f;
+    await Task.Delay (200);
 
     // Punch on LEFT click (issue #164): injected as real mouse-button events so the
     // binding itself is under test, not just the action.
@@ -310,8 +324,13 @@ public partial class PlaytestDriver : Node
     // >= 1: an incidental one-hit kill on the host in the line of fire also scores.
     Assert (Self.Score >= 1, $"own replicated Score is >= 1, got {Self.Score}");
 
-    // Victim must come back armored in the spawn room.
-    await WaitUntil (() => respawnArmorSeen, 15, "victim respawned with spawn armor");
+    // Death sequence (#152): the victim's body lies fallen at the death spot &
+    // the replicated Fallen state must render the tip-over on this peer too.
+    await WaitUntil (() => victim.Fallen, 10, "victim's fallen body replicated to shooter (#152)");
+
+    // Victim must come back armored in the spawn room (~5s later now, #152).
+    await WaitUntil (() => respawnArmorSeen, 20, "victim respawned with spawn armor");
+    await WaitUntil (() => !victim.Fallen, 5, "victim's body stood back up on respawn (#152)");
 
     // Streak glow bug (#88): the kill ended the victim's streak; the reset must
     // replicate here so the glow & pulsing leaderboard entry clear.
@@ -390,6 +409,8 @@ public partial class PlaytestDriver : Node
     await Task.Delay (300);
     Input.ActionRelease ("move_forward");
     await WaitUntil (() => !Self.Dancing, 5, "moving canceled the dance (#103)");
+
+    await RunMovementBatchPhases();
 
     // Boomerang (#98): collect the deterministic spawn-room pickup, throw it (aimed
     // away from everyone so no incidental steals), & watch it fly back into the hand.
@@ -485,6 +506,118 @@ public partial class PlaytestDriver : Node
     Assert (_adminMessages.All (message => !message.Contains ("FORGED")), "forged admin RPC was rejected (#158)");
   }
 
+  // Movement & death-feel batch (#171/#147/#148/#149/#150): crouch un-stick, the
+  // hold-to-crouch setting, slide-jump chaining, & standing slide expiry. Runs on
+  // the open arena ground - the paper-thin slab is the exact surface the #171
+  // regression wedged on - then returns to the spawn room for the pickup phases
+  // (teleport precedent: the victim's fall-penalty phase).
+  private async Task RunMovementBatchPhases()
+  {
+    Self.Position = new Vector3 (40.0f, 1.0f, -40.0f); // Open corner: no buildings, pillars, or platforms nearby.
+    await Task.Delay (300); // Settle onto the ground.
+
+    // The crouch phases must not depend on whatever crouch mode the developer's
+    // real settings.cfg persists (CodeRabbit on #185): force each mode explicitly
+    // & restore the real preference at the end.
+    var startedHoldToCrouch = Settings.HoldToCrouch;
+    Settings.HoldToCrouch = false;
+    Self.RefreshCrouchMode();
+
+    // Crouch un-stick (#171): a plain toggle on the thin arena ground must go down
+    // AND back up, with the feet staying planted - the old center-scale sank the
+    // body ~0.4m, so the overhead probe started under the slab, saw its underside,
+    // & wedged the toggle down.
+    var yBeforeCrouch = Self.GlobalPosition.Y;
+    PressAction ("crouch");
+    await Task.Delay (100);
+    ReleaseAction ("crouch");
+    await WaitUntil (() => Self.Crouching, 5, "crouch toggled down (#171)");
+    await Task.Delay (400); // Give any (wrongly) sinking body time to sink before probing.
+    Assert (Mathf.Abs (Self.GlobalPosition.Y - yBeforeCrouch) < 0.2f, $"crouch kept the feet planted (#171), drifted {Self.GlobalPosition.Y - yBeforeCrouch:0.00}m");
+    PressAction ("crouch");
+    await Task.Delay (100);
+    ReleaseAction ("crouch");
+    await WaitUntil (() => !Self.Crouching, 5, "crouch toggled back up (#171)");
+
+    // Hold-to-crouch (#147): switch to hold mode - hold = crouch, release = stand.
+    Settings.HoldToCrouch = true;
+    Self.RefreshCrouchMode();
+    PressAction ("crouch");
+    await WaitUntil (() => Self.Crouching, 5, "hold mode: crouched while held (#147)");
+    ReleaseAction ("crouch");
+    await WaitUntil (() => !Self.Crouching, 5, "hold mode: stood up on release (#147)");
+    Settings.HoldToCrouch = startedHoldToCrouch; // The developer's real preference survives the run.
+    Self.RefreshCrouchMode();
+
+    // Slide-jump chaining (#149): jumping out of a slide keeps its momentum in the
+    // air & cancels the cooldown, so a slide pressed right after landing chains
+    // faster than base - capped so it can't diverge. Aimed down the open -X lane at
+    // z=-40: ~15m of travel with nothing to hit.
+    await WaitUntil (() => Self.SlideReadyFraction >= 1.0f, 15, "slide cooldown ready for the chain test (#149)");
+    AimAt (Self.GlobalPosition + new Vector3 (-20.0f, 0.0f, 0.0f));
+    Input.ActionPress ("move_forward"); // The carry needs real momentum.
+    PressAction ("slide");
+    await WaitUntil (() => Self.Sliding, 5, "slide started for the chain (#149)");
+    await Task.Delay (200);
+    PressAction ("jump");
+    await Task.Delay (100);
+    ReleaseAction ("jump");
+    await WaitUntil (() => !Self.Sliding, 2, "jump ended the slide (#149)");
+    ReleaseAction ("slide");
+    Assert (Self.SlideReadyFraction >= 1.0f, "slide-jump canceled the slide cooldown (#149)");
+    var airSpeed = new Vector3 (Self.Velocity.X, 0.0f, Self.Velocity.Z).Length();
+    Assert (airSpeed >= Self.Speed * Self.SlideSpeedMultiplier - 0.5f, $"slide momentum carried into the air (#149), speed {airSpeed:0.0}");
+    await WaitUntil (() => Self.IsOnFloor(), 5, "landed from the slide-jump (#149)");
+    PressAction ("slide");
+    await WaitUntil (() => Self.Sliding, 2, "chained slide started with no cooldown (#149)");
+    Assert (Self.CurrentSlideSpeed > Self.Speed * Self.SlideSpeedMultiplier + 0.1f, $"chained slide runs faster than base (#149), speed {Self.CurrentSlideSpeed:0.0}");
+    Assert (Self.CurrentSlideSpeed <= Self.Speed * Self.SlideSpeedMultiplier * Self.MaxChainedSlideSpeedScale + 0.01f, $"chained slide speed capped (#149), speed {Self.CurrentSlideSpeed:0.0}");
+    ReleaseAction ("slide");
+    Input.ActionRelease ("move_forward");
+    await WaitUntil (() => !Self.Sliding, 2, "chained slide released");
+
+    // Chain window expiry (#149): outliving the landing window forfeits the chain -
+    // the next slide runs at base speed again (CodeRabbit on #185).
+    await WaitUntil (() => Self.SlideReadyFraction >= 1.0f, 15, "slide cooldown ready for the window-expiry test (#149)");
+    AimAt (Self.GlobalPosition + new Vector3 (-20.0f, 0.0f, 0.0f)); // Same clear -X lane.
+    Input.ActionPress ("move_forward");
+    PressAction ("slide");
+    await WaitUntil (() => Self.Sliding, 5, "slide started for the window-expiry test (#149)");
+    await Task.Delay (200);
+    PressAction ("jump");
+    await Task.Delay (100);
+    ReleaseAction ("jump");
+    await WaitUntil (() => !Self.Sliding, 2, "jump ended the window-expiry slide (#149)");
+    ReleaseAction ("slide");
+    await WaitUntil (() => Self.IsOnFloor(), 5, "landed from the window-expiry slide-jump (#149)");
+    Input.ActionRelease ("move_forward");
+    await Task.Delay (2000); // Far past the 0.5s window; generous because it counts (slower) physics time.
+    PressAction ("slide");
+    await WaitUntil (() => Self.Sliding, 2, "post-window slide started (#149)");
+    Assert (Self.CurrentSlideSpeed <= Self.Speed * Self.SlideSpeedMultiplier + 0.01f, $"expired chain window: slide back at base speed (#149), speed {Self.CurrentSlideSpeed:0.0}");
+    ReleaseAction ("slide");
+    await WaitUntil (() => !Self.Sliding, 2, "post-window slide released");
+
+    // Slide TIMER expiry (#148/#150): the lengthened slide runs its full duration &
+    // ends STANDING in the open - no more forced crouch on expiry. Stationary (no
+    // movement input): the timer & end pose don't need travel, & 7s at slide speed
+    // would cross most of the arena.
+    Assert (Self.SlideDurationSeconds >= 7.0f, $"slide duration lengthened (#148), got {Self.SlideDurationSeconds}s");
+    await WaitUntil (() => Self.SlideReadyFraction >= 1.0f, 15, "slide cooldown recovered for the expiry test (#150)");
+    PressAction ("slide");
+    await WaitUntil (() => Self.Sliding, 5, "slide started for the expiry test (#150)");
+    var slideStartMs = Time.GetTicksMsec();
+    await WaitUntil (() => !Self.Sliding, Self.SlideDurationSeconds + 5, "slide timer expired on its own (#148)");
+    var slideMs = Time.GetTicksMsec() - slideStartMs;
+    ReleaseAction ("slide");
+    Assert (slideMs >= 6000, $"slide lasted the lengthened duration (#148), got {slideMs}ms");
+    Assert (!Self.Crouching, "expired slide ended standing, not crouched (#150)");
+
+    // Back to the spawn room for the boomerang & slingshot pickup phases.
+    Self.Position = new Vector3 (0.0f, 31.0f, 0.0f);
+    await Task.Delay (300);
+  }
+
   // Presses V until the view matches; the toggle only persists on a real key press,
   // so this exercises the exact input path a player uses (#119).
   private async Task ToggleViewUntil (bool thirdPerson)
@@ -508,7 +641,7 @@ public partial class PlaytestDriver : Node
     // Password enforcement (issue #109): a wrong password must get kicked with
     // "Wrong password." before the real join succeeds.
     await AssertWrongPasswordIsKicked();
-    _world.StartClientSession (VictimName, difficulty: 0, _address, Port, Password, VictimColor);
+    _world.StartClientSession (VictimName, difficulty: 0, _address, _port, Password, VictimColor);
     await WaitUntil (() => _world.GetPlayers().Count() == 3, 60, "all 3 players visible");
     Assert (Self.MaxHealth == 400, $"own MaxHealth is Beginner 400, got {Self.MaxHealth}");
     // Chosen body colors (issue #43): own pick stuck & both peers' picks replicate to the victim.
@@ -545,7 +678,15 @@ public partial class PlaytestDriver : Node
     var partialLaserHits = 0;
     var healthAfterPunch = Self.Health;
     Self.HealthChanged += value => partialLaserHits += value > 0 && value < healthAfterPunch ? 1 : 0;
+    // Death sequence (#152): the kill drops us where we stand for ~DeathSequenceSeconds
+    // with the pulled-back death camera live, & only then the usual armored respawn.
+    await WaitUntil (() => Self.Fallen, 120, "own death started the lie-down (#152)");
+    var fallenStartMs = Time.GetTicksMsec();
+    Assert (Self.IsDeathViewActive, "death camera pulled back over the death spot (#152)");
     await WaitUntil (() => Self.SpawnArmor && Self.Health == Self.MaxHealth, 120, "died & respawned with armor & full health");
+    var lieDownMs = Time.GetTicksMsec() - fallenStartMs;
+    Assert (lieDownMs >= (ulong)(Self.DeathSequenceSeconds * 1000.0f) - 500, $"lay at the death spot ~{Self.DeathSequenceSeconds}s before respawning (#152), got {lieDownMs}ms");
+    Assert (!Self.Fallen && !Self.IsDeathViewActive, "respawn ended the lie-down & restored the normal view (#152)");
     Assert (partialLaserHits == 0, $"full-charge kill took exactly one hit (#93), saw {partialLaserHits} partial-damage hits");
     Assert (Self.GlobalPosition.Y > 20.0f, $"respawned up in the spawn room, y={Self.GlobalPosition.Y}");
     // >= 1: an incidental one-hit kill on the host in the line of fire also counts.
@@ -572,7 +713,7 @@ public partial class PlaytestDriver : Node
   {
     var kickReason = string.Empty;
     _world.KickedFromServer += reason => kickReason = reason;
-    _world.StartLegacyClientSession (VictimName, difficulty: 0, _address, Port, Password);
+    _world.StartLegacyClientSession (VictimName, difficulty: 0, _address, _port, Password);
     await WaitUntil (() => kickReason.Length > 0, 30, "legacy versionless join was kicked");
     var expected = $"Update required: server is v{World.GameVersion}, you have an older version.";
     Assert (kickReason == expected, $"kick reason is \"{expected}\", got \"{kickReason}\"");
@@ -587,7 +728,7 @@ public partial class PlaytestDriver : Node
   {
     var kickReason = string.Empty;
     _world.KickedFromServer += reason => kickReason = reason;
-    _world.StartClientSession (VictimName, difficulty: 0, _address, Port, Password, version: "0.0.0-spoofed");
+    _world.StartClientSession (VictimName, difficulty: 0, _address, _port, Password, version: "0.0.0-spoofed");
     await WaitUntil (() => kickReason.Length > 0, 30, "wrong-version join was kicked");
     var expected = $"Update required: server is v{World.GameVersion}, you have v0.0.0-spoofed.";
     Assert (kickReason == expected, $"kick reason is \"{expected}\", got \"{kickReason}\"");
@@ -602,7 +743,7 @@ public partial class PlaytestDriver : Node
   {
     var kickReason = string.Empty;
     _world.KickedFromServer += reason => kickReason = reason;
-    _world.StartClientSession (VictimName, difficulty: 0, _address, Port, "wrong-" + Password);
+    _world.StartClientSession (VictimName, difficulty: 0, _address, _port, "wrong-" + Password);
     await WaitUntil (() => kickReason.Length > 0, 30, "wrong-password join was kicked");
     Assert (kickReason == "Wrong password.", $"kick reason is \"Wrong password.\", got \"{kickReason}\"");
     await WaitUntil (() => Multiplayer.MultiplayerPeer.GetConnectionStatus() != MultiplayerPeer.ConnectionStatus.Connected, 15, "kicked connection fully closed");

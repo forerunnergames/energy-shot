@@ -94,6 +94,7 @@ public partial class Player
   {
     if (!IsMultiplayerAuthority()) return;
     if (SpawnArmor) return;
+    if (Fallen) return; // A body mid-death-sequence is scenery: nothing left to steal or hurt (issue #152).
     var throwerId = Multiplayer.GetRemoteSenderId();
     GD.Print ($"{DisplayName}: I was clipped by {thrownByPlayerName}'s boomerang!");
     LastDamageKind = DamageKind.Boomerang; // Message context (issue #84).
