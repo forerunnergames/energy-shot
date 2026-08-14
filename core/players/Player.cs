@@ -41,6 +41,9 @@ public partial class Player : CharacterBody3D
 
   [Signal] public delegate void HealthChangedEventHandler (int value);
   [Signal] public delegate void BreadEatenEventHandler (string playerName);
+  // Soft feedback for a bread press that can't eat (issue #160): isOut = the loaf is
+  // gone this life; otherwise the player is already at full health.
+  [Signal] public delegate void BreadDeniedEventHandler (bool isOut);
   [Signal] public delegate void PunchedEventHandler();
   [Signal] public delegate void ScoredEventHandler (string playerName, string shotPlayerName);
   [Signal] public delegate void RespawnedShotEventHandler (string playerName, string shotByPlayerName);
@@ -230,6 +233,9 @@ public partial class Player : CharacterBody3D
   // still connects (issue #86).
   [Export] public float AirRocketBoostRange = 8.0f;
   [Export] public float KnockbackStrength = 16.0f;
+  // Hits shove mostly horizontally (issue #163): knockback never pushes upward speed
+  // past this, so stacked or full-draw hits can't launch victims sky-high.
+  [Export] public float KnockbackUpPopCap = 6.0f;
   [Export] public int KillHealAmount = 50;
   [Export] public float PunchKnockbackScale = 0.33f;
   [Export] public float JumpVelocity = 20.0f;
@@ -242,6 +248,8 @@ public partial class Player : CharacterBody3D
   [Export] public float HealthTagNameTagMaxSpacing = 3.0f;
   [Export] public float NameTagBaseHeight = 2.3f;
   public int NetworkId => Name.ToString().ToInt();
+  // Whether the one-per-life loaf is still uneaten, for the HUD bread icon (issue #160).
+  public bool HasBread => _bread.IsAvailable;
   public float LastZapEnergy { get; private set; }
   // Whether the last zap this player took came through a pierced barrier (issue #94).
   public bool LastZapThroughBarrier { get; private set; }
@@ -350,6 +358,11 @@ public partial class Player : CharacterBody3D
     _zapOutSound = GetNode <AudioStreamPlayer> ("ZapOutSound");
     _respawnSound = GetNode <AudioStreamPlayer> ("RespawnSound");
     _jumpSound = GetNode <AudioStreamPlayer> ("JumpSound");
+    // Rapid-retrigger sfx mix instead of cutting each other off (issue #182): the
+    // default polyphony (1) restarts the stream on every play, glitching quick
+    // punches, full-auto hitmarker bursts, & back-to-back damage hits; extra voices
+    // let overlapping plays ring out their tails.
+    foreach (var sound in new[] { _punchSound, _punchWhiffSound, _punchThudSound, _weaponPickupSound, _throughWallZapSound, _hitmarkerSound, _damageSound, _jumpSound }) sound.MaxPolyphony = 6;
     _healthBar.MaxValue = MaxHealth;
     _health = MaxHealth;
     _healthBar.Value = _health;
@@ -409,6 +422,7 @@ public partial class Player : CharacterBody3D
     UpdateXrayReveal();
     UpdateViewToggle(); // Third-person toggle on V (issue #119).
     UpdateWeaponSelection();
+    CancelStaleLaserCharge(); // Leaving the laser slot cancels the charge (issue #156).
     UpdateBananaLauncher();
     UpdateBoomerang();
     UpdateSlingshot (delta); // Draw-&-release stones (issue #99).

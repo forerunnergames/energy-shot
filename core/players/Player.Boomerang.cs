@@ -111,11 +111,15 @@ public partial class Player
   {
     var type = PickDroppableWeapon();
     if (type == HeldWeapon.None) return;
+    // Request BEFORE clearing, like DropHeldWeapon (issue #154): clearing first let
+    // the replicated HeldWeapon delta beat the escrow RPC to the server, & a
+    // reconcile pass in that window counted the weapon as gone & spawned a
+    // duplicate - the suspected banana-launcher double.
+    Spawner.SendStolenEscrowRequest (throwerId, type);
     HeldWeapon &= ~type;
     ForgetTheft (type);
     DeselectUnheldWeapon();
     GD.Print ($"{DisplayName}: That boomerang made off with my {type}!");
-    Spawner.SendStolenEscrowRequest (throwerId, type);
   }
 
   private void OnBoomerangScoopedPickup (string pickupName) => Spawner.SendScoopRequest (pickupName);
@@ -136,9 +140,12 @@ public partial class Player
   {
     _liveBoomerang = null;
     Rpc (MethodName.FreeVisualBoomerang);
+    // Request BEFORE clearing, like DropHeldWeapon (issue #154): the release RPC
+    // must reach the server while its replicated view still shows the boomerang
+    // held, or a reconcile pass in the gap spawns a duplicate.
+    Spawner.SendBoomerangReleaseRequest (position);
     HeldWeapon &= ~HeldWeapon.Boomerang;
     DeselectUnheldWeapon();
-    Spawner.SendBoomerangReleaseRequest (position);
   }
 
   // Zapping out (or falling off the world) mid-flight: the boomerang & its cargo

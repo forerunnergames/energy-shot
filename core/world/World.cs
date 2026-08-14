@@ -17,6 +17,9 @@ public partial class World : Node3D
   [Signal] public delegate void SelfPlayerHealthChangedEventHandler (string playerName, int health);
   [Signal] public delegate void SelfPlayerPunchedEventHandler();
   [Signal] public delegate void SelfPlayerSplatteredEventHandler();
+  // Bread feedback (issue #160): eaten + soft denied cues, forwarded to the HUD.
+  [Signal] public delegate void SelfPlayerAteBreadEventHandler();
+  [Signal] public delegate void SelfPlayerBreadDeniedEventHandler (bool isOut);
   [Signal] public delegate void RemoteMessageReceivedEventHandler (string message);
   [Signal] public delegate void AdminMessageReceivedEventHandler (string message);
   [Signal] public delegate void KickedFromServerEventHandler (string reason);
@@ -86,6 +89,10 @@ public partial class World : Node3D
     // Deaths reach the server through these notifications on every path (issue #111).
     _networkManager.PlayerRespawnedShot += (playerName, shotByPlayerName) => { if (IsActiveServer()) ServerLog.Event (FindPlayerId (playerName), $"death: {playerName} zapped out by {shotByPlayerName}"); };
     _networkManager.PlayerRespawnedFell += playerName => { if (IsActiveServer()) ServerLog.Event (FindPlayerId (playerName), $"death: {playerName} fell off the world"); };
+    // Crown rules (issue #178): every peer sees these death broadcasts, so the
+    // tied-incumbent handover stays consistent everywhere without new networking.
+    _networkManager.PlayerRespawnedShot += (playerName, _) => OnCrownIncumbentDied (playerName);
+    _networkManager.PlayerRespawnedFell += playerName => OnCrownIncumbentDied (playerName);
     _networkManager.RemoteMessageReceived += message => EmitSignal (SignalName.RemoteMessageReceived, message);
     _networkManager.AdminMessageReceived += message => EmitSignal (SignalName.AdminMessageReceived, message);
     _networkManager.PlayerJoinGame += playerName => EmitSignal (SignalName.PlayerJoinedGame, playerName);
@@ -418,6 +425,8 @@ public partial class World : Node3D
     selfPlayer.HealthChanged += value => EmitSignal (SignalName.SelfPlayerHealthChanged, selfPlayer.DisplayName, value);
     selfPlayer.Punched += () => EmitSignal (SignalName.SelfPlayerPunched);
     selfPlayer.Splattered += () => EmitSignal (SignalName.SelfPlayerSplattered);
+    selfPlayer.BreadEaten += _ => EmitSignal (SignalName.SelfPlayerAteBread); // Bread feedback (issue #160).
+    selfPlayer.BreadDenied += isOut => EmitSignal (SignalName.SelfPlayerBreadDenied, isOut);
     selfPlayer.Scored += (playerName, shotPlayerName) => EmitSignal (SignalName.PlayerScored, ++_score, playerName, shotPlayerName);
     GD.Print ($"{_selfPlayer.NetworkId}: Registered my player {_selfPlayer.DisplayName}");
     EmitSignal (SignalName.NewGameStarted, _selfPlayer.DisplayName, _selfPlayer.MaxHealth);
@@ -435,9 +444,11 @@ public partial class World : Node3D
   }
 
   // Golden crown (issue #89): every peer computes the score leader locally from the
-  // replicated Scores each second - no new networking; ties break by the
-  // leaderboard's sort order (highest score, then name). The same tick samples pings
-  // server-side (issue #100).
+  // replicated Scores each second - no new networking; every peer sees the same
+  // replicated scores & death broadcasts, so the incumbent state (issue #178) stays
+  // consistent everywhere. The same tick samples pings server-side (issue #100).
+  private string _crownHolderName = string.Empty;
+
   private void StartCrownTicker()
   {
     var timer = new Timer { WaitTime = 1.0, Autostart = true };
@@ -446,11 +457,36 @@ public partial class World : Node3D
     AddChild (timer);
   }
 
+  // Crown rules (issue #178): no crown anywhere until the leader's score is above
+  // zero, & in ties the incumbent keeps it until strictly surpassed.
   private void UpdateCrownHolder()
   {
     var players = GetPlayers().ToList();
-    var leader = players.OrderByDescending (player => player.Score).ThenBy (player => player.DisplayName).FirstOrDefault();
-    players.ForEach (player => player.SetCrowned (player == leader));
+    var holder = PickCrownHolder (players);
+    _crownHolderName = holder?.DisplayName ?? string.Empty;
+    players.ForEach (player => player.SetCrowned (player == holder));
+  }
+
+  private Player? PickCrownHolder (System.Collections.Generic.List <Player> players)
+  {
+    var top = players.OrderByDescending (player => player.Score).ThenBy (player => player.DisplayName).FirstOrDefault();
+    if (top == null || top.Score <= 0) return null; // Nobody's earned it yet (issue #178).
+    var incumbent = players.FirstOrDefault (player => player.DisplayName == _crownHolderName);
+    if (incumbent != null && incumbent.Score >= top.Score) return incumbent; // Tying alone never steals the crown (issue #178).
+    return top;
+  }
+
+  // Crown rules (issue #178): the incumbent dying while tied at the top hands the
+  // crown to the tied player immediately; dying while strictly ahead changes nothing.
+  private void OnCrownIncumbentDied (string playerName)
+  {
+    if (playerName != _crownHolderName) return;
+    var players = GetPlayers().ToList();
+    var incumbent = players.FirstOrDefault (player => player.DisplayName == playerName);
+    var rival = players.Where (player => player != incumbent).OrderByDescending (player => player.Score).ThenBy (player => player.DisplayName).FirstOrDefault();
+    if (incumbent == null || rival == null || rival.Score < incumbent.Score) return;
+    _crownHolderName = rival.DisplayName;
+    UpdateCrownHolder();
   }
 
   // Per-player ping (issue #100): the server samples each peer's ENet round-trip time

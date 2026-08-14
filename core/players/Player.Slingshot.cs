@@ -10,19 +10,29 @@ namespace com.forerunnergames.energyshot.players;
 public partial class Player
 {
   [Export] public float SlingshotMaxDrawSeconds = 1.2f;
+  // Fire-rate cap (issue #163): a sub-minimum release just relaxes the band (no
+  // stone), & the band needs a beat between shots, so tap-spam does nothing.
+  [Export] public float SlingshotMinDrawSeconds = 0.2f;
+  [Export] public float SlingshotCooldownSeconds = 0.5f;
   [Export] public float SlingshotMinSpeed = 22.0f;
-  [Export] public float SlingshotMaxSpeed = 60.0f;
+  // Raised from 60 (issue #163): a full draw is a genuinely long shot.
+  [Export] public float SlingshotMaxSpeed = 90.0f;
   // 15-60 damage via CalculateHealthDecrease (issue #99): a nuisance at a tap,
   // a proper wallop at full draw, never a one-hit zap-out.
   [Export] public float SlingshotMinEnergy = 0.15f;
   [Export] public float SlingshotMaxEnergy = 0.6f;
   [Export] public float SlingshotKnockbackScale = 0.6f;
+  // Arc flattening (issue #163): stone gravity eases off as the draw rises, so
+  // full-draw stones fly flat long shots while taps stay lobbed.
+  [Export] public float SlingshotMinDrawGravity = 24.0f;
+  [Export] public float SlingshotMaxDrawGravity = 10.0f;
   // How far the held frame pulls back toward the eye at full draw (issue #99).
   private const float SlingshotDrawPullMeters = 0.25f;
   private static readonly Vector3 SlingshotRestPosition = new(0.5f, -0.5f, -0.9f);
   private Node3D _slingshotHeld = null!;
   private AudioStreamPlayer _slingshotStretchSound = null!;
   private float _slingshotDrawSeconds;
+  private float _slingshotCooldownLeft;
   private float SlingshotDrawFraction => Mathf.Clamp (_slingshotDrawSeconds / SlingshotMaxDrawSeconds, 0.0f, 1.0f);
 
   // Held model: the same code-built Y-frame as the pickup, resting in the hand
@@ -34,7 +44,8 @@ public partial class Player
     _slingshotHeld.Position = SlingshotRestPosition;
     _slingshotHeld.RotationDegrees = new Vector3 (0.0f, 10.0f, -8.0f);
     GetNode <Node3D> ("Camera3D").AddChild (_slingshotHeld);
-    _slingshotStretchSound = new AudioStreamPlayer { Stream = ResourceLoader.Load <AudioStream> ("res://assets/sounds/punch-whiff.wav"), PitchScale = 0.55f };
+    // MaxPolyphony 4 (issue #182): quick draw-cancel-draw retriggers inside the slowed creak's tail.
+    _slingshotStretchSound = new AudioStreamPlayer { Stream = ResourceLoader.Load <AudioStream> ("res://assets/sounds/punch-whiff.wav"), PitchScale = 0.55f, MaxPolyphony = 4 };
     AddChild (_slingshotStretchSound);
   }
 
@@ -43,6 +54,7 @@ public partial class Player
   // slingshot (or selection) mid-draw cancels cleanly.
   private void UpdateSlingshot (double delta)
   {
+    _slingshotCooldownLeft = Mathf.Max (0.0f, _slingshotCooldownLeft - (float)delta);
     var active = IsSlingshotSelected && HasSlingshot && _isInputEnabled;
     if (!active) { CancelSlingshotDraw(); return; }
     if (Input.IsActionPressed ("shoot")) { AccumulateSlingshotDraw ((float)delta); return; }
@@ -52,6 +64,7 @@ public partial class Player
 
   private void AccumulateSlingshotDraw (float dt)
   {
+    if (_slingshotCooldownLeft > 0.0f) return; // Fire-rate cap (issue #163): no new draw mid-cooldown.
     if (_slingshotDrawSeconds <= 0.0f) _slingshotStretchSound.Play(); // Once per draw.
     _slingshotDrawSeconds = Mathf.Min (SlingshotMaxDrawSeconds, _slingshotDrawSeconds + dt);
     ApplySlingshotDrawPose();
@@ -65,37 +78,48 @@ public partial class Player
     ApplySlingshotDrawPose();
   }
 
-  // The frame pulls back toward the eye as the band stretches (issue #99).
-  private void ApplySlingshotDrawPose() => _slingshotHeld.Position = SlingshotRestPosition + Vector3.Back * (SlingshotDrawPullMeters * SlingshotDrawFraction);
+  // The frame pulls back toward the eye as the band stretches (issue #99), the
+  // nocked stone & pouch pull further back with the draw, & the band halves stretch
+  // with them - snapping forward when the draw resets to zero (issue #163).
+  private void ApplySlingshotDrawPose()
+  {
+    _slingshotHeld.Position = SlingshotRestPosition + Vector3.Back * (SlingshotDrawPullMeters * SlingshotDrawFraction);
+    SlingshotStone.PoseBand (_slingshotHeld, SlingshotDrawFraction);
+  }
 
   private void FireSlingshotStone()
   {
-    CancelSpawnArmorIfFired();
     var draw = SlingshotDrawFraction;
+    var drawSeconds = _slingshotDrawSeconds;
     CancelSlingshotDraw();
+    if (drawSeconds < SlingshotMinDrawSeconds) return; // Sub-minimum release: the band just relaxes, no shot (issue #163).
+    CancelSpawnArmorIfFired();
+    _slingshotCooldownLeft = SlingshotCooldownSeconds; // Fire-rate cap (issue #163).
     var speed = Mathf.Lerp (SlingshotMinSpeed, SlingshotMaxSpeed, draw);
     var energy = Mathf.Lerp (SlingshotMinEnergy, SlingshotMaxEnergy, draw);
+    var gravity = Mathf.Lerp (SlingshotMinDrawGravity, SlingshotMaxDrawGravity, draw); // Flatter arc at full draw (issue #163).
     var direction = -_camera.GlobalTransform.Basis.Z;
-    var origin = _camera.GlobalPosition + direction * MuzzleOffsetMeters;
-    SpawnStone (origin, direction, speed, energy, isLive: true);
-    Rpc (MethodName.SpawnVisualStone, origin, direction, speed);
+    var sweepStart = _camera.GlobalPosition; // First sweep covers camera->muzzle (issues #112 & #163).
+    var origin = sweepStart + direction * MuzzleOffsetMeters;
+    SpawnStone (origin, sweepStart, direction, speed, gravity, energy, isLive: true);
+    Rpc (MethodName.SpawnVisualStone, origin, sweepStart, direction, speed, gravity);
   }
 
   // Visual-only copy of the shooter's stone on every other peer. Firing proves the
   // shooter's spawn armor is gone, so stale armor whitewash clears here (issue #114).
   [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
-  private void SpawnVisualStone (Vector3 origin, Vector3 direction, float speed)
+  private void SpawnVisualStone (Vector3 origin, Vector3 sweepStart, Vector3 direction, float speed, float gravity)
   {
     ClearArmorDisplayOnRemoteAttack();
-    SpawnStone (origin, direction, speed, energy: 0.0f, isLive: false);
+    SpawnStone (origin, sweepStart, direction, speed, gravity, energy: 0.0f, isLive: false);
   }
 
-  private void SpawnStone (Vector3 origin, Vector3 direction, float speed, float energy, bool isLive)
+  private void SpawnStone (Vector3 origin, Vector3 sweepStart, Vector3 direction, float speed, float gravity, float energy, bool isLive)
   {
     PlaySlingshotThwack (origin);
     var stone = new SlingshotStone();
     GetParent().AddChild (stone);
-    stone.Launch (origin, direction, speed, energy, isLive, this);
+    stone.Launch (origin, sweepStart, direction, speed, gravity, energy, isLive, this);
     if (isLive) stone.HitPlayer += OnStoneHitPlayer;
   }
 

@@ -39,6 +39,10 @@ public partial class PlaytestDriver : Node
   private int _boltsSpawned;
   private int _boomerangsSpawned;
   private int _stonesSpawned;
+  // The most recent stone & how far along +Z it got, sampled every frame (issue
+  // #163): the wall-block assert needs the flight path, not just the spawn count.
+  private SlingshotStone? _lastStone;
+  private float _lastStoneMaxZ = float.MinValue;
   private Player? _self;
   private readonly List <string> _adminMessages = new();
   private Player Self => _self ??= _world.GetPlayers().First (player => player.IsMultiplayerAuthority());
@@ -55,6 +59,7 @@ public partial class PlaytestDriver : Node
     _world.ChildEnteredTree += node => _boltsSpawned += node is LaserBolt ? 1 : 0;
     _world.ChildEnteredTree += node => _boomerangsSpawned += node is BoomerangProjectile ? 1 : 0;
     _world.ChildEnteredTree += node => _stonesSpawned += node is SlingshotStone ? 1 : 0;
+    _world.ChildEnteredTree += node => { if (node is SlingshotStone stone) TrackStone (stone); };
     var args = OS.GetCmdlineUserArgs();
     _role = ArgValue (args, "--playtest") ?? string.Empty;
     _address = ArgValue (args, "--address") ?? "127.0.0.1";
@@ -114,18 +119,33 @@ public partial class PlaytestDriver : Node
   private async Task RunHost()
   {
     _world.StartHostSession (HostName, difficulty: 2, _port, Password, HostColor);
+    // Vote-memory transitions (#162): record every server-side tally change with
+    // the authoritative all-time totals at that exact moment - votes only flow
+    // through this instance, so hooking before any client joins misses nothing.
+    var voteHistory = new List <(int Up, int Down, (int Up, int Down) AllTime)>();
+    Music.VoteCountsChanged += (up, down) => voteHistory.Add ((up, down, Music.CurrentTrackAllTimeVotes));
     await WaitUntil (() => _world.GetPlayers().Count() == 3, 60, "all 3 players joined");
     // Chosen body colors (issue #43): own pick stuck & both clients' picks replicate to the host.
     Assert (Self.ColorIndex == HostColor, $"own chosen color is {HostColor}, got {Self.ColorIndex}");
     await WaitUntil (() => FindPlayer (ShooterName)?.ColorIndex == ShooterColor && FindPlayer (VictimName)?.ColorIndex == VictimColor, 15, "clients' chosen colors replicated to host (#43)");
-    // Exactly one player wears the crown even at 0-0 (issue #107).
-    await WaitUntil (() => _world.GetPlayers().Count (player => player.IsCrowned) == 1, 10, "exactly one player crowned at 0-0");
+    // Crown rules (issue #178): nobody wears the crown at 0-0 - it must be earned.
+    await Task.Delay (3000); // Let a few 1s crown ticks pass before judging.
+    Assert (_world.GetPlayers().All (player => !player.IsCrowned), "no crown at 0-0 (#178)");
     // Server-measured pings replicate back to every peer (issue #100).
     await WaitUntil (() => FindPlayer (ShooterName)?.PingMs >= 0, 15, "shooter's ping measured & replicated to host");
     // Synced music (issue #137): the server picked a track & the shooter's thumbs-up
     // vote came back through the server tally.
     await WaitUntil (() => Music.CurrentTrackTitle.Length > 0, 15, "music track started on the server");
-    await WaitUntil (() => Music.CurrentUpVotes == 1, 30, "shooter's music vote tallied on host");
+    await WaitUntil (() => voteHistory.Any (entry => entry.Up == 1 && entry.Down == 0), 30, "shooter's up-vote tallied on host");
+    // The shooter re-votes up (a no-op) & then switches to down (#162): the same
+    // peer's reliable RPCs arrive in order, so once the switch lands both up
+    // entries are recorded - they must share identical totals (no double-count),
+    // & the switch must have moved exactly one all-time vote across.
+    await WaitUntil (() => voteHistory.Any (entry => entry.Up == 0 && entry.Down == 1), 60, "shooter's up-to-down switch tallied on host (#162)");
+    var upEntries = voteHistory.Where (entry => entry.Up == 1 && entry.Down == 0).ToList();
+    var downEntry = voteHistory.First (entry => entry.Up == 0 && entry.Down == 1);
+    Assert (upEntries.Count >= 2 && upEntries.All (entry => entry.AllTime == upEntries[0].AllTime), "repeated up-vote never double-counted the all-time totals (#162)");
+    Assert (downEntry.AllTime == (upEntries[0].AllTime.Up - 1, upEntries[0].AllTime.Down + 1), $"up-to-down switch moved one all-time vote (#162), got {upEntries[0].AllTime} -> {downEntry.AllTime}");
     // Admin messages (issue #158): drop an announcement into the operator file; the
     // 1s poller must broadcast it to every peer (host included) & consume the file
     // (claimed atomically by rename) so the same text can be re-sent later.
@@ -136,10 +156,17 @@ public partial class PlaytestDriver : Node
     // Shooter kills victim once (plus possibly the host itself in the line of
     // fire); wait to observe the replicated score.
     await WaitUntil (() => FindPlayer (ShooterName)?.Score >= 1, 120, "shooter's kill replicated to host");
+    // Crown rules (issue #178): the first score puts the crown on the scorer - & on
+    // nobody else. (A tie handover isn't cheaply reachable in this scenario's score
+    // flow, so the incumbent rules beyond these are covered by the logic itself.)
+    await WaitUntil (() => FindPlayer (ShooterName)?.IsCrowned == true, 10, "crown appeared on the first scorer (#178)");
+    await WaitUntil (() => _world.GetPlayers().Count (player => player.IsCrowned) == 1, 10, "exactly one crown after the first score (#178)");
     // Victim respawns with armor visible to the host too (~5s later now, #152).
     await WaitUntil (() => FindPlayer (VictimName)?.SpawnArmor == true, 35, "victim respawn armor replicated to host");
     // The victim's fall at score 0 goes negative & replicates (issue #108).
     await WaitUntil (() => FindPlayer (VictimName)?.Score == -1, 60, "victim's fall penalty (-1) replicated to host");
+    // Crown rules (issue #178): a lower score moving (the fall) never moves the crown.
+    Assert (FindPlayer (ShooterName)?.IsCrowned == true, "crown stayed on the leader after the fall penalty (#178)");
     // Stay up until both clients have finished & disconnected.
     await WaitUntil (() => _world.GetPlayers().Count() == 1, 120, "clients disconnected");
     // The version line goes only to joining clients, never broadcast (#158), so the
@@ -175,6 +202,17 @@ public partial class PlaytestDriver : Node
     // thumbs-up vote here must show up on every other peer's tally.
     await WaitUntil (() => Music.CurrentTrackTitle.Length > 0, 15, "current music track synced from server");
     Music.SubmitVote (isUpVote: true);
+    // Own-vote memory (issue #162): the server confirms the vote back to the voter,
+    // which is what drives the mini player's pressed-thumb highlight.
+    await WaitUntil (() => Music.CurrentOwnVote == 1 && Music.CurrentUpVotes == 1, 15, "own up-vote confirmed back by the server (#162)");
+    // Vote-memory transitions (#162): a repeated identical vote must change nothing
+    // (the host asserts the authoritative totals stayed put), then an up-to-down
+    // switch must press the other thumb & move the play tally by exactly one.
+    Music.SubmitVote (isUpVote: true);
+    await Task.Delay (1000);
+    Assert (Music.CurrentOwnVote == 1 && Music.CurrentUpVotes == 1 && Music.CurrentDownVotes == 0, "repeated up-vote was a no-op (#162)");
+    Music.SubmitVote (isUpVote: false);
+    await WaitUntil (() => Music.CurrentOwnVote == -1 && Music.CurrentUpVotes == 0 && Music.CurrentDownVotes == 1, 15, "up-to-down switch confirmed & re-tallied (#162)");
 
     // Movement: hold forward briefly & verify we actually moved.
     var startPosition = Self.GlobalPosition;
@@ -216,12 +254,14 @@ public partial class PlaytestDriver : Node
     Self.Position = victim.GlobalPosition + (flatAway.Length() > 0.5f ? flatAway.Normalized() : Vector3.Right) * 1.5f;
     await Task.Delay (200);
 
+    // Punch on LEFT click (issue #164): injected as real mouse-button events so the
+    // binding itself is under test, not just the action.
     for (var attempt = 0; attempt < 10 && victim.Health >= healthBeforePunch; ++attempt)
     {
       AimAt (victim.GlobalPosition + Vector3.Up);
-      PressAction ("punch");
+      PressLeftClick();
       await Task.Delay (80);
-      ReleaseAction ("punch");
+      ReleaseLeftClick();
       await Task.Delay (700);
     }
 
@@ -412,12 +452,45 @@ public partial class PlaytestDriver : Node
     for (var attempt = 0; attempt < 10 && _stonesSpawned == stonesBefore; ++attempt)
     {
       PressAction ("shoot");
-      await Task.Delay (600); // Hold to draw (#99); release slings the stone.
+      await Task.Delay (900); // Hold to draw (#99), past the minimum draw (#163); release slings the stone.
       ReleaseAction ("shoot");
       await Task.Delay (300);
     }
 
     Assert (_stonesSpawned > stonesBefore, "slingshot draw & release fired a stone (#99)");
+
+    // Fire-rate cap (#163): sub-minimum taps just relax the band - no stones.
+    await Task.Delay (800); // Let the previous shot's cooldown lapse so only the taps are under test.
+    var stonesBeforeSpam = _stonesSpawned;
+
+    for (var i = 0; i < 4; ++i)
+    {
+      PressAction ("shoot");
+      await Task.Delay (80);
+      ReleaseAction ("shoot");
+      await Task.Delay (120);
+    }
+
+    Assert (_stonesSpawned == stonesBeforeSpam, $"sub-minimum taps released no stones (#163), got {_stonesSpawned - stonesBeforeSpam}");
+
+    // Wall blocking (#163): point-blank into the spawn-room wall (the wall face is
+    // about as close as the muzzle offset from here), so the first-frame camera
+    // sweep is what stops the stone - it must never travel past the wall at z=6.
+    AimAt (new Vector3 (Self.GlobalPosition.X, 31.0f, 6.0f)); // Mid-height of the wall ahead.
+    var wallStone = await SlingAStone (drawMs: 1500, "wall-test stone (#163)");
+    await TryWaitUntil (() => !IsInstanceValid (wallStone) || !wallStone.IsInsideTree(), 5);
+    Assert (!IsInstanceValid (wallStone) || !wallStone.IsInsideTree(), "the wall stopped the stone (#163)");
+    Assert (_lastStoneMaxZ < 6.5f, $"stone never passed the wall at z=6 (#163), max z {_lastStoneMaxZ:0.00}");
+
+    // Long flight (#163): a full-draw stone lobbed high over the walls must still be
+    // flying seconds later & have covered real distance - no premature despawn.
+    var launchPosition = Self.GlobalPosition;
+    AimAt (Self.GetNode <Camera3D> ("Camera3D").GlobalPosition + new Vector3 (0.0f, 30.0f, 30.0f)); // ~45 degrees up, over the wall, away from everyone.
+    var flightStone = await SlingAStone (drawMs: 3000, "long-flight stone (#163)");
+    await Task.Delay (4000);
+    Assert (IsInstanceValid (flightStone) && flightStone.IsInsideTree(), "full-draw stone still flying after 4s (#163)");
+    var flightDistance = new Vector2 (flightStone.GlobalPosition.X - launchPosition.X, flightStone.GlobalPosition.Z - launchPosition.Z).Length();
+    Assert (flightDistance > 40.0f, $"full-draw stone covered real range (#163), got {flightDistance:0.0}m");
 
     // The toggle persists to the shared user settings (#119); restore the starting
     // view so a playtest run never flips the developer's real preference.
@@ -578,7 +651,10 @@ public partial class PlaytestDriver : Node
     // Synced music (issue #137): same track as everyone & the shooter's vote
     // propagated here through the server broadcast.
     await WaitUntil (() => Music.CurrentTrackTitle.Length > 0, 15, "current music track synced from server");
-    await WaitUntil (() => Music.CurrentUpVotes == 1, 30, "shooter's music vote visible to victim");
+    // The shooter's settled stance after its #162 transitions (up, repeat, down):
+    // waiting on the final state instead of the transient up-vote avoids racing
+    // the quick up-to-down switch.
+    await WaitUntil (() => Music.CurrentUpVotes == 0 && Music.CurrentDownVotes == 1, 60, "shooter's settled music vote (down after switch) visible to victim (#162)");
     // Admin messages (issue #158): the join-time version line & the host's
     // file-driven announcement both arrive as admin messages here too.
     await WaitUntil (() => _adminMessages.Contains ($"Running {ServerVersion}"), 30, "version line received on join (#158)");
@@ -728,6 +804,43 @@ public partial class PlaytestDriver : Node
 
   private static void PressAction (string action) => Input.ParseInputEvent (new InputEventAction { Action = action, Pressed = true });
   private static void ReleaseAction (string action) => Input.ParseInputEvent (new InputEventAction { Action = action, Pressed = false });
+  // Real left-mouse events, not action injections (issue #164): punching must work
+  // through the actual left-click binding while fists are the selected weapon.
+  private static void PressLeftClick() => Input.ParseInputEvent (new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = true });
+  private static void ReleaseLeftClick() => Input.ParseInputEvent (new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = false });
+
+  // Draws (holding well past the minimum draw time, #163) & releases until a stone
+  // spawns; retries absorb CI physics-time dilation eating into the cooldown & draw.
+  private async Task <SlingshotStone> SlingAStone (int drawMs, string description)
+  {
+    for (var attempt = 0; attempt < 5; ++attempt)
+    {
+      _lastStone = null;
+      PressAction ("shoot");
+      await Task.Delay (drawMs);
+      ReleaseAction ("shoot");
+      await TryWaitUntil (() => _lastStone != null, 2);
+      if (_lastStone != null) return _lastStone;
+    }
+
+    throw new Exception ($"no stone spawned: {description}");
+  }
+
+  // Samples the newest stone's +Z progress every frame until it despawns (issue
+  // #163): flight paths outlive any 100ms poll, so the wall assert needs per-frame data.
+  private async void TrackStone (SlingshotStone stone)
+  {
+    _lastStone = stone;
+    _lastStoneMaxZ = float.MinValue;
+
+    // Stop sampling once a newer stone takes over, so an earlier stone still in
+    // flight can't pollute the newer stone's measurements.
+    while (_lastStone == stone && IsInstanceValid (stone) && stone.IsInsideTree() && IsInsideTree())
+    {
+      _lastStoneMaxZ = Mathf.Max (_lastStoneMaxZ, stone.GlobalPosition.Z);
+      await ToSignal (GetTree(), SceneTree.SignalName.ProcessFrame);
+    }
+  }
 
   private static void Assert (bool condition, string description)
   {
