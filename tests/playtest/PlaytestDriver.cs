@@ -36,6 +36,10 @@ public partial class PlaytestDriver : Node
   private int _boltsSpawned;
   private int _boomerangsSpawned;
   private int _stonesSpawned;
+  // The most recent stone & how far along +Z it got, sampled every frame (issue
+  // #163): the wall-block assert needs the flight path, not just the spawn count.
+  private SlingshotStone? _lastStone;
+  private float _lastStoneMaxZ = float.MinValue;
   private Player? _self;
   private readonly List <string> _adminMessages = new();
   private Player Self => _self ??= _world.GetPlayers().First (player => player.IsMultiplayerAuthority());
@@ -52,6 +56,7 @@ public partial class PlaytestDriver : Node
     _world.ChildEnteredTree += node => _boltsSpawned += node is LaserBolt ? 1 : 0;
     _world.ChildEnteredTree += node => _boomerangsSpawned += node is BoomerangProjectile ? 1 : 0;
     _world.ChildEnteredTree += node => _stonesSpawned += node is SlingshotStone ? 1 : 0;
+    _world.ChildEnteredTree += node => { if (node is SlingshotStone stone) TrackStone (stone); };
     var args = OS.GetCmdlineUserArgs();
     _role = ArgValue (args, "--playtest") ?? string.Empty;
     _address = ArgValue (args, "--address") ?? "127.0.0.1";
@@ -235,12 +240,14 @@ public partial class PlaytestDriver : Node
     var healthBeforePunch = victim.Health;
     await WaitUntil (() => ApproachedVictim (victim), 30, "walked into punch range of victim");
 
+    // Punch on LEFT click (issue #164): injected as real mouse-button events so the
+    // binding itself is under test, not just the action.
     for (var attempt = 0; attempt < 10 && victim.Health >= healthBeforePunch; ++attempt)
     {
       AimAt (victim.GlobalPosition + Vector3.Up);
-      PressAction ("punch");
+      PressLeftClick();
       await Task.Delay (80);
-      ReleaseAction ("punch");
+      ReleaseLeftClick();
       await Task.Delay (700);
     }
 
@@ -424,12 +431,45 @@ public partial class PlaytestDriver : Node
     for (var attempt = 0; attempt < 10 && _stonesSpawned == stonesBefore; ++attempt)
     {
       PressAction ("shoot");
-      await Task.Delay (600); // Hold to draw (#99); release slings the stone.
+      await Task.Delay (900); // Hold to draw (#99), past the minimum draw (#163); release slings the stone.
       ReleaseAction ("shoot");
       await Task.Delay (300);
     }
 
     Assert (_stonesSpawned > stonesBefore, "slingshot draw & release fired a stone (#99)");
+
+    // Fire-rate cap (#163): sub-minimum taps just relax the band - no stones.
+    await Task.Delay (800); // Let the previous shot's cooldown lapse so only the taps are under test.
+    var stonesBeforeSpam = _stonesSpawned;
+
+    for (var i = 0; i < 4; ++i)
+    {
+      PressAction ("shoot");
+      await Task.Delay (80);
+      ReleaseAction ("shoot");
+      await Task.Delay (120);
+    }
+
+    Assert (_stonesSpawned == stonesBeforeSpam, $"sub-minimum taps released no stones (#163), got {_stonesSpawned - stonesBeforeSpam}");
+
+    // Wall blocking (#163): point-blank into the spawn-room wall (the wall face is
+    // about as close as the muzzle offset from here), so the first-frame camera
+    // sweep is what stops the stone - it must never travel past the wall at z=6.
+    AimAt (new Vector3 (Self.GlobalPosition.X, 31.0f, 6.0f)); // Mid-height of the wall ahead.
+    var wallStone = await SlingAStone (drawMs: 1500, "wall-test stone (#163)");
+    await TryWaitUntil (() => !IsInstanceValid (wallStone) || !wallStone.IsInsideTree(), 5);
+    Assert (!IsInstanceValid (wallStone) || !wallStone.IsInsideTree(), "the wall stopped the stone (#163)");
+    Assert (_lastStoneMaxZ < 6.5f, $"stone never passed the wall at z=6 (#163), max z {_lastStoneMaxZ:0.00}");
+
+    // Long flight (#163): a full-draw stone lobbed high over the walls must still be
+    // flying seconds later & have covered real distance - no premature despawn.
+    var launchPosition = Self.GlobalPosition;
+    AimAt (Self.GetNode <Camera3D> ("Camera3D").GlobalPosition + new Vector3 (0.0f, 30.0f, 30.0f)); // ~45 degrees up, over the wall, away from everyone.
+    var flightStone = await SlingAStone (drawMs: 3000, "long-flight stone (#163)");
+    await Task.Delay (4000);
+    Assert (IsInstanceValid (flightStone) && flightStone.IsInsideTree(), "full-draw stone still flying after 4s (#163)");
+    var flightDistance = new Vector2 (flightStone.GlobalPosition.X - launchPosition.X, flightStone.GlobalPosition.Z - launchPosition.Z).Length();
+    Assert (flightDistance > 40.0f, $"full-draw stone covered real range (#163), got {flightDistance:0.0}m");
 
     // The toggle persists to the shared user settings (#119); restore the starting
     // view so a playtest run never flips the developer's real preference.
@@ -623,6 +663,43 @@ public partial class PlaytestDriver : Node
 
   private static void PressAction (string action) => Input.ParseInputEvent (new InputEventAction { Action = action, Pressed = true });
   private static void ReleaseAction (string action) => Input.ParseInputEvent (new InputEventAction { Action = action, Pressed = false });
+  // Real left-mouse events, not action injections (issue #164): punching must work
+  // through the actual left-click binding while fists are the selected weapon.
+  private static void PressLeftClick() => Input.ParseInputEvent (new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = true });
+  private static void ReleaseLeftClick() => Input.ParseInputEvent (new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = false });
+
+  // Draws (holding well past the minimum draw time, #163) & releases until a stone
+  // spawns; retries absorb CI physics-time dilation eating into the cooldown & draw.
+  private async Task <SlingshotStone> SlingAStone (int drawMs, string description)
+  {
+    for (var attempt = 0; attempt < 5; ++attempt)
+    {
+      _lastStone = null;
+      PressAction ("shoot");
+      await Task.Delay (drawMs);
+      ReleaseAction ("shoot");
+      await TryWaitUntil (() => _lastStone != null, 2);
+      if (_lastStone != null) return _lastStone;
+    }
+
+    throw new Exception ($"no stone spawned: {description}");
+  }
+
+  // Samples the newest stone's +Z progress every frame until it despawns (issue
+  // #163): flight paths outlive any 100ms poll, so the wall assert needs per-frame data.
+  private async void TrackStone (SlingshotStone stone)
+  {
+    _lastStone = stone;
+    _lastStoneMaxZ = float.MinValue;
+
+    // Stop sampling once a newer stone takes over, so an earlier stone still in
+    // flight can't pollute the newer stone's measurements.
+    while (_lastStone == stone && IsInstanceValid (stone) && stone.IsInsideTree() && IsInsideTree())
+    {
+      _lastStoneMaxZ = Mathf.Max (_lastStoneMaxZ, stone.GlobalPosition.Z);
+      await ToSignal (GetTree(), SceneTree.SignalName.ProcessFrame);
+    }
+  }
 
   private static void Assert (bool condition, string description)
   {

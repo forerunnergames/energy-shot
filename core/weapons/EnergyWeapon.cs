@@ -113,6 +113,9 @@ public partial class EnergyWeapon : Node3D
   {
     _pivot = GetNode <Node3D> ("Pivot");
     _shootingSound = GetNode <AudioStreamPlayer3D> ("ShootingSound");
+    // Full-auto retriggers the shot every 0.15s (issue #182): extra voices keep each
+    // blast's tail ringing instead of restarting the stream mid-play.
+    _shootingSound.MaxPolyphony = 6;
     _chargingSound = GetNode <AudioStreamPlayer3D> ("ChargingSound");
     _fullAutoSwitchSound = GetNode <AudioStreamPlayer3D> ("FullAutoSwitchSound");
     _fullAutoReadySound = GetNode <AudioStreamPlayer3D> ("FullAutoReadySound");

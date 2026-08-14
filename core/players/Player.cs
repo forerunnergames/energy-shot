@@ -223,6 +223,9 @@ public partial class Player : CharacterBody3D
   // still connects (issue #86).
   [Export] public float AirRocketBoostRange = 8.0f;
   [Export] public float KnockbackStrength = 16.0f;
+  // Hits shove mostly horizontally (issue #163): knockback never pushes upward speed
+  // past this, so stacked or full-draw hits can't launch victims sky-high.
+  [Export] public float KnockbackUpPopCap = 6.0f;
   [Export] public int KillHealAmount = 50;
   [Export] public float PunchKnockbackScale = 0.33f;
   [Export] public float JumpVelocity = 20.0f;
@@ -336,6 +339,11 @@ public partial class Player : CharacterBody3D
     _zapOutSound = GetNode <AudioStreamPlayer> ("ZapOutSound");
     _respawnSound = GetNode <AudioStreamPlayer> ("RespawnSound");
     _jumpSound = GetNode <AudioStreamPlayer> ("JumpSound");
+    // Rapid-retrigger sfx mix instead of cutting each other off (issue #182): the
+    // default polyphony (1) restarts the stream on every play, glitching quick
+    // punches, full-auto hitmarker bursts, & back-to-back damage hits; extra voices
+    // let overlapping plays ring out their tails.
+    foreach (var sound in new[] { _punchSound, _punchWhiffSound, _punchThudSound, _weaponPickupSound, _throughWallZapSound, _hitmarkerSound, _damageSound, _jumpSound }) sound.MaxPolyphony = 6;
     _healthBar.MaxValue = MaxHealth;
     _health = MaxHealth;
     _healthBar.Value = _health;
@@ -394,6 +402,7 @@ public partial class Player : CharacterBody3D
     UpdateXrayReveal();
     UpdateViewToggle(); // Third-person toggle on V (issue #119).
     UpdateWeaponSelection();
+    CancelStaleLaserCharge(); // Leaving the laser slot cancels the charge (issue #156).
     UpdateBananaLauncher();
     UpdateBoomerang();
     UpdateSlingshot (delta); // Draw-&-release stones (issue #99).

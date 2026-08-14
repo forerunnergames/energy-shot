@@ -22,6 +22,8 @@ public partial class BananaLauncher : Node3D
   public override void _Ready()
   {
     _fireSound = GetNode <AudioStreamPlayer3D> ("FireSound");
+    // A follow-up launch inside the thump's tail mixes instead of restarting it (issue #182).
+    _fireSound.MaxPolyphony = 4;
     ApplyRifleVisuals();
   }
   public override void _PhysicsProcess (double delta) => _cooldownLeft = Mathf.Max (0.0f, _cooldownLeft - (float)delta);
