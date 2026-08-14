@@ -186,7 +186,9 @@ public partial class WeaponSpawner : Node3D
     // The airplane respects its exactly-one cap even in playtest mode (CodeRabbit on
     // #180): while someone holds it (or it sits landed somewhere), no respawn here.
     if (Count (HeldWeapon.PaperAirplane, pickups, players) < MaxPaperAirplanes) EnsurePlaytestPickup (HeldWeapon.PaperAirplane, PlaytestAirplanePosition, pickups); // Issue #102.
-    EnsurePlaytestPickup (HeldWeapon.Banana, PlaytestBananaPosition, pickups); // Issue #169.
+    // Same cap guard for the banana (CodeRabbit on #180): respawning it here while
+    // someone already carries one would put two in a level capped at one.
+    if (Count (HeldWeapon.Banana, pickups, players) < MaxBananas) EnsurePlaytestPickup (HeldWeapon.Banana, PlaytestBananaPosition, pickups); // Issue #169.
   }
 
   private void EnsurePlaytestPickup (HeldWeapon type, Vector3 position, List <WeaponPickup> pickups)
