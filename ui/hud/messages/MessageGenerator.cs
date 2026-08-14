@@ -59,6 +59,7 @@ public static class MessageGenerator
     if (context.Kind == DamageKind.Boomerang) return MessagePools.Boomerang; // Issue #98.
     if (context.Kind == DamageKind.SlungItem) return MessagePools.SlungItem; // Issue #190.
     if (context.Kind == DamageKind.Slingshot) return MessagePools.Slingshot; // Issue #99.
+    if (context.Kind == DamageKind.PaperAirplane) return MessagePools.PaperAirplane; // Issue #102.
     if (context.VictimHeldBananaGun) return MessagePools.HoldingBananaGun;
     if (context.Kind == DamageKind.Laser && context.ThroughBarrier) return MessagePools.ThroughWall; // Pierced a wall/floor first (issue #94).
     if (context.KillerSliding) return MessagePools.SlideShotKiller;
