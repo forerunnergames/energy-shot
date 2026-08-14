@@ -227,22 +227,34 @@ public static class MessagePools
     "{v} got recycled. {z} did the sorting"
   };
 
-  // The paper airplane's target: lit up & then popped (issue #191).
-  public static readonly List <string> AirplaneBurn = new()
+  // Paper airplane zap-outs (issue #102), now the ignite-then-pop it became in
+  // issue #191 - it picks one player & only that player ever feels it.
+  public static readonly List <string> PaperAirplane = new()
   {
-    "{v} received the paper airplane, signed & sealed",
-    "the paper airplane picked {v} personally. Just {v}",
-    "{v} went out in a small, tidy puff of stationery",
-    "folded, launched, & delivered: {v}"
+    "{z}'s paper airplane finally caught up with {v}",
+    "{v} lost a staring contest with {z}'s stationery",
+    "special delivery from {z}, signed for by {v}'s forehead",
+    "{v} forgot {z}'s paper airplane never forgets",
+    "{z}'s paper airplane picked {v} personally. Just {v}",
+    "{v} went out in a small, tidy puff of stationery, courtesy of {z}"
   };
 
-  // Stepped on the grounded airplane (issue #191).
+  // Stepped on a grounded, armed airplane (issue #191).
   public static readonly List <string> Landmine = new()
   {
     "{v} stepped on the paper airplane. The paper airplane stepped back",
     "{v} found the airplane the hard way",
     "{v} learned that origami holds a grudge",
     "beep, beep, beep, pop: goodnight {v}"
+  };
+
+  // Someone punched an incoming paper airplane out of the air (issue #102):
+  // {z} = the catcher, {v} = the thrower it's being returned to.
+  public static readonly List <string> AirplaneCatch = new()
+  {
+    "{z} snagged {v}'s paper airplane right out of the air",
+    "return to sender: {z} caught {v}'s paper airplane",
+    "{z} filed {v}'s paper airplane under 'mine now'"
   };
 
   // {z} zapped {v} with the weapon {v} dropped earlier.
@@ -260,6 +272,6 @@ public static class MessagePools
     Fall, FallStreak, Zapped, ThroughWall, FullCharge, FullAuto, Punch, PunchedOutArmed, FistsVsFists,
     BananaBlast, BananaDirect, HoldingBananaGun, ComboSplatterPunch, JumpShot, SlideShotKiller,
     SlideShotVictim, ZapStreakTier3, ZapStreakTier5, ZapStreakTier7, StreakEnded, StreakLost,
-    ZappedStreak, Boomerang, Slingshot, SlungItem, AirplaneBurn, Landmine, TheftRevenge
+    ZappedStreak, Boomerang, Slingshot, SlungItem, PaperAirplane, Landmine, AirplaneCatch, TheftRevenge
   };
 }

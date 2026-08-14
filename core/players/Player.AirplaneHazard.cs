@@ -4,13 +4,16 @@ using Godot;
 
 namespace com.forerunnergames.energyshot.players;
 
-// Being the paper airplane's target (issue #191). The airplane is a personal hazard
-// with no blast radius at all: it locks onto exactly ONE player & only that player
-// is ever harmed. Two ways to become the target - stepping on the grounded airplane
-// (the landmine, which pops it into the air & sends it swooping onto you), or being
-// hit by a slingshot-launched one (issue #190). Either way the sequence is the same:
-// you catch fire for ~2s of damage over time, & then you pop. Non-gory throughout:
-// a zappy flame, white paper scraps, & a respawn.
+// Being the paper airplane's target (issue #191). The slot-6 glider from issue #102
+// still flies, locks on, & can be punch-caught (Player.PaperAirplane.cs) - but an
+// UNCAUGHT hit no longer just stings: it sets that one player alight for ~2s of
+// damage over time & then pops them. Strictly personal: no blast radius at all, so
+// nobody standing next to the target is touched.
+//
+// Three ways to become the target, all ending in the same sequence:
+//   - a thrown airplane reaching the player it locked onto (issue #102),
+//   - a slingshot-launched one hitting anybody (issue #190),
+//   - stepping on an armed, grounded one - the landmine (issue #191).
 //
 // Everything here runs on the target's own peer (victim-authoritative, like every
 // other hit), with the server owning the "which player" decision & the exactly-one
@@ -38,95 +41,60 @@ public partial class Player
   // The pop itself finishes the target off, single-target & unclamped - the same
   // "no survivable clamp" rule the sticky banana uses (issue #83).
   [Export] public float AirplanePopEnergy = 2.0f;
+  // The mine's fuse (issue #191): the ring & beeping go to their fastest the instant
+  // you step on it, & about a second later the airplane lights you up.
+  [Export] public float MineFuseSeconds = 1.0f;
   private static readonly Color FlameOrange = new(1.0f, 0.55f, 0.12f);
   private bool _burning;
   private OmniLight3D? _burnLight;
+  private ulong _mineFuseEndMs;
+  // Whichever airplane is locked onto us, live or a visual copy - the ring reads its
+  // distance. Registered by SpawnAirplane on every peer (issues #102 & #191).
   private PaperAirplaneProjectile? _incomingAirplane;
-  private PaperAirplaneProjectile? _visualAirplane;
   // Bumped on every ignite & on every respawn, so a burn tick loop from a previous
   // life (or a previous hazard) can never keep damaging a fresh one.
   private int _burnGeneration;
 
-  // 0 = nothing incoming, 1 = impact. The HUD's warning ring & beeping read this,
-  // & only the targeted player's HUD ever sees a non-zero value (issue #191).
-  public float AirplaneThreatFraction => _incomingAirplane != null && IsInstanceValid (_incomingAirplane) ? _incomingAirplane.ThreatFraction() : 0.0f;
+  // 0 = nothing incoming, 1 = impact. The HUD's warning ring & beeping read this, &
+  // only the targeted player's own HUD ever sees a non-zero value (issue #191).
+  public float AirplaneThreatFraction => _mineFuseEndMs > 0 ? 1.0f : IncomingAirplaneThreat();
 
-  // The landmine went off under us (server-confirmed): the airplane pops up off the
-  // ground & swoops onto us. It locks onto this player for the whole flight - nobody
-  // else can be hit by it, however close they're standing.
-  public void BeginAirplaneSwoop (Vector3 minePosition)
+  // A mine is already at your feet, so its fuse pins the ring at maximum; an incoming
+  // glide fills the ring in as it closes.
+  private float IncomingAirplaneThreat()
   {
-    if (!IsMultiplayerAuthority()) return;
-    var origin = minePosition + Vector3.Up * MineLaunchHeightMeters;
-    _incomingAirplane = SpawnAirplane (origin, isLive: true);
-    _incomingAirplane.Struck += OnAirplaneStruckMe;
-    _incomingAirplane.Lost += OnAirplaneFell;
-    Rpc (MethodName.SpawnVisualAirplane, origin);
+    if (_incomingAirplane == null || !IsInstanceValid (_incomingAirplane) || !_incomingAirplane.IsInsideTree()) return 0.0f;
+    return _incomingAirplane.ThreatFractionFor (this);
+  }
+
+  // Called on every peer as a flight spawns, on the TARGET's node (issue #191): the
+  // ring & beeping belong to the locked player alone, so nobody else's HUD reacts.
+  public void NoteIncomingAirplane (PaperAirplaneProjectile airplane) => _incomingAirplane = airplane;
+
+  // Server-confirmed: we stepped on an armed, grounded airplane & it picked us.
+  // Fastest beeping & blinking immediately, then the ignite about a second later.
+  public async void BeginMineFuse (Vector3 minePosition)
+  {
+    if (!IsMultiplayerAuthority() || Burning || Fallen) return;
+    _mineFuseEndMs = Time.GetTicksMsec() + (ulong)(MineFuseSeconds * 1000.0f);
+    PaperAirplane.Arm (GetParent(), minePosition); // The mine's tick, heard by everyone nearby.
     GD.Print ($"{DisplayName}: I stepped on the paper airplane!");
-  }
-
-  // How high the triggered mine flips the airplane before it dives back onto the
-  // player who stepped on it - about a second in the air, so the warning ring &
-  // beeping start at their fastest immediately, exactly as the mine spec asks.
-  private const float MineLaunchHeightMeters = 8.0f;
-
-  // Visual-only copy of the swoop on every other peer; this RPC runs on the TARGET's
-  // node everywhere, so every copy homes onto the same locked player.
-  [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
-  private void SpawnVisualAirplane (Vector3 origin)
-  {
-    if (_visualAirplane != null && IsInstanceValid (_visualAirplane)) _visualAirplane.QueueFree();
-    _visualAirplane = SpawnAirplane (origin, isLive: false);
-  }
-
-  private PaperAirplaneProjectile SpawnAirplane (Vector3 origin, bool isLive)
-  {
-    var airplane = new PaperAirplaneProjectile();
-    GetParent().AddChild (airplane);
-    airplane.Launch (origin, this, isLive);
-    return airplane;
-  }
-
-  private void OnAirplaneStruckMe()
-  {
-    EndSwoop();
+    await ToSignal (GetTree().CreateTimer (MineFuseSeconds), SceneTreeTimer.SignalName.Timeout);
+    if (!IsInstanceValid (this) || !IsInsideTree()) return;
+    _mineFuseEndMs = 0;
     IgniteFromAirplane (attackerId: 0, "the paper airplane", DamageKind.Landmine);
   }
 
-  // Outran the swoop: the airplane comes down where it gave up & the server re-arms
-  // it there as the landmine, ready for whoever finds it next (issue #191).
-  private void OnAirplaneFell (Vector3 position)
-  {
-    EndSwoop();
-    GD.Print ($"{DisplayName}: I outran the paper airplane!");
-    Spawner.SendAirplaneFellRequest (position);
-  }
-
-  // The live copy is already gone (or being abandoned); every peer's visual copy has
-  // to go with it, or it would keep homing onto this player's next life.
-  private void EndSwoop()
-  {
-    if (_incomingAirplane != null && IsInstanceValid (_incomingAirplane)) _incomingAirplane.QueueFree();
-    _incomingAirplane = null;
-    if (IsInsideTree() && IsMultiplayerActive()) Rpc (MethodName.FreeVisualAirplane);
-  }
-
-  [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
-  private void FreeVisualAirplane()
-  {
-    if (_visualAirplane != null && IsInstanceValid (_visualAirplane)) _visualAirplane.QueueFree();
-    _visualAirplane = null;
-  }
-
-  // Server-confirmed entry point for a slingshot-launched strike (issue #190): the
-  // shooter reported the contact, the server checked they really had the airplane
-  // nocked, & now we light ourselves up exactly as a targeted swoop would.
-  public void IgniteFromAirplane (int shooterId, string shooterName) => IgniteFromAirplane (shooterId, shooterName, DamageKind.Airplane);
+  // Server-confirmed strike (issues #102, #190 & #191): a thrown airplane reached the
+  // player it locked onto without being caught, or a slung one hit somebody. Either
+  // way the server checked the attacker really had the airplane before saying so.
+  public void IgniteFromAirplane (int attackerId, string attackerName) => IgniteFromAirplane (attackerId, attackerName, DamageKind.PaperAirplane);
 
   private async void IgniteFromAirplane (int attackerId, string attackerName, DamageKind kind)
   {
     if (!IsMultiplayerAuthority() || SpawnArmor || Fallen || Burning) return;
     var generation = ++_burnGeneration;
+    _incomingAirplane = null; // It arrived; the warning ring's work is done.
     LastDamageKind = kind; // Message context (issue #84).
     Burning = true;
     Dancing = false; // Catching fire mid-dance ends the groove on every peer (issue #103).
@@ -194,7 +162,8 @@ public partial class Player
   private void ClearBurning()
   {
     ++_burnGeneration;
+    _mineFuseEndMs = 0;
+    _incomingAirplane = null;
     Burning = false;
-    if (_incomingAirplane != null) EndSwoop();
   }
 }

@@ -338,6 +338,7 @@ public partial class Player : CharacterBody3D
     _launcherRestPosition = _bananaLauncher.Position;
     CreateBoomerangHeld(); // Code-built held model, no scene asset (issue #98).
     CreateSlingshotHeld(); // Same, for the slot-5 slingshot (issue #99).
+    CreateAirplaneHeld(); // Same, for the slot-6 paper airplane (issue #102).
     UpdateWeaponVisibility();
     // Spawn-state sync runs before _Ready, when the slingshot node was still null,
     // so re-apply or a late joiner never sees an already-nocked item (issue #190).
@@ -430,6 +431,8 @@ public partial class Player : CharacterBody3D
     UpdateBananaLauncher();
     UpdateBoomerang();
     UpdateSlingshot (delta); // Draw-&-release stones (issue #99).
+    UpdateAirplane(); // Homing glider throws (issue #102).
+    UpdateAirplaneCatchWindow(); // An open swing keeps grabbing briefly (issue #102).
     UpdateBread();
     UpdateFullAuto (delta);
     UpdatePunch (delta);

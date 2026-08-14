@@ -27,6 +27,23 @@ public partial class WeaponPickup : Area3D
     }
   }
 
+  // Armed (issue #191): true only for a paper airplane that came down FROM FLIGHT -
+  // a glide that never found anyone, or a slung one that missed. Those are live
+  // landmines: walking onto one targets you instead of collecting it. A fresh
+  // spawn-point airplane (& one dropped from a dead player's hands) is unarmed &
+  // collects normally, which is how anyone gets it into slot 6 in the first place.
+  // Replicated at spawn so every peer renders & treats it the same way.
+  [Export]
+  public bool Armed
+  {
+    get => _armed;
+    set
+    {
+      _armed = value;
+      UpdateArmedLight();
+    }
+  }
+
   [Export] public float RotationsPerSecond = 0.25f;
   [Export] public float BobHeight = 0.15f;
   [Export] public float BobsPerSecond = 0.5f;
@@ -49,9 +66,12 @@ public partial class WeaponPickup : Area3D
   private Node3D _slingshotVisual = null!;
   private Node3D _breadVisual = null!;
   private Node3D _airplaneVisual = null!;
+  private OmniLight3D? _armedLight;
+  private bool _armed;
   private WeaponSpawner _spawner = null!;
-  // How fast the grounded airplane's arming LED blinks while it waits (issue #191).
-  private const float ArmedBlinksPerSecond = 0.8f;
+  // How fast an armed airplane's warning light blinks while it waits (issue #191).
+  private const float ArmedBlinksPerSecond = 1.4f;
+  private static readonly Color ArmedRed = new(1.0f, 0.15f, 0.12f);
   private float _ageSeconds;
   private float _retryCooldownLeft;
   private float _expiryLeft;
@@ -71,11 +91,21 @@ public partial class WeaponPickup : Area3D
     _visual.AddChild (_slingshotVisual);
     _breadVisual = Bread.CreateVisual(); // Death drops the loaf too (issue #190).
     _visual.AddChild (_breadVisual);
-    _airplaneVisual = PaperAirplane.CreateVisual(); // Grounded = armed landmine (issue #191).
+    _airplaneVisual = PaperAirplaneProjectile.CreateVisual(); // Code-built, shared with the projectile (issue #102).
     _visual.AddChild (_airplaneVisual);
     _spawner = GetNode <WeaponSpawner> ("/root/World/WeaponSpawner");
     _expiryLeft = ExpirySeconds;
     UpdateVisuals();
+    UpdateArmedLight(); // Spawn-state sync ran before this, when the node refs were null.
+  }
+
+  // An armed airplane advertises itself (issue #191): a small red light so a landmine
+  // is never an invisible trap - you can always see what you're about to step on.
+  private void UpdateArmedLight()
+  {
+    if (!IsInsideTree()) return;
+    if (_armed && _armedLight == null) { _armedLight = new OmniLight3D { LightColor = ArmedRed, LightEnergy = 3.0f, OmniRange = 4.0f }; AddChild (_armedLight); return; }
+    if (!_armed && _armedLight != null) { _armedLight.QueueFree(); _armedLight = null; }
   }
 
   // Cosmetic float & spin, animated locally on every peer around the replicated base position.
@@ -84,8 +114,8 @@ public partial class WeaponPickup : Area3D
     _ageSeconds += (float)delta;
     _visual.RotateY (Mathf.Tau * RotationsPerSecond * (float)delta);
     _visual.Position = Vector3.Up * (BobHeight * Mathf.Sin (Mathf.Tau * BobsPerSecond * _ageSeconds));
-    // A grounded airplane is an armed mine, so it winks at everyone (issue #191).
-    if (Weapon == HeldWeapon.Airplane) PaperAirplane.BlinkLed (_airplaneVisual, _ageSeconds, ArmedBlinksPerSecond);
+    // An armed airplane winks at everyone while it waits (issue #191).
+    if (_armedLight != null) _armedLight.Visible = Mathf.PosMod (_ageSeconds * ArmedBlinksPerSecond, 1.0f) < 0.5f;
   }
 
   public override void _PhysicsProcess (double delta)
@@ -121,9 +151,13 @@ public partial class WeaponPickup : Area3D
   private void SendClaim (Player collector)
   {
     if (collector.IsLoadingAmmo) { _spawner.SendAmmoLoadRequest (Name); return; }
-    if (Weapon == HeldWeapon.Airplane) { _spawner.SendMineTriggerRequest (Name); return; }
+    if (IsArmedMine) { _spawner.SendMineTriggerRequest (Name); return; }
     _spawner.SendPickupRequest (Name, collector.NetworkId);
   }
+
+  // An airplane that came down from flight (issue #191). Anything else - including a
+  // fresh spawn-point airplane - is an ordinary pickup you can put in slot 6 (#102).
+  private bool IsArmedMine => Weapon == HeldWeapon.PaperAirplane && Armed;
 
   // Sphere radius (1.2) + the player capsule's reach, against the player's center.
   private const float ClaimRangeMeters = 1.7f;
@@ -141,14 +175,14 @@ public partial class WeaponPickup : Area3D
   }
 
   // A slingshot-equipped player loads ANY world item (issue #190), so the
-  // already-holds rule doesn't apply to them; the grounded airplane is a mine
-  // anyone can set off (issue #191), except while armored, already alight, or lying
-  // through a death sequence - none of which should hand out a free detonation.
+  // already-holds rule doesn't apply to them; an armed airplane is a mine anyone can
+  // set off (issue #191), except while armored, already alight, or lying through a
+  // death sequence - none of which should hand out a free detonation.
   private bool IsEligibleCollector (Player player)
   {
     if (!player.IsMultiplayerAuthority() || player.Fallen) return false;
     if (player.IsLoadingAmmo) return true;
-    if (Weapon == HeldWeapon.Airplane) return !player.SpawnArmor && !player.Burning;
+    if (IsArmedMine) return !player.SpawnArmor && !player.Burning;
     return !player.Holds (Weapon);
   }
 
@@ -160,6 +194,6 @@ public partial class WeaponPickup : Area3D
     _boomerangVisual.Visible = Weapon == HeldWeapon.Boomerang;
     _slingshotVisual.Visible = Weapon == HeldWeapon.Slingshot; // Issue #99.
     _breadVisual.Visible = Weapon == HeldWeapon.Bread; // Issue #190.
-    _airplaneVisual.Visible = Weapon == HeldWeapon.Airplane; // Issue #191.
+    _airplaneVisual.Visible = Weapon == HeldWeapon.PaperAirplane; // Issue #102.
   }
 }

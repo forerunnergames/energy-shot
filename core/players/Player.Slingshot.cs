@@ -181,7 +181,7 @@ public partial class Player
     var gravity = Mathf.Lerp (SlingshotMinDrawGravity, SlingshotMaxDrawGravity, draw); // Flatter arc at full draw (issue #163).
     // The airplane defines its own ballistics (issue #191): fast, straight, & it
     // ignites whoever it hits instead of dealing the stone's draw-scaled damage.
-    if (ammo == HeldWeapon.Airplane) { speed = SlungAirplaneSpeed; gravity = 0.0f; }
+    if (ammo == HeldWeapon.PaperAirplane) { speed = SlungAirplaneSpeed; gravity = 0.0f; }
     var direction = -_camera.GlobalTransform.Basis.Z;
     var sweepStart = _camera.GlobalPosition; // First sweep covers camera->muzzle (issues #112 & #163).
     var origin = sweepStart + direction * MuzzleOffsetMeters;
@@ -206,7 +206,7 @@ public partial class Player
     GetParent().AddChild (stone);
     stone.Launch (origin, sweepStart, direction, speed, gravity, energy, isLive, this);
     if (!isLive) return;
-    if (ammo == HeldWeapon.Airplane) stone.HitPlayer += (victim, _) => OnSlungAirplaneHitPlayer (stone, victim);
+    if (ammo == HeldWeapon.PaperAirplane) stone.HitPlayer += (victim, _) => OnSlungAirplaneHitPlayer (stone, victim);
     else stone.HitPlayer += (victim, hitEnergy) => OnStoneHitPlayer (victim, hitEnergy, ammo);
     if (ammo == HeldWeapon.None || IsCosmeticAmmo (ammo)) return;
     // Only the newest flight owns this player's server-side ammo escrow, so an older

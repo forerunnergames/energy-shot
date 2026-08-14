@@ -90,7 +90,7 @@ public partial class SlingshotStone : Node3D
     HeldWeapon.Boomerang => Scaled (BoomerangProjectile.CreateVisual(), 0.6f),
     HeldWeapon.Slingshot => Scaled (CreateSlingshotVisual(), 0.6f),
     HeldWeapon.Bread => Scaled (Bread.CreateVisual(), 0.9f),
-    HeldWeapon.Airplane => Scaled (PaperAirplane.CreateVisual(), 0.8f),
+    HeldWeapon.PaperAirplane => Scaled (PaperAirplaneProjectile.CreateVisual(), 0.8f),
     HeldWeapon.BananaChunk => MeshVisual (null, BananaYellow, 1.0f),
     _ => CreateStoneVisual()
   };

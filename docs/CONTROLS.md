@@ -24,10 +24,11 @@ Slot keys select what's in your hands. You spawn with fists only; everything els
 | 3 | Banana launcher | Left-click to fire an arcing banana. Direct hits stick, launch the victim, & detonate. Massive recoil - it can also rocket-jump you |
 | 4 | Boomerang | Left-click to throw. Curves out & returns; steals weapons from anyone it clips & scoops pickups it passes; auto-catches on return |
 | 5 | Slingshot | Hold left-click to draw, release to fling a stone. Longer draw = faster, flatter, harder (never a one-hit). A quick tap just relaxes the band - stones need a minimum draw, & a short cooldown separates shots. **Universal ammo**: see below |
+| 6 | Paper airplane | Left-click to throw. Locks onto whoever's under your crosshair & glides slowly after them; punch an incoming one (fists out) to catch it & throw it back. Only one exists in the whole game, & it is a personal hazard - see below |
 
 ### Slingshot universal ammo
 
-With the slingshot **out and empty**, walking onto any world item **loads it** instead of collecting it - another player's dropped laser, the banana launcher, the boomerang, even another slingshot, plus loose bread, banana chunks, and the grounded paper airplane. You can only ever load what's on the ground: your own equipped weapons stay in your hands.
+With the slingshot **out and empty**, walking onto any world item **loads it** instead of collecting it - another player's dropped laser, the banana launcher, the boomerang, even another slingshot, plus loose bread, banana chunks, and a grounded paper airplane. You can only ever load what's on the ground: your own equipped weapons stay in your hands.
 
 - One item at a time. While something is nocked, normal pickup rules apply again.
 - Slung items fly the same draw-scaled arc as a stone and sting about the same, with their own flavor on impact (bread bonks, banana splatters).
@@ -54,13 +55,15 @@ With the slingshot **out and empty**, walking onto any world item **loads it** i
 
 ## The paper airplane
 
-There is exactly **one** paper airplane in the arena, and it is never a weapon you carry. It sits on the ground with a slowly blinking red light: an armed landmine.
+There is exactly **one** paper airplane in the arena. It's a slot-6 weapon like any other - until you throw it, at which point it becomes a personal hazard for exactly one player.
 
-- **Step on it** and it picks *you*, and only you. It flips into the air and swoops down: a big red ring fills your screen and beeps faster and faster, then you catch fire for ~2 seconds and pop. Nobody standing next to you is harmed - no blast radius at all.
-- **Sprint away** and you can genuinely outrun the swoop; the airplane comes down wherever it gave up and re-arms itself there.
-- **With a slingshot equipped** you load it instead of setting it off. A slung airplane flies fast and dead straight (no homing): hit a player and they ignite and pop exactly as if it had targeted them; hit anything else and it just deflects, falls, and is a landmine again. Reload it as often as you like.
-- Spawn armor keeps you safe from it, so walking over one on the way out of the spawn room is free.
-- Every time it goes off, a fresh one is folded somewhere in the arena.
+- **Thrown**, it locks onto whoever was under your crosshair and glides after them. It's slow: a sprinting, weaving target escapes, a distracted one doesn't.
+- **The target's screen only** fills with a big red ring that thickens and brightens as the airplane closes, then blinks with a beep that accelerates until impact. Nobody else sees or hears a thing.
+- **If it reaches them**, that player catches fire for ~2 seconds and then pops. Strictly single-target - there is no blast radius, so standing next to a burning player is perfectly safe.
+- **Punch it out of the air** (fists out) and you catch it instead: it goes straight into your hands, nobody ignites, and you can throw it back.
+- **If the glide never finds anyone**, it comes down **armed** - a grounded landmine with a blinking red light. Step on it and it picks *you*: fastest beeping immediately, alight about a second later, then the same personal pop. Spawn armor keeps you safe from it.
+- **With a slingshot equipped** you load an armed one as ammo instead of setting it off. A slung airplane flies fast and dead straight (no homing): hit a player and they ignite and pop exactly as a thrown hit would; hit anything else and it just falls and is a landmine again. Reload it as often as you like.
+- A fresh airplane is folded somewhere in the arena every time the old one goes off - and a fresh one is a normal pickup, not a mine.
 
 ## Good to know
 

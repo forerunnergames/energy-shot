@@ -22,6 +22,7 @@ public static class MessageGenerator
   public static string OnZappedStreak (string victimName) => Fill (Pick (MessagePools.ZappedStreak), victimName, "");
   public static string OnFallStreak (string victimName) => Fill (Pick (MessagePools.FallStreak), victimName, "");
   public static string OnTheftRevenge (string victimName, string zapperName) => Fill (Pick (MessagePools.TheftRevenge), victimName, zapperName);
+  public static string OnAirplaneCatch (string throwerName, string catcherName) => Fill (Pick (MessagePools.AirplaneCatch), throwerName, catcherName);
   public static string OnZapped (string victimName, string zapperName, DeathContext context) => Fill (Pick (SelectZappedPool (context)), victimName, zapperName);
   private static string Fill (string template, string victimName, string zapperName) => Capitalize (template.Replace ("{v}", victimName).Replace ("{z}", zapperName));
   private static string Capitalize (string message) => char.ToUpper (message[0]) + message[1..];
@@ -52,9 +53,9 @@ public static class MessageGenerator
     if (context.Kind == DamageKind.Punch && context.KillerUnarmed) return MessagePools.FistsVsFists;
     if (context.Kind == DamageKind.Punch) return MessagePools.Punch;
     // The airplane picked you personally, so it outranks every stance & weapon
-    // flavor below it: that's the whole story of the death (issue #191).
-    if (context.Kind == DamageKind.Landmine) return MessagePools.Landmine;
-    if (context.Kind == DamageKind.Airplane) return MessagePools.AirplaneBurn;
+    // flavor below it: that's the whole story of the death (issues #102 & #191).
+    if (context.Kind == DamageKind.Landmine) return MessagePools.Landmine; // Issue #191.
+    if (context.Kind == DamageKind.PaperAirplane) return MessagePools.PaperAirplane; // Issues #102 & #191.
     if (context.Kind == DamageKind.Boomerang) return MessagePools.Boomerang; // Issue #98.
     if (context.Kind == DamageKind.SlungItem) return MessagePools.SlungItem; // Issue #190.
     if (context.Kind == DamageKind.Slingshot) return MessagePools.Slingshot; // Issue #99.

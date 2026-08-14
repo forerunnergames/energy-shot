@@ -50,9 +50,10 @@ public partial class Player
     var removed = _heldWeapon & ~incoming;
     if (removed == HeldWeapon.None) return;
     var until = Time.GetTicksMsec() + (ulong)(RecentlyHeldGraceSeconds * 1000.0f);
-    // Bread is in the list (issue #190): the death drop clears it right after
-    // sending the drop RPC, so it needs the same grace or the server denies the loaf.
-    foreach (var flag in new[] { HeldWeapon.Laser, HeldWeapon.Banana, HeldWeapon.Boomerang, HeldWeapon.Slingshot, HeldWeapon.Bread }) { if ((removed & flag) != 0) _recentlyHeldUntilMs[flag] = until; }
+    // PaperAirplane rides the grace too (issue #102): its landing & catch handoff
+    // depend on it. So does bread (issue #190): the death drop clears the loaf right
+    // after sending the drop RPC, so without the grace the server denies it.
+    foreach (var flag in new[] { HeldWeapon.Laser, HeldWeapon.Banana, HeldWeapon.Boomerang, HeldWeapon.Slingshot, HeldWeapon.PaperAirplane, HeldWeapon.Bread }) { if ((removed & flag) != 0) _recentlyHeldUntilMs[flag] = until; }
   }
 
   // Which slot is out (issue #82). Replicated so every peer renders the right model
@@ -83,11 +84,13 @@ public partial class Player
   private bool HasBanana => Holds (HeldWeapon.Banana);
   private bool HasBoomerang => Holds (HeldWeapon.Boomerang);
   private bool HasSlingshot => Holds (HeldWeapon.Slingshot);
+  private bool HasPaperAirplane => Holds (HeldWeapon.PaperAirplane);
   private bool IsFistsSelected => _selectedWeapon == SelectedWeapon.Fists;
   private bool IsLaserSelected => _selectedWeapon == SelectedWeapon.Laser;
   private bool IsBananaSelected => _selectedWeapon == SelectedWeapon.Banana;
   private bool IsBoomerangSelected => _selectedWeapon == SelectedWeapon.Boomerang;
   private bool IsSlingshotSelected => _selectedWeapon == SelectedWeapon.Slingshot;
+  private bool IsPaperAirplaneSelected => _selectedWeapon == SelectedWeapon.PaperAirplane;
   private WeaponSpawner Spawner => _weaponSpawner ??= GetNode <WeaponSpawner> ("/root/World/WeaponSpawner");
 
   // Falling off the world: held weapons return to the spawn pool via the caps instead
@@ -95,6 +98,7 @@ public partial class Player
   private void ClearHeldWeapons()
   {
     ReleaseBoomerangInFlight(); // A boomerang out flying still drops where it is (issue #98).
+    ReleaseAirplaneInFlight(); // Same for a paper airplane mid-glide (issue #102).
     DropLoadedAmmo(); // Anything nocked in the slingshot lands too (issue #190).
     ForgetTheft (_heldWeapon);
     SetBreadHeld (isHeld: false); // The loaf leaves with everything else (issue #190).
@@ -131,11 +135,12 @@ public partial class Player
   // Runs on every peer via the replicated HeldWeapon & SelectedWeapon properties.
   private void UpdateWeaponVisibility()
   {
-    if (_bananaLauncher == null || _boomerangHeld == null || _slingshotHeld == null) return;
+    if (_bananaLauncher == null || _boomerangHeld == null || _slingshotHeld == null || _airplaneHeld == null) return;
     _energyWeapon.Visible = IsLaserSelected && HasLaser;
     _bananaLauncher.Visible = IsBananaSelected && HasBanana;
     _boomerangHeld.Visible = IsBoomerangSelected && HasBoomerang && !IsBoomerangOut; // Empty hand while it's out flying (issue #98).
     _slingshotHeld.Visible = IsSlingshotSelected && HasSlingshot; // Slot 5 (issue #99).
+    _airplaneHeld.Visible = IsPaperAirplaneSelected && HasPaperAirplane && !IsAirplaneOut; // Slot 6, empty hand mid-glide (issue #102).
     UpdateHandsVisibility(); // Hands render only while fists are selected (issue #82).
   }
 
@@ -149,6 +154,7 @@ public partial class Player
     if (Input.IsActionJustPressed ("weapon_3") && HasBanana) SelectedWeapon = SelectedWeapon.Banana;
     if (Input.IsActionJustPressed ("weapon_4") && HasBoomerang) SelectedWeapon = SelectedWeapon.Boomerang; // Slot 4 (issue #98).
     if (Input.IsActionJustPressed ("weapon_5") && HasSlingshot) SelectedWeapon = SelectedWeapon.Slingshot; // Slot 5 (issue #99).
+    if (Input.IsActionJustPressed ("weapon_6") && HasPaperAirplane) SelectedWeapon = SelectedWeapon.PaperAirplane; // Slot 6 (issue #102).
   }
 
   // A dropped or lost gun can't stay selected: fall back to fists (issue #82).
@@ -158,6 +164,7 @@ public partial class Player
     if (IsBananaSelected && !HasBanana) SelectedWeapon = SelectedWeapon.Fists;
     if (IsBoomerangSelected && !HasBoomerang) SelectedWeapon = SelectedWeapon.Fists;
     if (IsSlingshotSelected && !HasSlingshot) SelectedWeapon = SelectedWeapon.Fists;
+    if (IsPaperAirplaneSelected && !HasPaperAirplane) SelectedWeapon = SelectedWeapon.Fists;
   }
 
   // Called back (via the WeaponSpawner's ConfirmPickup RPC) after the server despawns
@@ -175,8 +182,8 @@ public partial class Player
     }
 
     HeldWeapon |= type;
-    // Every pickup auto-equips (issue #128), boomerang (#98) & slingshot (#99) included.
-    SelectedWeapon = type switch { HeldWeapon.Banana => SelectedWeapon.Banana, HeldWeapon.Boomerang => SelectedWeapon.Boomerang, HeldWeapon.Slingshot => SelectedWeapon.Slingshot, _ => SelectedWeapon.Laser };
+    // Every pickup auto-equips (issue #128), boomerang (#98), slingshot (#99), & paper airplane (#102) included.
+    SelectedWeapon = type switch { HeldWeapon.Banana => SelectedWeapon.Banana, HeldWeapon.Boomerang => SelectedWeapon.Boomerang, HeldWeapon.Slingshot => SelectedWeapon.Slingshot, HeldWeapon.PaperAirplane => SelectedWeapon.PaperAirplane, _ => SelectedWeapon.Laser };
     RememberTheft (type, previousOwner);
     _weaponPickupSound.Play(); // Satisfying pickup chime, owner-local only (issue #123).
     GD.Print ($"{DisplayName}: I picked up a {type}!");
@@ -216,18 +223,19 @@ public partial class Player
     GD.Print ($"{DisplayName}: I dropped my {type}!");
   }
 
-  // Selected gun first, then any other carried one. A boomerang that's out flying
-  // isn't in the hand, so it can't be knocked loose or stolen from it (issue #98).
-  // Bread is never on this list (issue #190): punches & boomerangs take weapons, not
-  // lunch - only dying drops the loaf.
+  // Selected gun first, then any other carried one. A boomerang or paper airplane
+  // that's out flying isn't in the hand, so it can't be knocked loose or stolen
+  // from it (issues #98 & #102). Bread is never on this list (issue #190): punches &
+  // boomerangs take weapons, not lunch - only dying drops the loaf.
   private HeldWeapon PickDroppableWeapon()
   {
-    var preferred = _selectedWeapon switch { SelectedWeapon.Banana => HeldWeapon.Banana, SelectedWeapon.Boomerang => HeldWeapon.Boomerang, SelectedWeapon.Slingshot => HeldWeapon.Slingshot, _ => HeldWeapon.Laser };
+    var preferred = _selectedWeapon switch { SelectedWeapon.Banana => HeldWeapon.Banana, SelectedWeapon.Boomerang => HeldWeapon.Boomerang, SelectedWeapon.Slingshot => HeldWeapon.Slingshot, SelectedWeapon.PaperAirplane => HeldWeapon.PaperAirplane, _ => HeldWeapon.Laser };
 
-    foreach (var type in new[] { preferred, HeldWeapon.Laser, HeldWeapon.Banana, HeldWeapon.Boomerang, HeldWeapon.Slingshot })
+    foreach (var type in new[] { preferred, HeldWeapon.Laser, HeldWeapon.Banana, HeldWeapon.Boomerang, HeldWeapon.Slingshot, HeldWeapon.PaperAirplane })
     {
       if (!Holds (type)) continue;
       if (type == HeldWeapon.Boomerang && IsBoomerangInFlight) continue;
+      if (type == HeldWeapon.PaperAirplane && IsAirplaneInFlight) continue;
       return type;
     }
 
@@ -242,6 +250,7 @@ public partial class Player
   private void DropAllHeldWeapons()
   {
     ReleaseBoomerangInFlight();
+    ReleaseAirplaneInFlight(); // A mid-glide airplane lands where the airplane is (issues #102 & #191).
     DropLoadedAmmo();
     if (_heldWeapon == HeldWeapon.None) return;
     Spawner.SendDropRequest (GlobalPosition, _heldWeapon);
@@ -258,6 +267,7 @@ public partial class Player
     ApplyOverlayMaterials (_bananaLauncher);
     ApplyOverlayMaterials (_boomerangHeld);
     ApplyOverlayMaterials (_slingshotHeld); // Slot 5 (issue #99).
+    ApplyOverlayMaterials (_airplaneHeld); // Slot 6 (issue #102).
   }
 
   private void ApplyOverlayMaterials (Node node)

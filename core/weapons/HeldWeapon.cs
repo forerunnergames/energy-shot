@@ -1,14 +1,14 @@
 namespace com.forerunnergames.energyshot.weapons;
 
 // What a player is carrying (issue #72). Flags so a player can hold the laser, the
-// banana launcher, the boomerang (issue #98), & the slingshot (issue #99) at the
-// same time; None = unarmed (fists only).
+// banana launcher, the boomerang (issue #98), the slingshot (issue #99), & the
+// paper airplane (issue #102) at the same time; None = unarmed (fists only).
 //
-// The last three flags are not weapon slots. Bread (issue #190) rides the mask so
-// the one-per-life loaf flows through the same pickup, drop, & death-drop machinery
-// as the guns. Airplane (issue #191) & BananaChunk (issue #190) are never carried at
-// all - they exist only as world items & as slingshot ammo (Player.SlingshotAmmo),
-// which reuses this enum as its ammo vocabulary.
+// The last two flags are not weapon slots. Bread (issue #190) rides the mask so the
+// one-per-life loaf flows through the same pickup, drop, & death-drop machinery as
+// the guns. BananaChunk (issue #190) is never carried at all - it exists only as
+// slingshot ammo (Player.SlingshotAmmo), which reuses this enum as its ammo
+// vocabulary so a nocked item & a held one are named the same thing.
 [System.Flags]
 public enum HeldWeapon
 {
@@ -17,7 +17,7 @@ public enum HeldWeapon
   Banana = 2,
   Boomerang = 4,
   Slingshot = 8,
-  Bread = 16,
-  Airplane = 32,
+  PaperAirplane = 16,
+  Bread = 32,
   BananaChunk = 64
 }

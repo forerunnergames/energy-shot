@@ -2,57 +2,22 @@ using Godot;
 
 namespace com.forerunnergames.energyshot.weapons;
 
-// The paper airplane's shared look & effects (issue #191). The airplane is never
-// carried: it lives on the ground as an armed landmine (a WeaponPickup carrying
-// HeldWeapon.Airplane), gets loaded into a slingshot as ammo (issue #190), or flies
-// as a PaperAirplaneProjectile. Built entirely from primitive meshes & existing
-// sounds - nothing is downloaded.
+// The paper airplane's hazard effects (issue #191), shared by every way it can go
+// off: a thrown airplane reaching its locked target, a slung one hitting somebody,
+// or an armed grounded one being stepped on. Non-gory by design - a tick, a zappy
+// flash, & a puff of paper scraps. Built from primitive meshes & existing sounds,
+// nothing downloaded. The airplane's own look lives on PaperAirplaneProjectile.
 public static class PaperAirplane
 {
-  private static readonly Color PaperWhite = new(0.94f, 0.94f, 0.9f);
-  private static readonly Color LedRed = new(1.0f, 0.15f, 0.12f);
-  public const string LedNodeName = "Led";
+  private static readonly Color PaperWhite = new(0.93f, 0.95f, 1.0f);
 
-  // A folded dart: a slim fuselage between two swept wings, with a tiny red arming
-  // LED that the grounded mine & the in-flight plane both blink.
-  public static Node3D CreateVisual()
-  {
-    var paper = new StandardMaterial3D { AlbedoColor = PaperWhite, Roughness = 0.75f };
-    var visual = new Node3D();
-    visual.AddChild (new MeshInstance3D { Mesh = new BoxMesh { Size = new Vector3 (0.05f, 0.09f, 0.7f) }, MaterialOverride = paper });
-    visual.AddChild (Wing (paper, side: -1.0f));
-    visual.AddChild (Wing (paper, side: 1.0f));
-    visual.AddChild (CreateLed());
-    return visual;
-  }
+  // The mine going live under somebody's foot (issue #191): a quick, dry tick
+  // everyone nearby can hear, so a triggered mine is never silent to bystanders -
+  // they get the beat they need to back away from the player who set it off.
+  public static void Arm (Node parent, Vector3 origin) => PlayAt (parent, origin, "res://assets/sounds/punch-thud.wav", pitch: 2.4f, volumeDb: -6.0f);
 
-  private static MeshInstance3D Wing (Material paper, float side) => new()
-  {
-    Mesh = new BoxMesh { Size = new Vector3 (0.34f, 0.02f, 0.62f) },
-    MaterialOverride = paper,
-    Position = new Vector3 (side * 0.17f, -0.02f, 0.04f),
-    RotationDegrees = new Vector3 (0.0f, side * -12.0f, side * 14.0f)
-  };
-
-  private static MeshInstance3D CreateLed() => new()
-  {
-    Name = LedNodeName,
-    Mesh = new SphereMesh { Radius = 0.05f, Height = 0.1f },
-    MaterialOverride = new StandardMaterial3D { AlbedoColor = LedRed, EmissionEnabled = true, Emission = LedRed, EmissionEnergyMultiplier = 4.0f },
-    Position = new Vector3 (0.0f, 0.07f, -0.3f)
-  };
-
-  // Blinks the arming LED at the given rate; shared by the grounded mine & the
-  // in-flight plane so "armed" always reads the same way (issue #191).
-  public static void BlinkLed (Node3D visual, float ageSeconds, float blinksPerSecond)
-  {
-    var led = visual.GetNodeOrNull <Node3D> (LedNodeName);
-    if (led == null) return;
-    led.Visible = Mathf.PosMod (ageSeconds * blinksPerSecond, 1.0f) < 0.5f;
-  }
-
-  // The non-gory pop (issue #191): a brief white flash & a burst of paper scraps,
-  // played locally on every peer. No blast radius - the damage is single-target.
+  // The pop (issue #191): a brief warm flash & a burst of paper scraps, played
+  // locally on every peer. No blast radius - the damage is strictly single-target.
   public static void Pop (Node parent, Vector3 origin)
   {
     var flash = new OmniLight3D { LightColor = new Color (1.0f, 0.85f, 0.5f), LightEnergy = 8.0f, OmniRange = 9.0f };
@@ -62,17 +27,17 @@ public static class PaperAirplane
     fade.TweenProperty (flash, "light_energy", 0.0f, 0.35f);
     fade.Finished += flash.QueueFree;
     BananaDebris.Scatter (parent, origin, PaperWhite);
-    PlayPopSound (parent, origin);
+    // The banana blast replayed short & bright reads as a paper pop - reusing an
+    // existing sound instead of downloading one.
+    PlayAt (parent, origin, "res://assets/sounds/banana-explode.mp3", pitch: 1.9f, volumeDb: -4.0f);
   }
 
-  // The banana blast replayed short & bright reads as a paper pop - reusing an
-  // existing sound instead of downloading one (issue #191).
-  private static void PlayPopSound (Node parent, Vector3 origin)
+  private static void PlayAt (Node parent, Vector3 origin, string streamPath, float pitch, float volumeDb)
   {
-    var pop = new AudioStreamPlayer3D { Stream = ResourceLoader.Load <AudioStream> ("res://assets/sounds/banana-explode.mp3"), PitchScale = 1.9f, VolumeDb = -4.0f };
-    parent.AddChild (pop);
-    pop.GlobalPosition = origin;
-    pop.Finished += pop.QueueFree;
-    pop.Play();
+    var sound = new AudioStreamPlayer3D { Stream = ResourceLoader.Load <AudioStream> (streamPath), PitchScale = pitch, VolumeDb = volumeDb };
+    parent.AddChild (sound);
+    sound.GlobalPosition = origin;
+    sound.Finished += sound.QueueFree;
+    sound.Play();
   }
 }

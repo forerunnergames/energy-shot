@@ -36,6 +36,11 @@ public partial class PlaytestDriver : Node
   // playtest pickup spot - a drop search next to one of those could match it instead.
   private static readonly Vector3 KillSpot = new(4.0f, 31.0f, 0.0f);
   private static readonly Vector3 SpawnRoomCenter = new(0.0f, 31.0f, 0.0f);
+  // Fixed marks for the airplane throw/catch (#102), out in the empty arena well
+  // clear of the spawn room where the host idles: 8m apart, so the glider gets a
+  // real flight & nobody else can wander into the throw's aim ray.
+  private static readonly Vector3 CatchMark = new(40.0f, 1.0f, -40.0f);
+  private static readonly Vector3 CatchThrowMark = new(40.0f, 1.0f, -32.0f);
   // The drop grounds straight down from the death spot (#151), so it stays in that
   // XZ column; the radius only has to cover RequestDrop's per-weapon side offsets.
   private const float DropSearchRadius = 2.0f;
@@ -50,7 +55,7 @@ public partial class PlaytestDriver : Node
   private int _boltsSpawned;
   private int _boomerangsSpawned;
   private int _stonesSpawned;
-  // Paper airplane swoops seen locally (issue #191): the landmine phase watches this
+  // Paper airplane flights seen locally (issue #102): the throw phase watches this
   // instead of the transient in-flight node, same trick as the boomerang count.
   private int _airplanesSpawned;
   // The most recent stone & how far along +Z it got, sampled every frame (issue
@@ -182,8 +187,9 @@ public partial class PlaytestDriver : Node
     await WaitUntil (() => FindPlayer (VictimName)?.Score == -1, 60, "victim's fall penalty (-1) replicated to host");
     // Crown rules (issue #178): a lower score moving (the fall) never moves the crown.
     Assert (FindPlayer (ShooterName)?.IsCrowned == true, "crown stayed on the leader after the fall penalty (#178)");
-    // Stay up until both clients have finished & disconnected.
-    await WaitUntil (() => _world.GetPlayers().Count() == 1, 120, "clients disconnected");
+    // Stay up until both clients have finished & disconnected (the shooter's solo
+    // phases now end with the paper airplane throw & catch, issue #102).
+    await WaitUntil (() => _world.GetPlayers().Count() == 1, 180, "clients disconnected");
     // The version line goes only to joining clients, never broadcast (#158), so the
     // host must never have seen one.
     Assert (_adminMessages.All (message => !message.Contains ("Running")), "version line was not broadcast to the host (#158)");
@@ -192,6 +198,13 @@ public partial class PlaytestDriver : Node
   private async Task RunShooter()
   {
     _world.StartClientSession (ShooterName, difficulty: 1, _address, _port, Password, ShooterColor);
+    // Snapshot the spawn state the moment our own player exists (#72 & #190). The
+    // join wait below runs for seconds, & the spawn room's deterministic pickups sit
+    // inside claim reach of the +/-4 random spawn scatter - an unlucky spawn
+    // auto-claims one & rewrites what "spawned with" ever meant.
+    await WaitUntil (() => _world.GetPlayers().Any (player => player.IsMultiplayerAuthority()), 60, "own player spawned");
+    var spawnedUnarmed = Self.IsUnarmed;
+    var spawnedWithBread = Self.Holds (HeldWeapon.Bread);
     await WaitUntil (() => _world.GetPlayers().Count() == 3, 60, "all 3 players visible");
     // Forged admin RPC (issue #158): a client impersonating the server must be
     // dropped by the server's peer-1 check; every role asserts the text never
@@ -211,8 +224,8 @@ public partial class PlaytestDriver : Node
     await WaitUntil (() => victim.ColorIndex == VictimColor && host.ColorIndex == HostColor, 15, "victim's & host's chosen colors replicated to shooter (#43)");
     // Unarmed means no guns (issue #190): every life still starts with a loaf, & the
     // loaf now rides the HeldWeapon mask so death can drop it.
-    Assert (Self.IsUnarmed, "spawned unarmed (#72)");
-    Assert (Self.Holds (HeldWeapon.Bread), "spawned carrying the one-per-life loaf (#190)");
+    Assert (spawnedUnarmed, "spawned unarmed (#72)");
+    Assert (spawnedWithBread, "spawned carrying the one-per-life loaf (#190)");
     // The server measures our ping & tells us within a tick or two (issue #100).
     await WaitUntil (() => Self.PingMs >= 0, 15, "own ping measured by the server");
 
@@ -256,13 +269,15 @@ public partial class PlaytestDriver : Node
     await WaitUntil (() => victim.Dancing, 15, "victim's dance replicated to shooter (#103)");
 
     // Punch phase: walk up to the victim & punch them; verify melee damage lands.
-    // Fists are weapon slot 1 & punching requires them selected (issue #82); unarmed
-    // players already default to fists, so this press is just a defensive re-select.
+    var healthBeforePunch = victim.Health;
+    await WaitUntil (() => ApproachedVictim (victim), 30, "walked into punch range of victim");
+    // Fists are weapon slot 1 & punching requires them selected (issue #82). The
+    // re-select happens AFTER the walk: a pickup auto-claimed en route auto-equips
+    // itself (#128) & would otherwise deselect the fists (seen with the paper
+    // airplane pickup, #102).
     PressAction ("weapon_1");
     await Task.Delay (100);
     ReleaseAction ("weapon_1");
-    var healthBeforePunch = victim.Health;
-    await WaitUntil (() => ApproachedVictim (victim), 30, "walked into punch range of victim");
 
     // Punch from the side of the victim opposite the idle host: the punch ray hits
     // the FIRST body, & an unlucky spawn once put the host in front of the victim
@@ -521,6 +536,55 @@ public partial class PlaytestDriver : Node
     Assert (flightDistance > 40.0f, $"full-draw stone covered real range (#163), got {flightDistance:0.0}m");
 
     await RunUniversalAmmoPhases();
+
+    // Paper airplane (#102): collect the deterministic spawn-room pickup, walk near
+    // the victim, & throw with them locked under the crosshair; the victim
+    // punch-catches the incoming glider & the handoff swaps it into their hands.
+    // Holster the slingshot first (#190): an equipped, empty slingshot LOADS a world
+    // item instead of collecting it, & the airplane is a world item like any other.
+    PressAction ("weapon_2");
+    await Task.Delay (100);
+    ReleaseAction ("weapon_2");
+    Assert (Self.SelectedWeapon == SelectedWeapon.Laser, "slingshot holstered so the airplane can be collected (#190)");
+    await WaitUntil (() => WalkedTo (WeaponSpawner.PlaytestAirplanePosition), 45, "walked to the playtest paper airplane pickup");
+    await WaitUntil (() => Self.Holds (HeldWeapon.PaperAirplane), 15, "collected the paper airplane pickup (#102)");
+    PressAction ("weapon_6");
+    await Task.Delay (100);
+    ReleaseAction ("weapon_6");
+    Assert (Self.SelectedWeapon == SelectedWeapon.PaperAirplane, "paper airplane selected in slot 6 (#102)");
+    // The victim fell & respawned earlier; wait for it to be back in the spawn room,
+    // then throw from close by so the host can't wander into the flight path.
+    // Keep some distance: the glider needs a moment of flight for the catch to be
+    // catchable at all - throwing from a few meters lands it before anyone can swing.
+    // Both of us take fixed marks in the empty arena for this phase (#102): the
+    // spawn room's three-bot traffic kept putting the idle host under the crosshair,
+    // & the throw locks onto whoever the ray finds first. Here the line is ours, &
+    // the 8m gap gives the glider enough flight to actually be catchable.
+    Self.Position = CatchThrowMark;
+    await Task.Delay (500); // Settle onto the ground.
+    await WaitUntil (() => victim.GlobalPosition.DistanceTo (CatchMark) < 3.0f, 60, "victim took its mark for the airplane catch (#102)");
+    // A genuine punch-catch fires our own AirplaneCaught signal when the handoff is
+    // validated (CodeRabbit on #180): a landing must NOT pass this phase.
+    var airplaneCaught = false;
+    Self.AirplaneCaught += _ => airplaneCaught = true;
+    var airplanesBefore = _airplanesSpawned;
+
+    for (var attempt = 0; attempt < 10 && _airplanesSpawned == airplanesBefore; ++attempt)
+    {
+      AimAt (victim.GlobalPosition + Vector3.Up);
+      if (!IsVictimTheNearestTarget (victim)) { await Task.Delay (250); continue; } // Host drifted into the ray again.
+      PressAction ("shoot");
+      await Task.Delay (80);
+      ReleaseAction ("shoot");
+      await Task.Delay (300);
+    }
+
+    Assert (_airplanesSpawned > airplanesBefore, "paper airplane thrown at the victim (#102)");
+    // The victim punch-catches it mid-air: the thrower-side catch signal is the
+    // observable handoff transition - a landing would never fire it (#102).
+    await WaitUntil (() => airplaneCaught, 30, "victim's punch-catch confirmed by own catch signal (#102)");
+    await WaitUntil (() => !Self.Holds (HeldWeapon.PaperAirplane), 15, "caught airplane left our hands (#102)");
+    await WaitUntil (() => victim.Holds (HeldWeapon.PaperAirplane), 30, "victim holds the caught paper airplane (#102)");
 
     // The toggle persists to the shared user settings (#119); restore the starting
     // view so a playtest run never flips the developer's real preference.
@@ -833,28 +897,72 @@ public partial class PlaytestDriver : Node
     Assert (Self.Score == 0, $"own score is 0 before the fall, got {Self.Score}");
     Self.Position = new Vector3 (120.0f, 5.0f, 120.0f); // Beyond the arena: nothing below but the kill boundary.
     await WaitUntil (() => Self.Score == -1, 60, "fall at score 0 dropped own score to -1");
+    // Respawned from the fall; the shooter's paper airplane phase needs us standing
+    // in the spawn room (#102).
+    await WaitUntil (() => Self.GlobalPosition.Y > 20.0f, 30, "respawned in the spawn room after the fall");
+    // Take up a fixed mark out in the empty arena for the catch (#102): the three
+    // bots milling about the spawn room made this phase a lottery - the idle host
+    // kept wandering under the shooter's crosshair & stealing the airplane's target
+    // lock. Down here the line between the two of us is ours alone.
+    Self.Position = CatchMark;
+    await Task.Delay (500); // Settle onto the ground.
+    // The throw replicates (#102): the shooter's flying airplane must appear here as
+    // a visual copy before there's anything to catch.
+    await WaitUntil (() => _world.GetChildren().OfType <PaperAirplaneProjectile>().Any(), 150, "shooter's thrown airplane replicated as a flying copy (#102)");
+    // Targeted-only warning (#191): the airplane locked onto US, so our own ring
+    // reads a live threat - & it must clear the moment the catch takes it away.
+    await WaitUntil (() => Self.AirplaneThreatFraction > 0.0f, 30, "the incoming airplane raised our own warning ring (#191)");
+    // The signature catch (#102): watch the shooter's incoming airplane & punch it
+    // out of the air once it's in reach; the handoff must land in our own hands.
+    // Catching still beats the hazard (#191): a caught airplane never ignites anyone.
+    // Catching requires fists out - re-select in case a wandering auto-claim ever
+    // auto-equipped something else (#128).
+    PressAction ("weapon_1");
+    await Task.Delay (100);
+    ReleaseAction ("weapon_1");
+    await PunchCatchAirplane();
+    Assert (Self.Holds (HeldWeapon.PaperAirplane), "punch-caught the incoming paper airplane & it was granted (#102)");
+    Assert (Self.SelectedWeapon == SelectedWeapon.PaperAirplane, "the caught paper airplane auto-equipped (#128)");
+    Assert (!Self.Burning, "punch-catching the airplane never ignites the catcher (#191)");
+    await WaitUntil (() => Self.AirplaneThreatFraction <= 0.0f, 10, "the warning ring cleared once the airplane was caught (#191)");
+    // Give the shooter time to observe the handoff before the landmine scenario.
+    await Task.Delay (3000);
     await RunLandminePhase();
-    // Give the shooter time to finish its solo phases (fire-rate & full-auto) before we vanish.
-    await Task.Delay (8000);
     // The shooter's forged admin RPC must never have been relayed to us: the
     // server drops admin messages from any sender but peer 1 (#158).
     Assert (_adminMessages.All (message => !message.Contains ("FORGED")), "forged admin RPC never relayed to the victim (#158)");
   }
 
-  // Paper airplane landmine (#191): with no slingshot to load it with, walking onto
-  // the grounded airplane makes US its target - it pops off the ground, swoops onto
-  // us, sets us alight for ~2s of damage over time, & then pops us. Strictly
-  // single-target: nobody else in the room is touched.
+  // Landing & landmine (#102 & #191): the caught airplane is thrown into the floor
+  // with nobody under the crosshair, so the glide ends with no target - it comes down
+  // ARMED as a grounded pickup, & walking onto it makes US the mine's one target.
+  // Fastest beeping immediately, ignite about a second later, then the personal pop.
   private async Task RunLandminePhase()
   {
-    Assert (!Self.Holds (HeldWeapon.Slingshot), "no slingshot, so the airplane is a mine & not ammo (#191)");
-    await WaitUntil (() => !Self.SpawnArmor, 20, "spawn armor expired before the landmine phase (#191)");
-    Self.Position = new Vector3 (WeaponSpawner.PlaytestAirplanePosition.X, 31.0f, 2.0f);
-    await Task.Delay (400);
-    var airplanesBefore = _airplanesSpawned;
-    await WaitUntil (() => WalkedTo (WeaponSpawner.PlaytestAirplanePosition), 45, "walked onto the grounded paper airplane (#191)");
-    await WaitUntil (() => _airplanesSpawned > airplanesBefore, 20, "the mine launched the airplane at us (#191)");
-    await WaitUntil (() => Self.Burning, 20, "the airplane's swoop set us alight (#191)");
+    Assert (Self.Holds (HeldWeapon.PaperAirplane), "holding the airplane to arm the landmine with (#191)");
+    Assert (!Self.Holds (HeldWeapon.Slingshot), "no slingshot, so the grounded airplane is a mine & not ammo (#190/#191)");
+    var shooterPlayer = FindPlayer (ShooterName);
+    var awayFromShooter = shooterPlayer == null ? Vector3.Right : (Self.GlobalPosition - shooterPlayer.GlobalPosition).Normalized();
+    AimAt (Self.GlobalPosition + awayFromShooter * 3.0f + Vector3.Down * 1.0f); // Floor a few meters away, aimed at nobody.
+
+    for (var attempt = 0; attempt < 10 && !Self.IsAirplaneInFlight && Self.Holds (HeldWeapon.PaperAirplane); ++attempt)
+    {
+      PressAction ("shoot");
+      await Task.Delay (80);
+      ReleaseAction ("shoot");
+      await Task.Delay (200);
+    }
+
+    await WaitUntil (() => !Self.Holds (HeldWeapon.PaperAirplane), 15, "thrown airplane landed & left our hands (#102)");
+    await WaitUntil (() => LandedAirplane() != null, 15, "landed airplane became a grounded pickup (#102)");
+    Assert (LandedAirplane()!.Armed, "an airplane that came down from flight is ARMED (#191)");
+    // Spawn armor would (rightly) refuse to set the mine off, so wait it out first.
+    await WaitUntil (() => !Self.SpawnArmor, 20, "spawn armor expired before stepping on the mine (#191)");
+    await WaitUntil (WalkedToLandedAirplane, 45, "walked onto the armed paper airplane (#191)");
+    // Fastest beeping & blinking immediately: the ring is pinned at maximum for the
+    // whole fuse, & only the stepper's own HUD ever sees it.
+    await WaitUntil (() => Self.AirplaneThreatFraction >= 1.0f, 10, "the mine pinned our warning ring at maximum (#191)");
+    await WaitUntil (() => Self.Burning, 20, "the mine's fuse set us alight (#191)");
     // Damage over time while burning, then the pop finishes the job.
     var healthWhileBurning = Self.Health;
     await WaitUntil (() => Self.Health < healthWhileBurning, 5, "burning damaged us over time (#191)");
@@ -863,7 +971,46 @@ public partial class PlaytestDriver : Node
     await WaitUntil (() => !Self.Fallen && Self.SpawnArmor, 30, "respawned armored after the landmine (#191)");
     Assert (!Self.Burning, "a fresh life never inherits the fire (#191)");
     // Exactly one airplane, always (#102/#191): the caps fold a new one straight away.
-    await WaitUntil (() => _world.GetChildren().OfType <WeaponPickup>().Count (pickup => pickup.Weapon == HeldWeapon.Airplane) == 1, 20, "exactly one paper airplane back in the level (#102/#191)");
+    await WaitUntil (() => AirplaneCount() == 1, 25, "exactly one paper airplane back in the level (#102/#191)");
+  }
+
+  // Every airplane anywhere: pickups on the ground plus whatever is in someone's
+  // hands, which together is what the exactly-one invariant is about (#102).
+  private int AirplaneCount() =>
+    _world.GetChildren().OfType <WeaponPickup>().Count (pickup => pickup.Weapon == HeldWeapon.PaperAirplane && !pickup.IsQueuedForDeletion())
+    + _world.GetPlayers().Count (player => player.Holds (HeldWeapon.PaperAirplane));
+
+  // The airplane we just landed (#102): near us & NOT the deterministic spawn-room
+  // pickup, which belongs to the shooter's collection phase.
+  private WeaponPickup? LandedAirplane() => _world.GetChildren().OfType <WeaponPickup>().FirstOrDefault (IsCatchRecoveryPickup);
+
+  private bool WalkedToLandedAirplane()
+  {
+    var pickup = LandedAirplane();
+    if (pickup == null) return Self.Burning || Self.AirplaneThreatFraction > 0.0f; // Already stepped on it.
+    return WalkedTo (pickup.GlobalPosition);
+  }
+
+  // The airplane locks onto whoever the crosshair ray finds first (#102), so the
+  // throw only reaches the victim while no one else is standing on the line to it.
+  // Merely being closer to us doesn't matter - the idle host often parks nearby but
+  // well off the line, & requiring it to be farther away than the victim never came
+  // true. This is the condition the ray itself cares about.
+  private bool IsVictimTheNearestTarget (Player victim) => FindThrowBlocker (victim) == null;
+
+  private Player? FindThrowBlocker (Player victim)
+  {
+    var from = Self.GlobalPosition + Vector3.Up;
+    var to = victim.GlobalPosition + Vector3.Up;
+    return _world.GetPlayers().FirstOrDefault (player => player != Self && player != victim && DistanceToSegment (player.GlobalPosition + Vector3.Up, from, to) <= 2.0f);
+  }
+
+  private static float DistanceToSegment (Vector3 point, Vector3 from, Vector3 to)
+  {
+    var line = to - from;
+    var lengthSquared = line.LengthSquared();
+    if (lengthSquared < 0.001f) return point.DistanceTo (from);
+    return point.DistanceTo (from + line * Mathf.Clamp ((point - from).Dot (line) / lengthSquared, 0.0f, 1.0f));
   }
 
   // Legacy-client check (issue #170): join the way a pre-#170 client does (the
@@ -896,6 +1043,40 @@ public partial class PlaytestDriver : Node
     await WaitUntil (() => Multiplayer.MultiplayerPeer.GetConnectionStatus() != MultiplayerPeer.ConnectionStatus.Connected, 15, "kicked connection fully closed");
     await Task.Delay (500); // Let the peer teardown settle before reconnecting.
   }
+
+  // Poll the incoming airplane & punch once it's within catch reach (#102). Strict
+  // catch-only coverage (CodeRabbit on #180): a landed airplane (visible as a fresh
+  // grounded pickup) fails this phase immediately instead of masquerading as a
+  // catch - the landing lifecycle has its own recovery scenario.
+  private async Task PunchCatchAirplane()
+  {
+    var deadline = Time.GetTicksMsec() + 60_000;
+
+    while (!Self.Holds (HeldWeapon.PaperAirplane) && Time.GetTicksMsec() < deadline)
+    {
+      if (_world.GetChildren().OfType <WeaponPickup>().Any (IsCatchRecoveryPickup)) throw new Exception ("assertion failed: the airplane landed instead of being punch-caught (#102)");
+      var airplane = _world.GetChildren().OfType <PaperAirplaneProjectile>().FirstOrDefault();
+
+      // Punch just outside the catch radius: input processing eats a frame or two
+      // while the glider closes ~0.4m/frame, & the catch RPC still needs a few
+      // more frames to reach the thrower before the hit lands.
+      if (airplane != null && airplane.GlobalPosition.DistanceTo (Self.GlobalPosition + Vector3.Up) <= 4.4f)
+      {
+        PressAction ("punch");
+        await Task.Delay (60);
+        ReleaseAction ("punch");
+      }
+
+      await Task.Delay (25);
+    }
+  }
+
+  // A freshly landed airplane pickup (#102): near us & NOT the deterministic
+  // spawn-room pickup, which belongs to the shooter's collection phase.
+  private bool IsCatchRecoveryPickup (WeaponPickup pickup) =>
+    pickup.Weapon == HeldWeapon.PaperAirplane
+    && pickup.GlobalPosition.DistanceTo (Self.GlobalPosition) < 15.0f
+    && pickup.GlobalPosition.DistanceTo (WeaponSpawner.PlaytestAirplanePosition) > 1.5f;
 
   // Negative password check (issue #109): join with a bogus password, expect the
   // server to kick us with exactly "Wrong password.", then wait out the disconnect
