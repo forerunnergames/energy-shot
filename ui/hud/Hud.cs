@@ -117,6 +117,7 @@ public partial class Hud : Control
     _splatter = (ShaderMaterial)_splatterRect.Material;
     _blurRect.Visible = false;
     _splatterRect.Visible = false;
+    _vignetteRect.Visible = false; // Shown by UpdateVignette once health drops (issue #200).
     _shotMeter = GetNode <CooldownMeter> ("CooldownMeters/Shot");
     _slideMeter = GetNode <CooldownMeter> ("CooldownMeters/Slide");
     _fullAutoMeter = GetNode <CooldownMeter> ("CooldownMeters/FullAuto");
@@ -268,7 +269,7 @@ public partial class Hud : Control
     _splatterSlide += SplatterSlidePerSecond * (float)delta;
     _splatter.SetShaderParameter ("slide", _splatterSlide);
     _splatter.SetShaderParameter ("intensity", _splatterSecondsLeft / SplatterSeconds);
-    // 48 wobbling goo chunks per pixel is a real cost, & it was being paid every
+    // 24 wobbling goo chunks per pixel is a real cost, & it was being paid every
     // frame of every match - the node only stays up while goo is on screen (#200).
     _splatterRect.Visible = _splatterSecondsLeft > 0.0f;
   }

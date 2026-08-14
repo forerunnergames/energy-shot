@@ -82,7 +82,10 @@ public partial class Player
   {
     if (!IsMultiplayerAuthority()) return;
     var wasLocked = _lockedTarget != null;
-    _lockedTarget = IsPaperAirplaneSelected && HasPaperAirplane && !IsAirplaneOut ? FindPlayerInsideLockRing() : null;
+    // Same gates the throw itself applies (CodeRabbit on #206): showing a lock during
+    // the respawn input lock or a dance promises a throw that won't happen.
+    var canThrow = _isInputEnabled && !Dancing && IsPaperAirplaneSelected && HasPaperAirplane && !IsAirplaneOut;
+    _lockedTarget = canThrow ? FindPlayerInsideLockRing() : null;
     if (_lockedTarget != null && !wasLocked) EmitSignal (SignalName.AirplaneLockAcquired); // Chirp on acquisition.
   }
 

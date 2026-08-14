@@ -44,8 +44,13 @@ public partial class TargetRing : Control
   // 0 = nothing incoming, 1 = impact. Called every frame by the HUD.
   public void SetThreat (float threat)
   {
+    var was = _threat;
     _threat = Mathf.Clamp (threat, 0.0f, 1.0f);
     if (_threat > 0.0f) { Visible = true; return; }
+    // The warning just ended (CodeRabbit on #206): with a lock still held the ring
+    // stays up, so it has to redraw as the steady lock ring instead of the last
+    // warning frame - nothing else will ask it to while the threat is zero.
+    if (was > 0.0f) QueueRedraw();
     Reset();
   }
 

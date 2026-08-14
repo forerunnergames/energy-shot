@@ -38,6 +38,10 @@ public partial class BananaDebris : MeshInstance3D
     }
   }
 
+  // Paper scraps are cosmetic only (CodeRabbit on #206): a slingshot must not scoop
+  // one up & fire it as a banana chunk.
+  private bool _isPaper;
+
   private static BananaDebris CreateChunk (Color color, bool isPaper = false)
   {
     var size = Rng.RandfRange (0.08f, 0.2f);
@@ -49,6 +53,7 @@ public partial class BananaDebris : MeshInstance3D
     {
       Mesh = new BoxMesh { Size = shape },
       _color = color,
+      _isPaper = isPaper,
       _velocity = RandomLaunchVelocity(),
       _spinRadiansPerSecond = new Vector3 (Rng.RandfRange (-6.0f, 6.0f), Rng.RandfRange (-6.0f, 6.0f), Rng.RandfRange (-6.0f, 6.0f))
     };
@@ -101,6 +106,7 @@ public partial class BananaDebris : MeshInstance3D
   // chunk each peer sees simply fades out on its own timer.
   private void TryLoadIntoSlingshot()
   {
+    if (_isPaper) return; // Paper scraps aren't ammo (CodeRabbit on #206).
     var local = players.Player.Local;
     if (local == null || !local.IsLoadingAmmo) return;
     if (local.GlobalPosition.DistanceTo (GlobalPosition) > ScoopRangeMeters) return;
