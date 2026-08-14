@@ -39,6 +39,9 @@ public partial class PlaytestDriver : Node
   private int _boltsSpawned;
   private int _boomerangsSpawned;
   private int _stonesSpawned;
+  // Paper airplane swoops seen locally (issue #191): the landmine phase watches this
+  // instead of the transient in-flight node, same trick as the boomerang count.
+  private int _airplanesSpawned;
   // The most recent stone & how far along +Z it got, sampled every frame (issue
   // #163): the wall-block assert needs the flight path, not just the spawn count.
   private SlingshotStone? _lastStone;
@@ -59,6 +62,7 @@ public partial class PlaytestDriver : Node
     _world.ChildEnteredTree += node => _boltsSpawned += node is LaserBolt ? 1 : 0;
     _world.ChildEnteredTree += node => _boomerangsSpawned += node is BoomerangProjectile ? 1 : 0;
     _world.ChildEnteredTree += node => _stonesSpawned += node is SlingshotStone ? 1 : 0;
+    _world.ChildEnteredTree += node => _airplanesSpawned += node is PaperAirplaneProjectile ? 1 : 0;
     _world.ChildEnteredTree += node => { if (node is SlingshotStone stone) TrackStone (stone); };
     var args = OS.GetCmdlineUserArgs();
     _role = ArgValue (args, "--playtest") ?? string.Empty;
@@ -194,7 +198,10 @@ public partial class PlaytestDriver : Node
     // Chosen body colors (issue #43): everyone's pick replicates to this peer.
     Assert (Self.ColorIndex == ShooterColor, $"own chosen color is {ShooterColor}, got {Self.ColorIndex}");
     await WaitUntil (() => victim.ColorIndex == VictimColor && host.ColorIndex == HostColor, 15, "victim's & host's chosen colors replicated to shooter (#43)");
-    Assert (Self.HeldWeapon == HeldWeapon.None, "spawned unarmed (#72)");
+    // Unarmed means no guns (issue #190): every life still starts with a loaf, & the
+    // loaf now rides the HeldWeapon mask so death can drop it.
+    Assert (Self.IsUnarmed, "spawned unarmed (#72)");
+    Assert (Self.Holds (HeldWeapon.Bread), "spawned carrying the one-per-life loaf (#190)");
     // The server measures our ping & tells us within a tick or two (issue #100).
     await WaitUntil (() => Self.PingMs >= 0, 15, "own ping measured by the server");
 
@@ -446,6 +453,15 @@ public partial class PlaytestDriver : Node
     await Task.Delay (100);
     ReleaseAction ("weapon_5");
     Assert (Self.SelectedWeapon == SelectedWeapon.Slingshot, "slingshot selected in slot 5 (#99)");
+    // Step off the pickup spot before the stone phases (#190): the playtest restocks
+    // a slingshot right where we're standing, & an equipped-but-empty slingshot now
+    // LOADS whatever it walks onto - so standing there would sling slingshots, not
+    // stones. This corner keeps the wall at z=6 point-blank for the #163 phases &
+    // is well clear of every deterministic pickup.
+    Self.Position = new Vector3 (5.0f, 31.0f, 5.0f);
+    await Task.Delay (400);
+    await EmptySlingshot();
+    Assert (Self.SlingshotAmmo == HeldWeapon.None, "slingshot is empty for the stone phases (#190)");
     AimAt (Self.GlobalPosition + new Vector3 (10, 1, 0)); // Aim away from everyone.
     var stonesBefore = _stonesSpawned;
 
@@ -491,6 +507,8 @@ public partial class PlaytestDriver : Node
     Assert (IsInstanceValid (flightStone) && flightStone.IsInsideTree(), "full-draw stone still flying after 4s (#163)");
     var flightDistance = new Vector2 (flightStone.GlobalPosition.X - launchPosition.X, flightStone.GlobalPosition.Z - launchPosition.Z).Length();
     Assert (flightDistance > 40.0f, $"full-draw stone covered real range (#163), got {flightDistance:0.0}m");
+
+    await RunUniversalAmmoPhases();
 
     // The toggle persists to the shared user settings (#119); restore the starting
     // view so a playtest run never flips the developer's real preference.
@@ -618,6 +636,62 @@ public partial class PlaytestDriver : Node
     await Task.Delay (300);
   }
 
+  // Slingshot universal ammo (#190): with the slingshot equipped & empty, walking
+  // onto a world item LOADS it instead of collecting it - here the deterministic
+  // laser pickup, which we already hold, so a normal pickup could never fire. Then
+  // slinging it must empty the slingshot & put the laser back into the world as an
+  // ordinary pickup, so nothing duplicates & nothing vanishes.
+  // Universal ammo (#190) means an equipped slingshot hoovers up whatever it walks
+  // onto, & this run's earlier phases can genuinely wander over the spawn room's
+  // pickups - so discard anything nocked before the stone phases, by slinging it up
+  // & over the wall where it can't be walked back onto.
+  private async Task EmptySlingshot()
+  {
+    if (Self.SlingshotAmmo == HeldWeapon.None) return;
+    AimAt (Self.GetNode <Camera3D> ("Camera3D").GlobalPosition + new Vector3 (0.0f, 30.0f, 30.0f));
+    await SlingAStone (drawMs: 1500, "slingshot-emptying shot (#190)");
+    await TryWaitUntil (() => Self.SlingshotAmmo == HeldWeapon.None, 5);
+  }
+
+  private async Task RunUniversalAmmoPhases()
+  {
+    Assert (Self.Holds (HeldWeapon.Slingshot) && Self.SelectedWeapon == SelectedWeapon.Slingshot, "slingshot still equipped for the ammo phase (#190)");
+    Assert (Self.SlingshotAmmo == HeldWeapon.None, "slingshot starts empty (#190)");
+    // Approach the laser pickup straight down the empty -Z lane, so the only item we
+    // can walk onto on the way is the one under test.
+    Self.Position = new Vector3 (WeaponSpawner.PlaytestLaserPosition.X, 31.0f, 0.5f);
+    await Task.Delay (400);
+    // We already hold a laser, so a NORMAL pickup could never fire here: any load at
+    // all proves the equipped slingshot changed what walking onto an item means.
+    Assert (Self.Holds (HeldWeapon.Laser), "already holding a laser, so only an ammo load can happen (#190)");
+    await WaitUntil (() => WalkedTo (WeaponSpawner.PlaytestLaserPosition), 45, "walked back onto the laser pickup with the slingshot equipped (#190)");
+    await WaitUntil (() => Self.SlingshotAmmo == HeldWeapon.Laser, 20, "walking onto the laser LOADED it as slingshot ammo instead of collecting it (#190)");
+
+    // Let the playtest spot restock BEFORE the landing check & then step off it, so
+    // the only laser pickup that can appear afterwards is the one we sling.
+    await WaitUntil (() => LaserPickupNames (WeaponSpawner.PlaytestLaserPosition).Any(), 20, "the playtest laser spot restocked (#72)");
+    Self.Position = new Vector3 (WeaponSpawner.PlaytestLaserPosition.X, 31.0f, 0.5f);
+    await Task.Delay (400);
+    // Aimed down the empty -Z lane into the spawn-room floor, so the slung laser
+    // comes to rest on real ground well clear of us (& can't be instantly reloaded).
+    AimAt (Self.GlobalPosition + new Vector3 (0.0f, -1.0f, -6.0f));
+    var lasersBefore = LaserPickupNames();
+    var ammoStonesBefore = _stonesSpawned;
+    await SlingAStone (drawMs: 900, "loaded-ammo shot (#190)");
+    Assert (_stonesSpawned > ammoStonesBefore, "fired the loaded laser out of the slingshot (#190)");
+    await WaitUntil (() => Self.SlingshotAmmo == HeldWeapon.None, 10, "firing emptied the slingshot (#190)");
+    // Nothing may vanish: the slung laser has to come back as an ordinary pickup.
+    await WaitUntil (() => LaserPickupNames().Except (lasersBefore).Any(), 20, "the slung laser landed as a world pickup again (#190)");
+    // ...& it has to rest on the floor it actually hit (the #151/#172 ray-grounding
+    // conventions): the spawn-room slab is paper thin, & a ground ray starting
+    // exactly on it used to fall through onto the arena 30m below.
+    var landed = _world.GetNode <WeaponPickup> (LaserPickupNames().Except (lasersBefore).First());
+    Assert (landed.Position.Y > 20.0f, $"the slung laser rested on the spawn-room floor, not through it (#190), y={landed.Position.Y:0.0}");
+  }
+
+  private List <string> LaserPickupNames() => _world.GetChildren().OfType <WeaponPickup>().Where (pickup => pickup.Weapon == HeldWeapon.Laser).Select (pickup => pickup.Name.ToString()).ToList();
+  private List <string> LaserPickupNames (Vector3 near) => _world.GetChildren().OfType <WeaponPickup>().Where (pickup => pickup.Weapon == HeldWeapon.Laser && pickup.Position.DistanceTo (near) < 1.0f).Select (pickup => pickup.Name.ToString()).ToList();
+
   // Presses V until the view matches; the toggle only persists on a real key press,
   // so this exercises the exact input path a player uses (#119).
   private async Task ToggleViewUntil (bool thirdPerson)
@@ -698,11 +772,37 @@ public partial class PlaytestDriver : Node
     Assert (Self.Score == 0, $"own score is 0 before the fall, got {Self.Score}");
     Self.Position = new Vector3 (120.0f, 5.0f, 120.0f); // Beyond the arena: nothing below but the kill boundary.
     await WaitUntil (() => Self.Score == -1, 60, "fall at score 0 dropped own score to -1");
+    await RunLandminePhase();
     // Give the shooter time to finish its solo phases (fire-rate & full-auto) before we vanish.
     await Task.Delay (8000);
     // The shooter's forged admin RPC must never have been relayed to us: the
     // server drops admin messages from any sender but peer 1 (#158).
     Assert (_adminMessages.All (message => !message.Contains ("FORGED")), "forged admin RPC never relayed to the victim (#158)");
+  }
+
+  // Paper airplane landmine (#191): with no slingshot to load it with, walking onto
+  // the grounded airplane makes US its target - it pops off the ground, swoops onto
+  // us, sets us alight for ~2s of damage over time, & then pops us. Strictly
+  // single-target: nobody else in the room is touched.
+  private async Task RunLandminePhase()
+  {
+    Assert (!Self.Holds (HeldWeapon.Slingshot), "no slingshot, so the airplane is a mine & not ammo (#191)");
+    await WaitUntil (() => !Self.SpawnArmor, 20, "spawn armor expired before the landmine phase (#191)");
+    Self.Position = new Vector3 (WeaponSpawner.PlaytestAirplanePosition.X, 31.0f, 2.0f);
+    await Task.Delay (400);
+    var airplanesBefore = _airplanesSpawned;
+    await WaitUntil (() => WalkedTo (WeaponSpawner.PlaytestAirplanePosition), 45, "walked onto the grounded paper airplane (#191)");
+    await WaitUntil (() => _airplanesSpawned > airplanesBefore, 20, "the mine launched the airplane at us (#191)");
+    await WaitUntil (() => Self.Burning, 20, "the airplane's swoop set us alight (#191)");
+    // Damage over time while burning, then the pop finishes the job.
+    var healthWhileBurning = Self.Health;
+    await WaitUntil (() => Self.Health < healthWhileBurning, 5, "burning damaged us over time (#191)");
+    await WaitUntil (() => Self.Fallen, 15, "the airplane popped us (#191)");
+    Assert (!Self.Burning, "the fire went out with the pop (#191)");
+    await WaitUntil (() => !Self.Fallen && Self.SpawnArmor, 30, "respawned armored after the landmine (#191)");
+    Assert (!Self.Burning, "a fresh life never inherits the fire (#191)");
+    // Exactly one airplane, always (#102/#191): the caps fold a new one straight away.
+    await WaitUntil (() => _world.GetChildren().OfType <WeaponPickup>().Count (pickup => pickup.Weapon == HeldWeapon.Airplane) == 1, 20, "exactly one paper airplane back in the level (#102/#191)");
   }
 
   // Legacy-client check (issue #170): join the way a pre-#170 client does (the

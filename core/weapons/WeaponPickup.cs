@@ -1,4 +1,5 @@
 using System.Linq;
+using com.forerunnergames.energyshot.items;
 using com.forerunnergames.energyshot.players;
 using com.forerunnergames.energyshot.utilities;
 using Godot;
@@ -8,6 +9,10 @@ namespace com.forerunnergames.energyshot.weapons;
 // Floating, slowly rotating weapon pickup (issue #72), claimed by walking into it.
 // The walking player's own peer detects the overlap & asks the server-side
 // WeaponSpawner to award the weapon & despawn the pickup for everyone.
+//
+// Walking into one now means three different things (issues #190 & #191): a
+// slingshot-equipped player LOADS it as ammo, anyone else stepping on the grounded
+// paper airplane TRIGGERS its landmine, & everything else is a normal pickup.
 public partial class WeaponPickup : Area3D
 {
   // Replicated at spawn so every peer shows the right weapon model.
@@ -42,7 +47,11 @@ public partial class WeaponPickup : Area3D
   private MeshInstance3D _bananaVisual = null!;
   private Node3D _boomerangVisual = null!;
   private Node3D _slingshotVisual = null!;
+  private Node3D _breadVisual = null!;
+  private Node3D _airplaneVisual = null!;
   private WeaponSpawner _spawner = null!;
+  // How fast the grounded airplane's arming LED blinks while it waits (issue #191).
+  private const float ArmedBlinksPerSecond = 0.8f;
   private float _ageSeconds;
   private float _retryCooldownLeft;
   private float _expiryLeft;
@@ -60,6 +69,10 @@ public partial class WeaponPickup : Area3D
     _visual.AddChild (_boomerangVisual);
     _slingshotVisual = SlingshotStone.CreateSlingshotVisual(); // Code-built, shared with the held model (issue #99).
     _visual.AddChild (_slingshotVisual);
+    _breadVisual = Bread.CreateVisual(); // Death drops the loaf too (issue #190).
+    _visual.AddChild (_breadVisual);
+    _airplaneVisual = PaperAirplane.CreateVisual(); // Grounded = armed landmine (issue #191).
+    _visual.AddChild (_airplaneVisual);
     _spawner = GetNode <WeaponSpawner> ("/root/World/WeaponSpawner");
     _expiryLeft = ExpirySeconds;
     UpdateVisuals();
@@ -71,6 +84,8 @@ public partial class WeaponPickup : Area3D
     _ageSeconds += (float)delta;
     _visual.RotateY (Mathf.Tau * RotationsPerSecond * (float)delta);
     _visual.Position = Vector3.Up * (BobHeight * Mathf.Sin (Mathf.Tau * BobsPerSecond * _ageSeconds));
+    // A grounded airplane is an armed mine, so it winks at everyone (issue #191).
+    if (Weapon == HeldWeapon.Airplane) PaperAirplane.BlinkLed (_airplaneVisual, _ageSeconds, ArmedBlinksPerSecond);
   }
 
   public override void _PhysicsProcess (double delta)
@@ -97,6 +112,16 @@ public partial class WeaponPickup : Area3D
     var collector = FindLocalCollector();
     if (collector == null) return;
     _retryCooldownLeft = RetryCooldownSeconds;
+    SendClaim (collector);
+  }
+
+  // Which of the three claims this walk-in is (issues #190 & #191). Every branch is
+  // just a request: the server decides & first request wins, so two players reaching
+  // the same item (or the same mine) in the same tick still resolve to exactly one.
+  private void SendClaim (Player collector)
+  {
+    if (collector.IsLoadingAmmo) { _spawner.SendAmmoLoadRequest (Name); return; }
+    if (Weapon == HeldWeapon.Airplane) { _spawner.SendMineTriggerRequest (Name); return; }
     _spawner.SendPickupRequest (Name, collector.NetworkId);
   }
 
@@ -115,14 +140,26 @@ public partial class WeaponPickup : Area3D
     return (local.GlobalPosition + Vector3.Up).DistanceTo (GlobalPosition) <= ClaimRangeMeters ? local : null;
   }
 
-  private bool IsEligibleCollector (Player player) => player.IsMultiplayerAuthority() && !player.Holds (Weapon);
+  // A slingshot-equipped player loads ANY world item (issue #190), so the
+  // already-holds rule doesn't apply to them; the grounded airplane is a mine
+  // anyone can set off (issue #191), except while armored, already alight, or lying
+  // through a death sequence - none of which should hand out a free detonation.
+  private bool IsEligibleCollector (Player player)
+  {
+    if (!player.IsMultiplayerAuthority() || player.Fallen) return false;
+    if (player.IsLoadingAmmo) return true;
+    if (Weapon == HeldWeapon.Airplane) return !player.SpawnArmor && !player.Burning;
+    return !player.Holds (Weapon);
+  }
 
   private void UpdateVisuals()
   {
-    if (_laserVisual == null || _boomerangVisual == null || _slingshotVisual == null) return;
+    if (_laserVisual == null || _boomerangVisual == null || _slingshotVisual == null || _breadVisual == null || _airplaneVisual == null) return;
     _laserVisual.Visible = Weapon == HeldWeapon.Laser;
     _bananaVisual.Visible = Weapon == HeldWeapon.Banana;
     _boomerangVisual.Visible = Weapon == HeldWeapon.Boomerang;
     _slingshotVisual.Visible = Weapon == HeldWeapon.Slingshot; // Issue #99.
+    _breadVisual.Visible = Weapon == HeldWeapon.Bread; // Issue #190.
+    _airplaneVisual.Visible = Weapon == HeldWeapon.Airplane; // Issue #191.
   }
 }

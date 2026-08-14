@@ -8,16 +8,22 @@ using Godot;
 namespace com.forerunnergames.energyshot.weapons;
 
 // Server-authoritative weapon lifecycle manager (issue #72): keeps at most 3 lasers,
-// 1 banana, 1 boomerang (issue #98), & 1 slingshot (issue #99) existing in the level
-// (held + dropped + pickups + boomerang escrow), spawning pickups at the building-top
-// & banana-platform spawn points. Spawns replicate to every peer through the World's MultiplayerSpawner,
-// same as players.
+// 1 banana, 1 boomerang (issue #98), 1 slingshot (issue #99), & exactly 1 paper
+// airplane (issues #102 & #191) existing in the level (held + dropped + pickups +
+// boomerang escrow + slingshot ammo + airplane hazards), spawning pickups at the
+// building-top & banana-platform spawn points. Spawns replicate to every peer
+// through the World's MultiplayerSpawner, same as players.
+//
+// Bread is deliberately uncapped (issue #190): every life restocks a loaf, so the
+// level's supply is however many players are alive plus whatever they dropped, & a
+// dropped loaf simply expires like any other drop instead of respawning.
 public partial class WeaponSpawner : Node3D
 {
   [Export] public int MaxLasers = 3;
   [Export] public int MaxBananas = 1;
   [Export] public int MaxBoomerangs = 1;
   [Export] public int MaxSlingshots = 1;
+  [Export] public int MaxAirplanes = 1;
   [Export] public float ReconcileIntervalSeconds = 1.0f;
   [Export] public float PickupHoverHeight = 0.9f;
   // Playtest-only (#72): a laser pickup is kept at this fixed spawn-room spot so the
@@ -28,6 +34,10 @@ public partial class WeaponSpawner : Node3D
   public static readonly Vector3 PlaytestBoomerangPosition = new(3.0f, 31.1f, 5.0f);
   // Playtest-only (#99): same idea for the slingshot draw/release phase.
   public static readonly Vector3 PlaytestSlingshotPosition = new(-3.0f, 31.1f, 5.0f);
+  // Playtest-only (#191): same idea for the landmine phase. Tucked into the spawn
+  // room's far corner - clear of the other three pickups AND of the +/-4 random
+  // spawn scatter, so nobody trips the mine just by spawning next to it.
+  public static readonly Vector3 PlaytestAirplanePosition = new(-5.0f, 31.1f, 5.5f);
   private const float OccupiedRadius = 1.0f;
   // Cargo riding a boomerang home (issue #98): stolen & scooped weapons live here
   // between the grab & the thrower's catch, so the caps still count them.
@@ -41,6 +51,18 @@ public partial class WeaponSpawner : Node3D
   private readonly record struct PendingGrant (int CollectorId, HeldWeapon Type, ulong ExpiresAtMs);
   private readonly List <PendingGrant> _pendingGrants = new();
   private const float PendingGrantTimeoutSeconds = 3.0f;
+  // Universal slingshot ammo (issue #190): a world item loaded into a slingshot
+  // exists nowhere else until it lands, so the caps count it here - exactly like
+  // boomerang cargo. One nocked item per loader.
+  private readonly record struct LoadedAmmo (int LoaderId, HeldWeapon Type, string PreviousOwner);
+  private readonly List <LoadedAmmo> _ammoEscrow = new();
+  // A paper airplane mid-hazard (issue #191): from the mine trigger (or a slingshot
+  // strike) until the target pops, the airplane isn't a pickup & isn't ammo - this
+  // flight record is what keeps the exactly-one invariant honest in between. The
+  // timeout covers a target that disconnects mid-burn (the caps then respawn it).
+  private readonly record struct AirplaneFlight (int TargetId, ulong ExpiresAtMs);
+  private readonly List <AirplaneFlight> _airplaneFlights = new();
+  private const float AirplaneFlightTimeoutSeconds = 15.0f;
   private readonly RandomNumberGenerator _rng = new();
   private readonly List <Vector3> _laserPoints = new();
   private PackedScene _pickupScene = null!;
@@ -63,7 +85,9 @@ public partial class WeaponSpawner : Node3D
   // exists, & counting only current holds let a reconcile pass over-spawn it. The
   // union per player counts once - recently-held includes any still-held flags.
   // Pending grants bridge the award->replication window the same way (issue #154).
-  private int Count (HeldWeapon type, List <WeaponPickup> pickups, List <Player> players) => pickups.Count (pickup => pickup.Weapon == type) + players.Count (player => (player.HeldOrRecentlyHeld & type) != 0) + _escrow.Count (cargo => cargo.Type == type) + _pendingGrants.Count (grant => grant.Type == type);
+  // Loaded slingshot ammo (issue #190) & airplane hazards in progress (issue #191)
+  // count the same way, so nothing over-spawns while an item is mid-transition.
+  private int Count (HeldWeapon type, List <WeaponPickup> pickups, List <Player> players) => pickups.Count (pickup => pickup.Weapon == type) + players.Count (player => (player.HeldOrRecentlyHeld & type) != 0) + _escrow.Count (cargo => cargo.Type == type) + _pendingGrants.Count (grant => grant.Type == type) + _ammoEscrow.Count (ammo => ammo.Type == type) + (type == HeldWeapon.Airplane ? _airplaneFlights.Count : 0);
   private void TrackPendingGrant (int collectorId, HeldWeapon type) => _pendingGrants.Add (new PendingGrant (collectorId, type, Time.GetTicksMsec() + (ulong)(PendingGrantTimeoutSeconds * 1000.0f))); // Issue #154.
   // A pending grant ends when the collector's replicated HeldWeapon shows the weapon
   // (it counts as held from then on) or the timeout passes (issue #154).
@@ -125,6 +149,10 @@ public partial class WeaponSpawner : Node3D
     var players = Players().ToList();
     // Cargo whose thrower vanished mid-flight goes back to the spawn pool via the caps (issue #98).
     _escrow.RemoveAll (cargo => players.All (player => player.NetworkId != cargo.OwnerId));
+    // Same for ammo nocked by a player who left (issue #190) & airplane hazards whose
+    // target left or whose burn sequence never reported back (issue #191).
+    _ammoEscrow.RemoveAll (ammo => players.All (player => player.NetworkId != ammo.LoaderId));
+    _airplaneFlights.RemoveAll (flight => Time.GetTicksMsec() > flight.ExpiresAtMs || players.All (player => player.NetworkId != flight.TargetId));
     PrunePendingGrants (players); // Delivered or expired award bridges stop counting (issue #154).
     var freePoints = _laserPoints.Where (point => IsFree (point, pickups)).ToList();
     var laserCount = Count (HeldWeapon.Laser, pickups, players);
@@ -149,6 +177,19 @@ public partial class WeaponSpawner : Node3D
     if (candidates.Count > 0 && Count (HeldWeapon.Banana, pickups, players) < MaxBananas) Spawn (HeldWeapon.Banana, TakeRandom (candidates), expires: false);
     if (candidates.Count > 0 && Count (HeldWeapon.Boomerang, pickups, players) < MaxBoomerangs) Spawn (HeldWeapon.Boomerang, TakeRandom (candidates), expires: false);
     if (candidates.Count > 0 && Count (HeldWeapon.Slingshot, pickups, players) < MaxSlingshots) Spawn (HeldWeapon.Slingshot, TakeRandom (candidates), expires: false);
+    SpawnAirplaneIfMissing (pickups, players, candidates);
+  }
+
+  // Exactly one paper airplane, always (issues #102 & #191): whenever the level's
+  // only airplane is spent - a mine popped its target, or a slung one struck - the
+  // count dips & a fresh one is folded at a spawn point. In --playtest mode it lands
+  // at the fixed spot so the driver can step on the mine deterministically.
+  private void SpawnAirplaneIfMissing (List <WeaponPickup> pickups, List <Player> players, List <Vector3> candidates)
+  {
+    if (Count (HeldWeapon.Airplane, pickups, players) >= MaxAirplanes) return;
+    if (_isPlaytest) { Spawn (HeldWeapon.Airplane, PlaytestAirplanePosition, expires: false); return; }
+    if (candidates.Count == 0) return;
+    Spawn (HeldWeapon.Airplane, TakeRandom (candidates), expires: false);
   }
 
   // Playtest-only (#72 & #98): keeps deterministic pickups available in the spawn
@@ -264,6 +305,243 @@ public partial class WeaponSpawner : Node3D
     if (dropped.HasFlag (HeldWeapon.Banana)) Spawn (HeldWeapon.Banana, spot + Vector3.Right * 0.8f, expires: true, dropperName);
     if (dropped.HasFlag (HeldWeapon.Boomerang)) Spawn (HeldWeapon.Boomerang, spot + Vector3.Left * 0.8f, expires: true, dropperName); // Issue #98.
     if (dropped.HasFlag (HeldWeapon.Slingshot)) Spawn (HeldWeapon.Slingshot, spot + Vector3.Back * 0.8f, expires: true, dropperName); // Issue #99.
+    // Death drops the uneaten loaf too (issue #190), & it expires like any other
+    // drop so dropped bread can never pile up - respawns restock it anyway.
+    if (dropped.HasFlag (HeldWeapon.Bread)) Spawn (HeldWeapon.Bread, spot + Vector3.Forward * 0.8f, expires: true, dropperName);
+  }
+
+  // ------------------------------------------- slingshot universal ammo (issue #190)
+
+  // Client -> server entry points; when this peer already is the server, skip the RPC.
+  public void SendAmmoLoadRequest (string pickupName)
+  {
+    if (Multiplayer.IsServer()) { RequestAmmoLoad (pickupName); return; }
+    RpcId (1, MethodName.RequestAmmoLoad, pickupName);
+  }
+
+  public void SendAmmoLandRequest (Vector3 position)
+  {
+    if (Multiplayer.IsServer()) { RequestAmmoLand (position); return; }
+    RpcId (1, MethodName.RequestAmmoLand, position);
+  }
+
+  // A slingshot-equipped player walked onto a world item: despawn it for everyone &
+  // hold it as that player's nocked ammo. First request wins, like RequestPickup, so
+  // two players reaching the same item resolve to exactly one loader.
+  // Server-side state check (the #145/#167/#184 convention): the sender's replicated
+  // HeldWeapon must show a slingshot & their replicated SelectedWeapon must have it
+  // out - a client can't claim to be equipped.
+  [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
+  private void RequestAmmoLoad (string pickupName)
+  {
+    if (!Multiplayer.IsServer()) return;
+    var loaderId = SenderOrSelf();
+    var loader = Players().FirstOrDefault (player => player.NetworkId == loaderId);
+
+    if (loader == null || (loader.HeldOrRecentlyHeld & HeldWeapon.Slingshot) == 0 || loader.SelectedWeapon != SelectedWeapon.Slingshot)
+    {
+      ServerLog.Event (loaderId, "ammo load deny: sender does not have a slingshot equipped");
+      return;
+    }
+
+    if (_ammoEscrow.Any (ammo => ammo.LoaderId == loaderId))
+    {
+      ServerLog.Event (loaderId, "ammo load deny: slingshot is already loaded");
+      return;
+    }
+
+    var pickup = GetParent().GetNodeOrNull <WeaponPickup> (pickupName);
+
+    if (pickup == null || pickup.IsQueuedForDeletion())
+    {
+      ServerLog.Event (loaderId, $"ammo load deny: pickup [{pickupName}] is gone");
+      return;
+    }
+
+    _ammoEscrow.Add (new LoadedAmmo (loaderId, pickup.Weapon, pickup.PreviousOwner));
+    ServerLog.Event (loaderId, $"ammo load: {pickup.Weapon} from pickup [{pickupName}]");
+    pickup.QueueFree(); // Despawns on every peer via the MultiplayerSpawner.
+    if (loaderId == Multiplayer.GetUniqueId()) { LoadIntoSelf ((int)pickup.Weapon); return; }
+    RpcId (loaderId, MethodName.ConfirmAmmoLoad, (int)pickup.Weapon);
+  }
+
+  private void LoadIntoSelf (int type) => (GetParent() as World)?.SelfPlayer?.LoadSlingshotAmmo ((HeldWeapon)type);
+  [Rpc] private void ConfirmAmmoLoad (int type) => LoadIntoSelf (type);
+
+  // A slung item came to rest (or its loader died holding it): it becomes a normal
+  // world pickup again where it stopped, grounded onto the level below like any
+  // drop (issue #151). Escrow is the server's own record, so a forged request from
+  // a peer with nothing nocked simply finds nothing to spawn.
+  [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
+  private void RequestAmmoLand (Vector3 position)
+  {
+    if (!Multiplayer.IsServer()) return;
+    var loaderId = SenderOrSelf();
+    var landed = TakeAmmoFor (loaderId);
+
+    if (landed.Count == 0)
+    {
+      ServerLog.Event (loaderId, "ammo land deny: sender has nothing nocked");
+      return;
+    }
+
+    foreach (var ammo in landed) LandAmmo (loaderId, ammo, position);
+  }
+
+  private List <LoadedAmmo> TakeAmmoFor (int loaderId)
+  {
+    var loaded = _ammoEscrow.Where (ammo => ammo.LoaderId == loaderId).ToList();
+    _ammoEscrow.RemoveAll (ammo => ammo.LoaderId == loaderId);
+    return loaded;
+  }
+
+  private void LandAmmo (int loaderId, LoadedAmmo ammo, Vector3 position)
+  {
+    // Cosmetic ammo (banana chunks) is scenery no cap tracks: it just splatters.
+    if (ammo.Type == HeldWeapon.BananaChunk) return;
+
+    // Nothing beneath it (over the void): skip the spawn like RequestDrop does & let
+    // the caps put the item back at a spawn point instead of floating it out of reach.
+    if (!TryFindGround (position, out var spot))
+    {
+      ServerLog.Event (loaderId, $"ammo land skip: no ground beneath {position}; [{ammo.Type}] returns via the caps");
+      return;
+    }
+
+    ServerLog.Event (loaderId, $"ammo land: {ammo.Type} at {spot}");
+    // The one-&-only airplane never expires (issues #102 & #191): it re-arms as the
+    // landmine right where it fell & waits there for the next player.
+    Spawn (ammo.Type, spot, expires: ammo.Type != HeldWeapon.Airplane, ammo.PreviousOwner);
+  }
+
+  // -------------------------------------------------- paper airplane (issue #191)
+
+  // Client -> server entry points; when this peer already is the server, skip the RPC.
+  public void SendMineTriggerRequest (string pickupName)
+  {
+    if (Multiplayer.IsServer()) { RequestMineTrigger (pickupName); return; }
+    RpcId (1, MethodName.RequestMineTrigger, pickupName);
+  }
+
+  public void SendAirplaneStrikeRequest (int targetId)
+  {
+    if (Multiplayer.IsServer()) { RequestAirplaneStrike (targetId); return; }
+    RpcId (1, MethodName.RequestAirplaneStrike, targetId);
+  }
+
+  public void SendAirplaneSpentRequest()
+  {
+    if (Multiplayer.IsServer()) { RequestAirplaneSpent(); return; }
+    RpcId (1, MethodName.RequestAirplaneSpent);
+  }
+
+  public void SendAirplaneFellRequest (Vector3 position)
+  {
+    if (Multiplayer.IsServer()) { RequestAirplaneFell (position); return; }
+    RpcId (1, MethodName.RequestAirplaneFell, position);
+  }
+
+  // Somebody stepped on the grounded airplane. Despawning the pickup here is what
+  // makes simultaneous touches pick exactly ONE target: the second request finds it
+  // already gone. The sender is the target by construction (peers only ever report
+  // their own steps), & their replicated state has to allow it.
+  [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
+  private void RequestMineTrigger (string pickupName)
+  {
+    if (!Multiplayer.IsServer()) return;
+    var targetId = SenderOrSelf();
+    var target = Players().FirstOrDefault (player => player.NetworkId == targetId);
+
+    if (target == null || target.SpawnArmor || target.Fallen || target.Burning)
+    {
+      ServerLog.Event (targetId, "mine deny: sender is armored, already alight, or down");
+      return;
+    }
+
+    var pickup = GetParent().GetNodeOrNull <WeaponPickup> (pickupName);
+
+    if (pickup == null || pickup.IsQueuedForDeletion() || pickup.Weapon != HeldWeapon.Airplane)
+    {
+      ServerLog.Event (targetId, $"mine deny: pickup [{pickupName}] is not an armed airplane");
+      return;
+    }
+
+    var spot = pickup.Position;
+    pickup.QueueFree(); // Despawns on every peer via the MultiplayerSpawner.
+    TrackAirplaneFlight (targetId);
+    ServerLog.Event (targetId, $"mine trigger: paper airplane [{pickupName}] locked on at {spot}");
+    if (targetId == Multiplayer.GetUniqueId()) { TriggerMineOnSelf (spot); return; }
+    RpcId (targetId, MethodName.ConfirmMineTrigger, spot);
+  }
+
+  private void TriggerMineOnSelf (Vector3 spot) => (GetParent() as World)?.SelfPlayer?.BeginAirplaneSwoop (spot);
+  [Rpc] private void ConfirmMineTrigger (Vector3 spot) => TriggerMineOnSelf (spot);
+  private void TrackAirplaneFlight (int targetId) => _airplaneFlights.Add (new AirplaneFlight (targetId, Time.GetTicksMsec() + (ulong)(AirplaneFlightTimeoutSeconds * 1000.0f)));
+
+  // A slingshot-launched airplane hit somebody. The shooter reports the contact, but
+  // only the server decides whether it counts: the shooter must actually have the
+  // airplane nocked (its own escrow record), & the target must be a live, unarmored
+  // player. The target then ignites itself, victim-authoritative like every hit.
+  [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
+  private void RequestAirplaneStrike (int targetId)
+  {
+    if (!Multiplayer.IsServer()) return;
+    var shooterId = SenderOrSelf();
+    var shooter = Players().FirstOrDefault (player => player.NetworkId == shooterId);
+    var nocked = _ammoEscrow.Any (ammo => ammo.LoaderId == shooterId && ammo.Type == HeldWeapon.Airplane);
+
+    if (shooter == null || !nocked)
+    {
+      ServerLog.Event (shooterId, "airplane strike deny: sender has no airplane nocked");
+      return;
+    }
+
+    _ammoEscrow.RemoveAll (ammo => ammo.LoaderId == shooterId && ammo.Type == HeldWeapon.Airplane);
+    var target = Players().FirstOrDefault (player => player.NetworkId == targetId);
+
+    if (target == null || target.SpawnArmor || target.Fallen || target.Burning)
+    {
+      ServerLog.Event (shooterId, $"airplane strike void: target [{targetId}] is armored, already alight, or gone; the airplane returns via the caps");
+      return;
+    }
+
+    TrackAirplaneFlight (targetId);
+    ServerLog.Event (shooterId, $"airplane strike: [{shooter.DisplayName}] lit up [{target.DisplayName}]");
+    if (targetId == Multiplayer.GetUniqueId()) { IgniteSelf (shooterId, shooter.DisplayName); return; }
+    RpcId (targetId, MethodName.ConfirmAirplaneStrike, shooterId, shooter.DisplayName);
+  }
+
+  private void IgniteSelf (int shooterId, string shooterName) => (GetParent() as World)?.SelfPlayer?.IgniteFromAirplane (shooterId, shooterName);
+  [Rpc] private void ConfirmAirplaneStrike (int shooterId, string shooterName) => IgniteSelf (shooterId, shooterName);
+
+  // The hazard finished (the target popped, or the swoop never connected): the
+  // flight record drops & the caps fold a fresh airplane back into the level.
+  [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
+  private void RequestAirplaneSpent()
+  {
+    if (!Multiplayer.IsServer()) return;
+    var targetId = SenderOrSelf();
+    if (_airplaneFlights.RemoveAll (flight => flight.TargetId == targetId) == 0) return;
+    ServerLog.Event (targetId, "airplane spent: the caps will fold a new one");
+  }
+
+  // The swoop outlived its target's sprint: the airplane comes down where it gave
+  // up & re-arms itself as the landmine there, so the cycle can start over.
+  [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
+  private void RequestAirplaneFell (Vector3 position)
+  {
+    if (!Multiplayer.IsServer()) return;
+    var targetId = SenderOrSelf();
+    if (_airplaneFlights.RemoveAll (flight => flight.TargetId == targetId) == 0) return;
+
+    if (!TryFindGround (position, out var spot))
+    {
+      ServerLog.Event (targetId, $"airplane fell skip: no ground beneath {position}; it returns via the caps");
+      return;
+    }
+
+    ServerLog.Event (targetId, $"airplane fell: re-armed as a landmine at {spot}");
+    Spawn (HeldWeapon.Airplane, spot, expires: false);
   }
 
   // ------------------------------------------------ boomerang cargo (issue #98)
@@ -319,6 +597,14 @@ public partial class WeaponSpawner : Node3D
       return;
     }
 
+    // An armed airplane is a hazard, not cargo (issue #191): a boomerang can't carry
+    // a landmine home, & nobody ever "holds" the airplane in the first place.
+    if (pickup.Weapon == HeldWeapon.Airplane)
+    {
+      ServerLog.Event (throwerId, "boomerang scoop deny: the armed paper airplane is not cargo");
+      return;
+    }
+
     _escrow.Add (new BoomerangCargo (throwerId, pickup.Weapon, pickup.PreviousOwner));
     ServerLog.Event (throwerId, $"boomerang scoop: {pickup.Weapon} from pickup [{pickupName}]");
     pickup.QueueFree(); // Despawns on every peer via the MultiplayerSpawner.
@@ -352,6 +638,7 @@ public partial class WeaponSpawner : Node3D
 
   // Escrow & pickups carry exactly one weapon each: reduce a validated mask to its
   // first flag so downstream Spawn/Deliver never see a multi-flag type (issue #184).
+  // Bread is deliberately absent (issue #190): a boomerang steals weapons, not lunch.
   private static HeldWeapon FirstFlag (HeldWeapon mask)
   {
     foreach (var flag in new[] { HeldWeapon.Laser, HeldWeapon.Banana, HeldWeapon.Boomerang, HeldWeapon.Slingshot }) { if ((mask & flag) != 0) return flag; }

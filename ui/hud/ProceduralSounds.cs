@@ -19,6 +19,15 @@ public static class ProceduralSounds
     return FromSamples (samples);
   }
 
+  // The paper airplane's target warning beep (issue #191): one short, bright blip.
+  // Played faster & faster as the airplane closes, so it stays a single tiny sound.
+  public static AudioStreamWav Beep()
+  {
+    var samples = new float[(int)(SampleRate * 0.07f)];
+    AddChime (samples, startSeconds: 0.0f, fromHz: 1320.0f, toHz: 1320.0f, seconds: 0.06f, amplitude: 0.3f);
+    return FromSamples (samples);
+  }
+
   // A soft "uh-uh" denied cue (issue #160): two low, gentle blips - clearly not an error buzzer.
   public static AudioStreamWav Denied()
   {

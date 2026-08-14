@@ -218,6 +218,33 @@ public static class MessagePools
     "physics homework by {z}: the arc ended on {v}"
   };
 
+  // Zapped out by a world item slung out of a slingshot (issue #190).
+  public static readonly List <string> SlungItem = new()
+  {
+    "{z} found something on the floor & returned it to {v} at speed",
+    "{v} was retired by ordinary arena litter, aimed by {z}",
+    "{z} proved anything is a projectile if {v} is standing there",
+    "{v} got recycled. {z} did the sorting"
+  };
+
+  // The paper airplane's target: lit up & then popped (issue #191).
+  public static readonly List <string> AirplaneBurn = new()
+  {
+    "{v} received the paper airplane, signed & sealed",
+    "the paper airplane picked {v} personally. Just {v}",
+    "{v} went out in a small, tidy puff of stationery",
+    "folded, launched, & delivered: {v}"
+  };
+
+  // Stepped on the grounded airplane (issue #191).
+  public static readonly List <string> Landmine = new()
+  {
+    "{v} stepped on the paper airplane. The paper airplane stepped back",
+    "{v} found the airplane the hard way",
+    "{v} learned that origami holds a grudge",
+    "beep, beep, beep, pop: goodnight {v}"
+  };
+
   // {z} zapped {v} with the weapon {v} dropped earlier.
   public static readonly List <string> TheftRevenge = new()
   {
@@ -233,6 +260,6 @@ public static class MessagePools
     Fall, FallStreak, Zapped, ThroughWall, FullCharge, FullAuto, Punch, PunchedOutArmed, FistsVsFists,
     BananaBlast, BananaDirect, HoldingBananaGun, ComboSplatterPunch, JumpShot, SlideShotKiller,
     SlideShotVictim, ZapStreakTier3, ZapStreakTier5, ZapStreakTier7, StreakEnded, StreakLost,
-    ZappedStreak, Boomerang, Slingshot, TheftRevenge
+    ZappedStreak, Boomerang, Slingshot, SlungItem, AirplaneBurn, Landmine, TheftRevenge
   };
 }

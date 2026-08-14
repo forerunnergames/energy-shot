@@ -251,7 +251,7 @@ public partial class Player
   private void CaptureDeathSnapshot()
   {
     DiedSliding = Sliding;
-    DiedArmed = HeldWeapon != HeldWeapon.None;
+    DiedArmed = !IsUnarmed; // Carrying bread isn't being armed (issue #190).
     DiedHoldingBananaGun = Holds (HeldWeapon.Banana);
     LostStreakCount = ZapStreakCount;
   }
@@ -295,9 +295,10 @@ public partial class Player
     Health = MaxHealth;
     Velocity = Vector3.Zero;
     Position = CalculateRandomSpawnPosition();
-    _bread.Restock(); // Fresh bread every life (issue #62).
+    SetBreadHeld (isHeld: true); // Fresh bread every life (issues #62 & #190).
     _energyWeapon.ResetCharge(); // Every life starts with a cold weapon (issue #67).
     ClearStun(); // Death shakes off any punch/banana stun.
+    ClearBurning(); // No fire (or incoming airplane) carries into a new life (issue #191).
     _stickyFlightSecondsLeft = 0.0f; // A new life isn't still banana-launched (issue #83).
     ActivateSpawnArmor();
     // Fresh lives start standing & slide-ready: no lingering pose, no cooldown carryover (#104).
