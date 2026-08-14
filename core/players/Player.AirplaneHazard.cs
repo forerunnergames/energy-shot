@@ -47,6 +47,7 @@ public partial class Player
   private static readonly Color FlameOrange = new(1.0f, 0.55f, 0.12f);
   private bool _burning;
   private OmniLight3D? _burnLight;
+  private CpuParticles3D? _burnFlames;
   private ulong _mineFuseEndMs;
   // Whichever airplane is locked onto us, live or a visual copy - the ring reads its
   // distance. Registered by SpawnAirplane on every peer (issues #102 & #191).
@@ -156,8 +157,9 @@ public partial class Player
     if (!_burning && _burnLight != null) StopBurnEffect();
   }
 
-  // A zappy flame, not a fire: a flickering orange light riding the body, visible to
-  // everyone so the whole arena can see who's about to pop.
+  // Actual flames (issue #207): a flickering light alone just tinted the player
+  // orange, which reads as "hurt", not "on fire". Rising particles give visible
+  // fire on the body, & everyone sees them - the light stays for the glow it casts.
   private void StartBurnEffect()
   {
     _burnLight = new OmniLight3D { LightColor = FlameOrange, LightEnergy = 4.0f, OmniRange = 7.0f, Position = Vector3.Up * 1.2f };
@@ -165,12 +167,56 @@ public partial class Player
     var flicker = _burnLight.CreateTween().SetLoops();
     flicker.TweenProperty (_burnLight, "light_energy", 1.6f, 0.09f);
     flicker.TweenProperty (_burnLight, "light_energy", 4.0f, 0.09f);
+    _burnFlames = CreateFlames();
+    AddChild (_burnFlames);
+  }
+
+  // Code-built so nothing is downloaded: additive billboard quads streaming upward,
+  // fading bright yellow -> orange -> out, spread across the body's height.
+  private static CpuParticles3D CreateFlames()
+  {
+    var gradient = new Gradient();
+    gradient.SetColor (0, new Color (1.0f, 0.95f, 0.45f, 1.0f));
+    gradient.SetColor (1, new Color (1.0f, 0.25f, 0.05f, 0.0f));
+
+    return new CpuParticles3D
+    {
+      Amount = 48,
+      Lifetime = 0.55,
+      Position = Vector3.Up * 0.6f,
+      Mesh = new QuadMesh
+      {
+        Size = new Vector2 (0.42f, 0.42f),
+        Material = new StandardMaterial3D
+        {
+          ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
+          Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
+          BlendMode = BaseMaterial3D.BlendModeEnum.Add,
+          BillboardMode = BaseMaterial3D.BillboardModeEnum.Particles,
+          VertexColorUseAsAlbedo = true,
+          AlbedoColor = Colors.White
+        }
+      },
+      EmissionShape = CpuParticles3D.EmissionShapeEnum.Box,
+      EmissionBoxExtents = new Vector3 (0.35f, 0.7f, 0.35f),
+      Direction = Vector3.Up,
+      Spread = 18.0f,
+      InitialVelocityMin = 1.4f,
+      InitialVelocityMax = 2.6f,
+      Gravity = Vector3.Up * 1.2f, // Flames rise; they don't fall.
+      ScaleAmountMin = 0.7f,
+      ScaleAmountMax = 1.5f,
+      ColorRamp = gradient,
+      Emitting = true
+    };
   }
 
   private void StopBurnEffect()
   {
     _burnLight?.QueueFree();
     _burnLight = null;
+    _burnFlames?.QueueFree();
+    _burnFlames = null;
   }
 
   // A respawn (or falling off the world) puts the fire out & abandons any burn ticks

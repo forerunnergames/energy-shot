@@ -25,25 +25,35 @@ public partial class BananaDebris : MeshInstance3D
 
   public static void Scatter (Node parent, Vector3 origin) => Scatter (parent, origin, BananaYellow);
 
-  // Recolored bursts reuse the same chunks (issue #191): the paper airplane's pop
-  // scatters white paper scraps instead of banana pieces - non-gory either way.
-  public static void Scatter (Node parent, Vector3 origin, Color color)
+  // Recoloring alone wasn't enough (issue #203): the paper airplane's pop was
+  // throwing banana-shaped chunks around, just painted white. Paper scraps are flat
+  // & wide, so the burst reads as shredded paper instead of fruit.
+  public static void Scatter (Node parent, Vector3 origin, Color color, bool isPaper = false)
   {
     for (var i = 0; i < ChunkCount; ++i)
     {
-      var chunk = CreateChunk (color);
+      var chunk = CreateChunk (color, isPaper);
       parent.AddChild (chunk);
       chunk.GlobalPosition = origin;
     }
   }
 
-  private static BananaDebris CreateChunk (Color color)
+  // Paper scraps are cosmetic only (CodeRabbit on #206): a slingshot must not scoop
+  // one up & fire it as a banana chunk.
+  private bool _isPaper;
+
+  private static BananaDebris CreateChunk (Color color, bool isPaper = false)
   {
     var size = Rng.RandfRange (0.08f, 0.2f);
+    var shape = isPaper
+      ? new Vector3 (size * 1.7f, size * 0.06f, size * 1.3f) // Flat, wide scraps.
+      : new Vector3 (size, size * 0.6f, size * 1.6f);        // Chunky banana pieces.
+
     return new BananaDebris
     {
-      Mesh = new BoxMesh { Size = new Vector3 (size, size * 0.6f, size * 1.6f) },
+      Mesh = new BoxMesh { Size = shape },
       _color = color,
+      _isPaper = isPaper,
       _velocity = RandomLaunchVelocity(),
       _spinRadiansPerSecond = new Vector3 (Rng.RandfRange (-6.0f, 6.0f), Rng.RandfRange (-6.0f, 6.0f), Rng.RandfRange (-6.0f, 6.0f))
     };
@@ -96,6 +106,7 @@ public partial class BananaDebris : MeshInstance3D
   // chunk each peer sees simply fades out on its own timer.
   private void TryLoadIntoSlingshot()
   {
+    if (_isPaper) return; // Paper scraps aren't ammo (CodeRabbit on #206).
     var local = players.Player.Local;
     if (local == null || !local.IsLoadingAmmo) return;
     if (local.GlobalPosition.DistanceTo (GlobalPosition) > ScoopRangeMeters) return;
