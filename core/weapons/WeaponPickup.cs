@@ -112,6 +112,17 @@ public partial class WeaponPickup : Area3D
   public override void _Process (double delta)
   {
     _ageSeconds += (float)delta;
+
+    // An armed mine LIES on the ground (issue #204): it spawns at the standard
+    // pickup hover like every other pickup, which left the airplane bobbing in
+    // mid-air instead of sitting where it came down, waiting to be stepped on.
+    if (IsArmedMine)
+    {
+      _visual.Position = Vector3.Down * MineRestDrop;
+      if (_armedLight != null) _armedLight.Visible = Mathf.PosMod (_ageSeconds * ArmedBlinksPerSecond, 1.0f) < 0.5f;
+      return;
+    }
+
     _visual.RotateY (Mathf.Tau * RotationsPerSecond * (float)delta);
     _visual.Position = Vector3.Up * (BobHeight * Mathf.Sin (Mathf.Tau * BobsPerSecond * _ageSeconds));
     // An armed airplane winks at everyone while it waits (issue #191).
@@ -158,6 +169,9 @@ public partial class WeaponPickup : Area3D
   // An airplane that came down from flight (issue #191). Anything else - including a
   // fresh spawn-point airplane - is an ordinary pickup you can put in slot 6 (#102).
   private bool IsArmedMine => Weapon == HeldWeapon.PaperAirplane && Armed;
+  // Pickups spawn a hover height up so they're reachable; a mine drops back to the
+  // surface it landed on (issue #204).
+  private const float MineRestDrop = 0.85f;
 
   // Sphere radius (1.2) + the player capsule's reach, against the player's center.
   private const float ClaimRangeMeters = 1.7f;

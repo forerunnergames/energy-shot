@@ -432,6 +432,7 @@ public partial class Player : CharacterBody3D
     UpdateBoomerang();
     UpdateSlingshot (delta); // Draw-&-release stones (issue #99).
     UpdateAirplane(); // Homing glider throws (issue #102).
+    UpdateAirplaneLock(); // Lock-on ring while one's in hand (issue #205).
     UpdateAirplaneCatchWindow(); // An open swing keeps grabbing briefly (issue #102).
     UpdateBread();
     UpdateFullAuto (delta);

@@ -293,6 +293,10 @@ public partial class Player
   {
     ZapStreakCount = 0; // Any respawn ends the streak.
     Health = MaxHealth;
+    // Announce it (issue #201): the HUD's health bar & the red death-vignette both
+    // follow this signal, so a silent reset left the vignette glowing for the rest
+    // of the life - a permanent red halo after every respawn.
+    EmitSignal (SignalName.HealthChanged, Health);
     Velocity = Vector3.Zero;
     Position = CalculateRandomSpawnPosition();
     SetBreadHeld (isHeld: true); // Fresh bread every life (issues #62 & #190).

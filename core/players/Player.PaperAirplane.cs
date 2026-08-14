@@ -63,6 +63,17 @@ public partial class Player
     ThrowPaperAirplane();
   }
 
+  // Lock-on feedback (issue #205): with the airplane in hand & a player under the
+  // crosshair, the throw WILL home on them - the HUD draws a big ring so that's
+  // visible before committing, instead of the lock being silent & invisible.
+  public bool HasAirplaneLock { get; private set; }
+
+  private void UpdateAirplaneLock()
+  {
+    if (!IsMultiplayerAuthority()) return;
+    HasAirplaneLock = IsPaperAirplaneSelected && HasPaperAirplane && !IsAirplaneOut && FindAimedPlayer (200.0f) != null;
+  }
+
   // The target locks at throw time (issue #102): whoever is under the crosshair.
   // With nobody aimed, the airplane just glides straight & lands as a pickup.
   private void ThrowPaperAirplane()

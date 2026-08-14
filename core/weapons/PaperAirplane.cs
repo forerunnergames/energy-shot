@@ -26,7 +26,7 @@ public static class PaperAirplane
     var fade = flash.CreateTween();
     fade.TweenProperty (flash, "light_energy", 0.0f, 0.35f);
     fade.Finished += flash.QueueFree;
-    BananaDebris.Scatter (parent, origin, PaperWhite);
+    BananaDebris.Scatter (parent, origin, PaperWhite, isPaper: true); // Paper scraps, not fruit (issue #203).
     // The banana blast replayed short & bright reads as a paper pop - reusing an
     // existing sound instead of downloading one.
     PlayAt (parent, origin, "res://assets/sounds/banana-explode.mp3", pitch: 1.9f, volumeDb: -4.0f);
