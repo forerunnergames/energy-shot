@@ -794,7 +794,15 @@ public partial class WeaponSpawner : Node3D
       return;
     }
 
+    var catcher = Players().FirstOrDefault (player => player.NetworkId == catcherId);
+    if (catcher == null) return; // Catcher vanished mid-catch; the caps respawn it.
     ServerLog.Event (throwerId, $"airplane catch: handed to peer {catcherId}");
+    // The announcement only goes out once the handoff has actually committed here
+    // (CodeRabbit): the thrower used to announce its own predicted catch, which a
+    // denied request (an impact, a landing, or a lost flight record) would have made
+    // a lie. Told before the grant, so the thrower hears it even if the grant RPC
+    // is the packet that goes missing.
+    AnnounceCatch (throwerId, catcher.DisplayName);
 
     if (catcherId == Multiplayer.GetUniqueId())
     {
@@ -802,9 +810,18 @@ public partial class WeaponSpawner : Node3D
       return;
     }
 
-    if (Players().All (player => player.NetworkId != catcherId)) return; // Catcher vanished mid-catch; the caps respawn it.
+    TrackPendingGrant (catcherId, HeldWeapon.PaperAirplane); // Bridge until the catcher's HeldWeapon replicates back (issue #154).
     RpcId (catcherId, MethodName.ConfirmPickup, (int)HeldWeapon.PaperAirplane, thrower.DisplayName);
   }
+
+  private void AnnounceCatch (int throwerId, string catcherName)
+  {
+    if (throwerId == Multiplayer.GetUniqueId()) { AnnounceCatchToSelf (catcherName); return; }
+    RpcId (throwerId, MethodName.ConfirmAirplaneCatch, catcherName);
+  }
+
+  private void AnnounceCatchToSelf (string catcherName) => (GetParent() as World)?.SelfPlayer?.NotifyAirplaneCaught (catcherName);
+  [Rpc] private void ConfirmAirplaneCatch (string catcherName) => AnnounceCatchToSelf (catcherName);
 
   // The boomerang dropped out of the sky (thrower zapped out mid-flight, or the
   // safety timeout): it & any cargo become expiring pickups where it was, settled

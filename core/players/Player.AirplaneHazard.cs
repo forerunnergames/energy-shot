@@ -76,11 +76,21 @@ public partial class Player
   public async void BeginMineFuse (Vector3 minePosition)
   {
     if (!IsMultiplayerAuthority() || Burning || Fallen) return;
+    // Snapshot the generation like BurnDownTo does (CodeRabbit): a respawn during
+    // the fuse abandons it structurally, instead of relying on the incidental fact
+    // that spawn armor happens to outlast the fuse.
+    var generation = _burnGeneration;
     _mineFuseEndMs = Time.GetTicksMsec() + (ulong)(MineFuseSeconds * 1000.0f);
     PaperAirplane.Arm (GetParent(), minePosition); // The mine's tick, heard by everyone nearby.
     GD.Print ($"{DisplayName}: I stepped on the paper airplane!");
     await ToSignal (GetTree().CreateTimer (MineFuseSeconds), SceneTreeTimer.SignalName.Timeout);
+    // A disconnect can free this node mid-fuse (the #185 convention): never touch
+    // disposed state after an await, & never light up a life the fuse wasn't lit on.
     if (!IsInstanceValid (this) || !IsInsideTree()) return;
+
+    // Abandoned fuse (a respawn cleared it): the airplane is still spoken for in the
+    // server's hazard record, so release it or the caps wait out the timeout.
+    if (generation != _burnGeneration) { Spawner.SendAirplaneSpentRequest(); return; }
     _mineFuseEndMs = 0;
     IgniteFromAirplane (attackerId: 0, "the paper airplane", DamageKind.Landmine);
   }
@@ -100,7 +110,13 @@ public partial class Player
     Dancing = false; // Catching fire mid-dance ends the groove on every peer (issue #103).
     GD.Print ($"{DisplayName}: I'm on fire! Popping in {AirplaneBurnSeconds}s...");
     await BurnDownTo (generation, attackerId, attackerName);
-    if (!IsInstanceValid (this) || !IsInsideTree() || generation != _burnGeneration) return;
+    if (!IsInstanceValid (this) || !IsInsideTree()) return;
+
+    // The hazard is over either way (CodeRabbit): the most likely ending is the burn
+    // ticks zapping us out, which respawns us & bumps the generation - & that path
+    // used to skip the release, leaving the level airplane-less until the 15s hazard
+    // timeout. RequestAirplaneSpent keys on the sender, so a second report is a no-op.
+    if (generation != _burnGeneration) { Spawner.SendAirplaneSpentRequest(); return; }
     Burning = false;
     if (!Fallen) Pop (attackerId, attackerName);
     Spawner.SendAirplaneSpentRequest(); // The caps fold a fresh airplane into the level.

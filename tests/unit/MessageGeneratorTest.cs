@@ -101,6 +101,11 @@ public class MessageGeneratorTest
     var airplane = new DeathContext { Kind = DamageKind.PaperAirplane, Energy = 2.0f };
     AssertObject (MessageGenerator.SelectZappedPool (airplane with { KillerSliding = true, KillerAirborne = true })).IsSame (MessagePools.PaperAirplane);
     AssertObject (MessageGenerator.SelectZappedPool (airplane with { Kind = DamageKind.Landmine, VictimHeldBananaGun = true })).IsSame (MessagePools.Landmine);
+    // ...but the scenarios ABOVE it still win, so a future reorder can't quietly
+    // promote the airplane past them (issue #84's ordering).
+    AssertObject (MessageGenerator.SelectZappedPool (airplane with { VictimLostStreak = 5 })).IsSame (MessagePools.StreakEnded);
+    AssertObject (MessageGenerator.SelectZappedPool (airplane with { VictimLostStreak = 3 })).IsSame (MessagePools.StreakLost);
+    AssertObject (MessageGenerator.SelectZappedPool (airplane with { SplatterActive = true, BlurActive = true })).IsSame (MessagePools.ComboSplatterPunch);
   }
 
   [TestCase]

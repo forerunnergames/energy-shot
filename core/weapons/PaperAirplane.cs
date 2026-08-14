@@ -32,9 +32,13 @@ public static class PaperAirplane
     PlayAt (parent, origin, "res://assets/sounds/banana-explode.mp3", pitch: 1.9f, volumeDb: -4.0f);
   }
 
+  // Load first (CodeRabbit): a stream that fails to load would leave a player that
+  // never plays, never emits Finished, & so never frees itself.
   private static void PlayAt (Node parent, Vector3 origin, string streamPath, float pitch, float volumeDb)
   {
-    var sound = new AudioStreamPlayer3D { Stream = ResourceLoader.Load <AudioStream> (streamPath), PitchScale = pitch, VolumeDb = volumeDb };
+    var stream = ResourceLoader.Load <AudioStream> (streamPath);
+    if (stream == null) { GD.PushWarning ($"Paper airplane sound [{streamPath}] failed to load; skipping it."); return; }
+    var sound = new AudioStreamPlayer3D { Stream = stream, PitchScale = pitch, VolumeDb = volumeDb };
     parent.AddChild (sound);
     sound.GlobalPosition = origin;
     sound.Finished += sound.QueueFree;

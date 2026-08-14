@@ -62,7 +62,13 @@ public partial class Player
   private float SlingshotDrawFraction => Mathf.Clamp (_slingshotDrawSeconds / SlingshotMaxDrawSeconds, 0.0f, 1.0f);
   // Ammo only loads while the slingshot is actually out & empty (issue #190); a
   // loaded (or holstered) slingshot leaves normal pickup rules alone.
-  public bool IsLoadingAmmo => HasSlingshot && IsSlingshotSelected && SlingshotAmmo == HeldWeapon.None && !Fallen;
+  // A slung item is still ours until it lands: the server's escrow holds it, so a
+  // load request in that window is denied & WeaponPickup would just retry it once a
+  // second instead of collecting normally (CodeRabbit). Waiting for the flight to
+  // finish keeps the two views of "loaded" in step.
+  public bool IsLoadingAmmo => HasSlingshot && IsSlingshotSelected && SlingshotAmmo == HeldWeapon.None && !IsSlungItemInFlight && !Fallen;
+  // Playtest-observable (issue #190): true from the shot until the item comes to rest.
+  public bool IsSlungItemInFlight => _ammoStone != null && IsInstanceValid (_ammoStone) && _ammoStone.IsInsideTree();
   // Cosmetic ammo (banana chunks) is scenery no cap tracks: it splatters & is gone.
   private static bool IsCosmeticAmmo (HeldWeapon ammo) => ammo == HeldWeapon.BananaChunk;
 

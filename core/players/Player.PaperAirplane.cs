@@ -88,15 +88,26 @@ public partial class Player
   [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
   private void SpawnVisualAirplane (Vector3 origin, Vector3 direction, int targetId)
   {
+    if (!IsFromOwner()) return;
     ClearArmorDisplayOnRemoteAttack();
     var target = targetId == 0 ? null : GetParent().GetNodeOrNull <Player> ($"{targetId}");
-    _visualAirplane = SpawnAirplane (origin, direction, isLive: false, target);
-    _visualAirplane.TreeExited += OnVisualAirplaneGone;
+    FreeVisualAirplane(); // A previous copy would otherwise leak & keep chasing.
+    var spawned = SpawnAirplane (origin, direction, isLive: false, target);
+    _visualAirplane = spawned;
+    // The exit callback captures ITS OWN copy (CodeRabbit): a stale exit event
+    // clearing the newer reference put the hand back mid-flight.
+    spawned.TreeExited += () => OnVisualAirplaneGone (spawned);
     UpdateWeaponVisibility();
   }
 
-  private void OnVisualAirplaneGone()
+  // Only this player's own peer narrates their airplane (CodeRabbit): otherwise any
+  // peer could spawn or free the visual copy on somebody else's node. A direct local
+  // call has no remote sender, which is the authority calling itself.
+  private bool IsFromOwner() => Multiplayer.GetRemoteSenderId() is var sender && (sender == 0 || sender == NetworkId);
+
+  private void OnVisualAirplaneGone (PaperAirplaneProjectile gone)
   {
+    if (_visualAirplane != gone) return; // A newer flight already owns the hand.
     _visualAirplane = null;
     if (IsInsideTree()) UpdateWeaponVisibility();
   }
@@ -244,7 +255,6 @@ public partial class Player
   {
     if (!IsAirplaneInFlight) return;
     Spawner.SendAirplaneCatchRequest (catcher.NetworkId);
-    EmitSignal (SignalName.AirplaneCaught, catcher.DisplayName); // HUD catch announcement (issue #102).
     _liveAirplane!.QueueFree();
     _liveAirplane = null;
     Rpc (MethodName.FreeVisualAirplane);
@@ -253,8 +263,10 @@ public partial class Player
     DeselectUnheldWeapon();
   }
 
-  // Zapping out (or falling off the world) mid-flight: the airplane lands as a
-  // pickup wherever it currently is, same as the boomerang release (issue #98).
+  // Zapping out (or falling off the world) mid-flight: the airplane comes down where
+  // it was, & since it came down FROM FLIGHT it comes down armed (issue #191) - a
+  // thrower who gets zapped out mid-glide leaves a landmine behind them, not a plain
+  // pickup. It travels the same OnAirplaneLanded path every other flight end uses.
   private void ReleaseAirplaneInFlight()
   {
     if (!IsAirplaneInFlight) { _liveAirplane = null; return; }
@@ -263,9 +275,18 @@ public partial class Player
     OnAirplaneLanded (position);
   }
 
+  // The server confirmed the handoff actually committed (CodeRabbit): only then does
+  // the thrower announce it, so a denied catch can never be broadcast as a real one.
+  public void NotifyAirplaneCaught (string catcherName)
+  {
+    if (!IsMultiplayerAuthority()) return;
+    EmitSignal (SignalName.AirplaneCaught, catcherName); // HUD catch announcement (issue #102).
+  }
+
   [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
   private void FreeVisualAirplane()
   {
+    if (!IsFromOwner()) return; // Only this player's own peer frees their copy (CodeRabbit).
     if (_visualAirplane == null || !IsInstanceValid (_visualAirplane)) return;
     _visualAirplane.QueueFree();
   }

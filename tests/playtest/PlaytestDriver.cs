@@ -189,7 +189,11 @@ public partial class PlaytestDriver : Node
     Assert (FindPlayer (ShooterName)?.IsCrowned == true, "crown stayed on the leader after the fall penalty (#178)");
     // Stay up until both clients have finished & disconnected (the shooter's solo
     // phases now end with the paper airplane throw & catch, issue #102).
-    await WaitUntil (() => _world.GetPlayers().Count() == 1, 180, "clients disconnected");
+    // 600s, not 180 (CodeRabbit): this single wait has to span every client phase
+    // that follows - the shooter's ammo & airplane phases & the victim's catch and
+    // landmine phases - & the sum of their per-step budgets already exceeds 180s. A
+    // slow run that stays inside every inner budget must not fail out here.
+    await WaitUntil (() => _world.GetPlayers().Count() == 1, 600, "clients disconnected");
     // The version line goes only to joining clients, never broadcast (#158), so the
     // host must never have seen one.
     Assert (_adminMessages.All (message => !message.Contains ("Running")), "version line was not broadcast to the host (#158)");
@@ -571,8 +575,12 @@ public partial class PlaytestDriver : Node
 
     for (var attempt = 0; attempt < 10 && _airplanesSpawned == airplanesBefore; ++attempt)
     {
+      // Wait a drifting bystander off the line WITHOUT burning a throw attempt
+      // (CodeRabbit): the old `continue` spent all 10 attempts in ~2.5s, which is
+      // exactly the flake this phase's fixed marks were meant to kill.
+      await TryWaitUntil (() => IsVictimTheNearestTarget (victim), 15);
       AimAt (victim.GlobalPosition + Vector3.Up);
-      if (!IsVictimTheNearestTarget (victim)) { await Task.Delay (250); continue; } // Host drifted into the ray again.
+      if (!IsVictimTheNearestTarget (victim)) { --attempt; continue; } // Still blocked: not a throw.
       PressAction ("shoot");
       await Task.Delay (80);
       ReleaseAction ("shoot");
@@ -794,11 +802,15 @@ public partial class PlaytestDriver : Node
     Assert (_stonesSpawned > ammoStonesBefore, "fired the loaded laser out of the slingshot (#190)");
     await WaitUntil (() => Self.SlingshotAmmo == HeldWeapon.None, 10, "firing emptied the slingshot (#190)");
     // Nothing may vanish: the slung laser has to come back as an ordinary pickup.
-    await WaitUntil (() => LaserPickupNames().Except (lasersBefore).Any(), 20, "the slung laser landed as a world pickup again (#190)");
+    // Capture the name INSIDE the wait (CodeRabbit): re-querying afterwards could
+    // find the pickup already claimed or expired & throw an opaque First() instead
+    // of a named assertion failure.
+    var landedName = string.Empty;
+    await WaitUntil (() => (landedName = LaserPickupNames().Except (lasersBefore).FirstOrDefault() ?? string.Empty).Length > 0, 20, "the slung laser landed as a world pickup again (#190)");
     // ...& it has to rest on the floor it actually hit (the #151/#172 ray-grounding
     // conventions): the spawn-room slab is paper thin, & a ground ray starting
     // exactly on it used to fall through onto the arena 30m below.
-    var landed = _world.GetNode <WeaponPickup> (LaserPickupNames().Except (lasersBefore).First());
+    var landed = _world.GetNode <WeaponPickup> (landedName);
     Assert (landed.Position.Y > 20.0f, $"the slung laser rested on the spawn-room floor, not through it (#190), y={landed.Position.Y:0.0}");
   }
 
@@ -908,7 +920,10 @@ public partial class PlaytestDriver : Node
     await Task.Delay (500); // Settle onto the ground.
     // The throw replicates (#102): the shooter's flying airplane must appear here as
     // a visual copy before there's anything to catch.
-    await WaitUntil (() => _world.GetChildren().OfType <PaperAirplaneProjectile>().Any(), 150, "shooter's thrown airplane replicated as a flying copy (#102)");
+    // 300s, not 150 (CodeRabbit): the shooter still has its universal-ammo phase &
+    // its own walk to the airplane pickup to get through before it can throw, & the
+    // sum of those per-step budgets is already larger than the old bound.
+    await WaitUntil (() => _world.GetChildren().OfType <PaperAirplaneProjectile>().Any(), 300, "shooter's thrown airplane replicated as a flying copy (#102)");
     // Targeted-only warning (#191): the airplane locked onto US, so our own ring
     // reads a live threat - & it must clear the moment the catch takes it away.
     await WaitUntil (() => Self.AirplaneThreatFraction > 0.0f, 30, "the incoming airplane raised our own warning ring (#191)");
@@ -967,7 +982,9 @@ public partial class PlaytestDriver : Node
     var healthWhileBurning = Self.Health;
     await WaitUntil (() => Self.Health < healthWhileBurning, 5, "burning damaged us over time (#191)");
     await WaitUntil (() => Self.Fallen, 15, "the airplane popped us (#191)");
-    Assert (!Self.Burning, "the fire went out with the pop (#191)");
+    // Fallen & Burning clear in separate frames, so wait (CodeRabbit): asserting in
+    // the same tick could read the stale burning state & fail a correct run.
+    await WaitUntil (() => !Self.Burning, 5, "the fire went out with the pop (#191)");
     await WaitUntil (() => !Self.Fallen && Self.SpawnArmor, 30, "respawned armored after the landmine (#191)");
     Assert (!Self.Burning, "a fresh life never inherits the fire (#191)");
     // Exactly one airplane, always (#102/#191): the caps fold a new one straight away.
