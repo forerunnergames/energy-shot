@@ -14,7 +14,12 @@ namespace com.forerunnergames.energyshot.weapons;
 public partial class PaperAirplaneProjectile : Node3D
 {
   [Export] public float Speed = 10.5f;
-  [Export] public float TurnDegreesPerSecond = 65.0f;
+  // Fast enough to actually hold a turn: at 10.5 m/s, 65 deg/s couldn't sustain a
+  // circle inside ~10m, so the glider physically could not follow anyone who moved
+  // (issue #210). Still well short of a missile - sprinting away breaks it.
+  [Export] public float TurnDegreesPerSecond = 115.0f;
+  // How far ahead of a moving target the glider aims (issue #210).
+  [Export] public float MaxLeadSeconds = 1.2f;
   [Export] public float MaxGlideSeconds = 10.0f;
   [Export] public float FlutterSpeed = 4.5f;
   [Export] public float MaxLifetimeSeconds = 16.0f;
@@ -48,7 +53,17 @@ public partial class PaperAirplaneProjectile : Node3D
   }
   private bool IsFluttering => _age > MaxGlideSeconds;
   private bool HasLiveTarget => _target != null && IsInstanceValid (_target) && _target.IsInsideTree();
-  private Vector3 TargetPoint() => _target!.GlobalPosition + Vector3.Up;
+  // Aim where they're GOING, not where they are (issue #210): pure pursuit trails a
+  // moving player & needs an ever-tighter turn as it closes, so the glider swung wide
+  // & sailed past. Leading keeps it dodgeable - CHANGING direction still breaks the
+  // intercept - while a player who just runs in a straight line gets found.
+  private Vector3 TargetPoint()
+  {
+    var body = _target!.GlobalPosition + Vector3.Up;
+    var secondsToImpact = Mathf.Min (GlobalPosition.DistanceTo (body) / Speed, MaxLeadSeconds);
+    var drift = new Vector3 (_target.Velocity.X, 0.0f, _target.Velocity.Z) * secondsToImpact;
+    return body + drift;
+  }
 
   // Shared look for the projectile, the world pickup, & the held model (issue #102):
   // a folded paper dart - a flat delta wing in two dihedral halves over a thin keel,

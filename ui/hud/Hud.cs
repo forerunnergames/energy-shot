@@ -37,6 +37,7 @@ public partial class Hud : Control
   private CooldownMeter _bananaMeter = null!;
   private TextureRect _breadIcon = null!;
   private AudioStreamPlayer _munchSound = null!;
+  private AudioStreamPlayer _lockOnSound = null!;
   private AudioStreamPlayer _breadDeniedSound = null!;
   private ColorRect _deathOverlay = null!;
   private Label _deathCountdown = null!;
@@ -122,9 +123,12 @@ public partial class Hud : Control
     _bananaMeter = GetNode <CooldownMeter> ("CooldownMeters/Banana");
     _breadIcon = GetNode <TextureRect> ("VBoxContainer/Bread/Icon");
     CreateBreadSounds();
+    _lockOnSound = new AudioStreamPlayer { Stream = ProceduralSounds.LockOn(), MaxPolyphony = 2 }; // Issue #211.
+    AddChild (_lockOnSound);
     _world.SelfPlayerPunched += OnSelfPlayerPunched;
     _world.SelfPlayerSplattered += OnSelfPlayerSplattered;
     _world.SelfPlayerAirplaneCaught += OnSelfPlayerAirplaneCaught;
+    _world.SelfPlayerAirplaneLockAcquired += () => _lockOnSound.Play(); // Issue #211.
     _world.SelfPlayerAteBread += OnSelfPlayerAteBread;
     _world.SelfPlayerBreadDenied += OnSelfPlayerBreadDenied;
     GetNode <Timer> ("LeaderboardTimer").Timeout += UpdateLeaderboard;

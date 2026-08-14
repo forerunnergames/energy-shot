@@ -34,6 +34,9 @@ public partial class Player
   // validated on their own peer; this only rejects wildly stale/forged requests.
   [Export] public float AirplaneCatchSlackMeters = 6.0f;
   [Signal] public delegate void AirplaneCaughtEventHandler (string catcherName);
+  // Fired the moment a player enters the lock ring (issue #211): the HUD chirps so
+  // the lock is audible as well as visible, without watching the ring.
+  [Signal] public delegate void AirplaneLockAcquiredEventHandler();
   private PaperAirplaneProjectile? _liveAirplane;
   private PaperAirplaneProjectile? _visualAirplane;
   private Node3D _airplaneHeld = null!;
@@ -66,12 +69,44 @@ public partial class Player
   // Lock-on feedback (issue #205): with the airplane in hand & a player under the
   // crosshair, the throw WILL home on them - the HUD draws a big ring so that's
   // visible before committing, instead of the lock being silent & invisible.
-  public bool HasAirplaneLock { get; private set; }
+  public bool HasAirplaneLock => _lockedTarget != null;
+  // The ring is a big TARGET AREA, not a crosshair (issue #211): anyone inside the
+  // circle when you release is who the glider chases. Measured as a cone off the aim
+  // axis rather than in screen pixels - 27 degrees is what TargetRing's 0.34-of-screen
+  // circle subtends at the default FOV, & unlike a viewport measurement it means the
+  // same thing at any window size (& in a headless playtest, where there is none).
+  private const float LockConeDegrees = 27.0f;
+  private Player? _lockedTarget;
 
   private void UpdateAirplaneLock()
   {
     if (!IsMultiplayerAuthority()) return;
-    HasAirplaneLock = IsPaperAirplaneSelected && HasPaperAirplane && !IsAirplaneOut && FindAimedPlayer (200.0f) != null;
+    var wasLocked = _lockedTarget != null;
+    _lockedTarget = IsPaperAirplaneSelected && HasPaperAirplane && !IsAirplaneOut ? FindPlayerInsideLockRing() : null;
+    if (_lockedTarget != null && !wasLocked) EmitSignal (SignalName.AirplaneLockAcquired); // Chirp on acquisition.
+  }
+
+  // Whoever sits nearest the middle of the ring - screen-space, so a distant player
+  // inside the circle locks just as well as a close one.
+  private Player? FindPlayerInsideLockRing()
+  {
+    var aim = -_camera.GlobalTransform.Basis.Z;
+    var cone = Mathf.DegToRad (LockConeDegrees);
+    Player? best = null;
+    var bestAngle = float.MaxValue;
+
+    foreach (var node in GetParent().GetChildren())
+    {
+      if (node is not Player player || player == this) continue;
+      var toHead = player.GlobalPosition + Vector3.Up - _camera.GlobalPosition;
+      if (toHead.LengthSquared() < 0.001f) continue;
+      var angle = aim.AngleTo (toHead.Normalized());
+      if (angle > cone || angle >= bestAngle) continue; // Nearest the middle of the ring wins.
+      best = player;
+      bestAngle = angle;
+    }
+
+    return best;
   }
 
   // The target locks at throw time (issue #102): whoever is under the crosshair.
@@ -79,7 +114,7 @@ public partial class Player
   private void ThrowPaperAirplane()
   {
     CancelSpawnArmorIfFired();
-    var target = FindAimedPlayer (200.0f);
+    var target = _lockedTarget; // Whoever was inside the ring at release (issue #211).
     var direction = -_camera.GlobalTransform.Basis.Z;
     var origin = _camera.GlobalPosition + direction * MuzzleOffsetMeters;
     // The server registers the flight (CodeRabbit on #180): the single-use record a

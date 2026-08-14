@@ -49,6 +49,16 @@ public static class ProceduralSounds
     return FromSamples (samples);
   }
 
+  // Lock acquired (issue #211): two quick ascending blips - clearly "got them",
+  // and distinct from the target warning's single flat beep.
+  public static AudioStreamWav LockOn()
+  {
+    var samples = new float[(int)(SampleRate * 0.16f)];
+    AddChime (samples, startSeconds: 0.0f, fromHz: 880.0f, toHz: 880.0f, seconds: 0.05f, amplitude: 0.24f);
+    AddChime (samples, startSeconds: 0.07f, fromHz: 1320.0f, toHz: 1400.0f, seconds: 0.07f, amplitude: 0.26f);
+    return FromSamples (samples);
+  }
+
   // A short burst of low-passed noise with an exponential decay reads as a bread crunch.
   private static void AddCrunch (float[] samples, float startSeconds, float brightness)
   {

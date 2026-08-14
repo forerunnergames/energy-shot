@@ -431,8 +431,8 @@ public partial class Player : CharacterBody3D
     UpdateBananaLauncher();
     UpdateBoomerang();
     UpdateSlingshot (delta); // Draw-&-release stones (issue #99).
+    UpdateAirplaneLock(); // Resolve the lock BEFORE the throw reads it (issues #205 & #211).
     UpdateAirplane(); // Homing glider throws (issue #102).
-    UpdateAirplaneLock(); // Lock-on ring while one's in hand (issue #205).
     UpdateAirplaneCatchWindow(); // An open swing keeps grabbing briefly (issue #102).
     UpdateBread();
     UpdateFullAuto (delta);

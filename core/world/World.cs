@@ -19,6 +19,8 @@ public partial class World : Node3D
   [Signal] public delegate void SelfPlayerSplatteredEventHandler();
   // Someone caught our own thrown paper airplane (issue #102); the thrower's HUD announces it.
   [Signal] public delegate void SelfPlayerAirplaneCaughtEventHandler (string catcherName, string throwerName);
+  // Our own airplane lock landing on somebody (issue #211); the HUD chirps.
+  [Signal] public delegate void SelfPlayerAirplaneLockAcquiredEventHandler();
   // Bread feedback (issue #160): eaten + soft denied cues, forwarded to the HUD.
   [Signal] public delegate void SelfPlayerAteBreadEventHandler();
   [Signal] public delegate void SelfPlayerBreadDeniedEventHandler (bool isOut);
@@ -430,6 +432,7 @@ public partial class World : Node3D
     // Fired only from the server-confirmed handoff now (CodeRabbit on #198), never
     // from the thrower's own prediction - a denied catch used to announce anyway.
     selfPlayer.AirplaneCaught += catcherName => EmitSignal (SignalName.SelfPlayerAirplaneCaught, catcherName, selfPlayer.DisplayName); // Issue #102.
+    selfPlayer.AirplaneLockAcquired += () => EmitSignal (SignalName.SelfPlayerAirplaneLockAcquired); // Issue #211.
     selfPlayer.BreadEaten += _ => EmitSignal (SignalName.SelfPlayerAteBread); // Bread feedback (issue #160).
     selfPlayer.BreadDenied += isOut => EmitSignal (SignalName.SelfPlayerBreadDenied, isOut);
     selfPlayer.Scored += (playerName, shotPlayerName) => EmitSignal (SignalName.PlayerScored, ++_score, playerName, shotPlayerName);
