@@ -3,6 +3,7 @@ using com.forerunnergames.energyshot.core.world;
 using com.forerunnergames.energyshot.players;
 using com.forerunnergames.energyshot.ui.dialogs;
 using com.forerunnergames.energyshot.ui.hud.messages;
+using com.forerunnergames.energyshot.utilities;
 using com.forerunnergames.energyshot.weapons;
 using Godot;
 
@@ -31,6 +32,9 @@ public partial class Hud : Control
   private TextureRect _breadIcon = null!;
   private AudioStreamPlayer _munchSound = null!;
   private AudioStreamPlayer _breadDeniedSound = null!;
+  private ColorRect _deathOverlay = null!;
+  private Label _deathCountdown = null!;
+  private ulong _deathOverlayEndMs;
   private float _blurIntensity;
   private float _splatterSecondsLeft;
   private float _splatterSlide;
@@ -123,6 +127,41 @@ public partial class Hud : Control
     _world.SelfPlayerHealthChanged += OnSelfPlayerHealthChanged;
     _world.KickedFromServer += OnKickedFromServer;
     _world.ServerShutDown += OnServerShutDown;
+    CreateDeathOverlay();
+    AddCrouchModeToggleToPauseDialog();
+  }
+
+  // Death overlay (issue #152): a dim wash + countdown while the body lies at the
+  // death spot; built in code to keep Hud scene edits minimal, like the music
+  // player's pause toggle (issue #137).
+  private void CreateDeathOverlay()
+  {
+    _deathOverlay = new ColorRect { Color = new Color (0.0f, 0.0f, 0.0f, 0.45f), MouseFilter = MouseFilterEnum.Ignore, Visible = false };
+    _deathOverlay.SetAnchorsPreset (LayoutPreset.FullRect);
+    AddChild (_deathOverlay);
+    MoveChild (_deathOverlay, 0); // Under the health bar, messages, & leaderboard.
+    _deathCountdown = new Label { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, MouseFilter = MouseFilterEnum.Ignore };
+    _deathCountdown.AddThemeFontSizeOverride ("font_size", 48);
+    _deathCountdown.SetAnchorsPreset (LayoutPreset.FullRect);
+    _deathOverlay.AddChild (_deathCountdown);
+  }
+
+  // Crouch toggle-vs-hold (issue #147), persisted & offered in the pause (quit)
+  // dialog - the only in-game UI with a visible mouse - like the music toggle (#137).
+  private void AddCrouchModeToggleToPauseDialog()
+  {
+    var container = GetNodeOrNull <BoxContainer> ("QuitDialog/VBoxContainer/HBoxContainer");
+    if (container == null) { GD.PushWarning ("Pause-dialog container missing: the hold-to-crouch toggle (issue #147) was not added."); return; }
+    var toggle = new CheckButton { Text = "Hold to crouch", ButtonPressed = Settings.HoldToCrouch };
+    toggle.AddThemeFontSizeOverride ("font_size", 40);
+    toggle.Toggled += OnHoldToCrouchToggled;
+    container.AddChild (toggle);
+  }
+
+  private static void OnHoldToCrouchToggled (bool isEnabled)
+  {
+    Settings.HoldToCrouch = isEnabled;
+    Player.Local?.RefreshCrouchMode(); // Applies immediately, not just next launch (issue #147).
   }
 
   public override void _UnhandledInput (InputEvent @event)
@@ -137,6 +176,7 @@ public partial class Hud : Control
     UpdateSplatter (delta);
     UpdateCooldownMeters();
     UpdateBreadIcon();
+    UpdateDeathOverlay();
   }
 
   // Bread munch & soft denied cues are code-generated (issue #160): no downloaded assets.
@@ -146,6 +186,25 @@ public partial class Hud : Control
     _breadDeniedSound = new AudioStreamPlayer { Stream = ProceduralSounds.Denied() };
     AddChild (_munchSound);
     AddChild (_breadDeniedSound);
+  }
+
+  private void ShowDeathOverlay()
+  {
+    var seconds = _world.SelfPlayer?.DeathSequenceSeconds ?? 5.0f;
+    _deathOverlayEndMs = Time.GetTicksMsec() + (ulong)(seconds * 1000.0f);
+    _deathOverlay.Visible = true;
+  }
+
+  // Countdown feel (issue #152): whole seconds ticking down to the auto-respawn;
+  // clears once the wait is over & the replicated Fallen state has dropped.
+  private void UpdateDeathOverlay()
+  {
+    if (!_deathOverlay.Visible) return;
+    var now = Time.GetTicksMsec();
+    var secondsLeft = now >= _deathOverlayEndMs ? 0 : (int)Mathf.Ceil ((_deathOverlayEndMs - now) / 1000.0f);
+    _deathCountdown.Text = $"Zapped out!\nBack in {Mathf.Max (1, secondsLeft)}...";
+    if (secondsLeft > 0 || _world.SelfPlayer?.Fallen == true) return;
+    _deathOverlay.Visible = false;
   }
 
   // Punch blur stacks per hit & fades back to sharp; a heavy stack fades slower, so
@@ -226,6 +285,7 @@ public partial class Hud : Control
   {
     _selfPlayerName = selfPlayerName;
     _messageScroller.Reset();
+    _deathOverlay.Visible = false; // No stale countdown from a previous session (issue #152).
     _healthBar.MaxValue = selfMaxHealth;
     _healthBar.Value = selfMaxHealth;
     UpdateVignette (selfMaxHealth);
@@ -261,6 +321,7 @@ public partial class Hud : Control
     if (!IsSelf (playerName)) return;
     // Your own death renders red locally (issue #101); everyone else gets the same text in white.
     Announce (MessageGenerator.OnZapped (playerName, shotByPlayerName, BuildDeathContext (shotByPlayerName)), MessageScroller.MessageImportance.Critical);
+    ShowDeathOverlay(); // The message now lands at death time, opening the lie-down wait (issue #152).
     ++_zappedStreak;
     _zapStreak = 0;
     if (_zappedStreak >= 3) Announce (MessageGenerator.OnZappedStreak (playerName));
