@@ -20,6 +20,13 @@ public partial class Player
   // ~0.1s, so anything tighter made well-timed catches lose the race to the hit -
   // at the old 3m a catch had to land inside a single frame's worth of travel.
   [Export] public float AirplaneCatchRadiusMeters = 4.0f;
+  // How long a swing keeps grabbing after it misses (issue #102): about one punch
+  // animation, so catching rewards timing instead of frame luck.
+  [Export] public float AirplaneCatchWindowSeconds = 0.35f;
+  // Replicated so the flight's authority can settle a mid-swing impact as a catch
+  // without waiting for the catcher's request to cross the wire (issue #102).
+  [Export] public bool CatchingAirplane { get; set; }
+  private ulong _catchWindowEndMs;
   // Server-side-of-the-thrower slack for the catch check: the catcher's punch was
   // validated on their own peer; this only rejects wildly stale/forged requests.
   [Export] public float AirplaneCatchSlackMeters = 6.0f;
@@ -102,6 +109,19 @@ public partial class Player
   private void OnAirplaneHitPlayer (Player victim)
   {
     if (victim.NetworkId == NetworkId) return;
+
+    // Swinging when it arrives IS the catch (issue #102). The catcher's own grab
+    // asks us over the wire, & the airplane keeps flying here while that request
+    // travels - so on any real latency the impact beat the catch & a correctly
+    // timed punch got paper-cut anyway. CatchingAirplane replicates, so we can
+    // settle it here on the flight's authority with nothing in flight but state.
+    if (victim.CatchingAirplane)
+    {
+      GD.Print ($"{DisplayName}: {victim.DisplayName} caught my paper airplane mid-swing!");
+      GrantCaughtAirplaneTo (victim);
+      return;
+    }
+
     GD.Print ($"{DisplayName}: My paper airplane found {victim.DisplayName}!");
     _hitmarkerSound.Play();
     ReportToServer ($"paper airplane: {DisplayName} hit {victim.DisplayName}");
@@ -140,8 +160,33 @@ public partial class Player
   // requested from them & the server hands the airplane over.
   private bool TryCatchPaperAirplane()
   {
+    if (TryGrabAirplane()) return true;
+    // Nothing in reach yet, so the swing stays "open" briefly (issue #102): an
+    // instantaneous proximity test made catching frame-perfect, since a loaded
+    // frame can advance the glider more than a meter - a well-timed swing kept
+    // landing the frame before the airplane arrived & became a plain punch.
+    _catchWindowEndMs = Time.GetTicksMsec() + (ulong)(AirplaneCatchWindowSeconds * 1000.0f);
+    CatchingAirplane = true;
+    return false;
+  }
+
+  // An open swing keeps grabbing until its window lapses (issue #102): whichever
+  // airplane flies into reach during it is caught, so catching depends on timing
+  // the swing, not on which frame the glider happens to land in.
+  private void UpdateAirplaneCatchWindow()
+  {
+    if (_catchWindowEndMs == 0 || !IsMultiplayerAuthority()) return;
+    if (Time.GetTicksMsec() < _catchWindowEndMs && !TryGrabAirplane()) return;
+    _catchWindowEndMs = 0;
+    CatchingAirplane = false;
+  }
+
+  private bool TryGrabAirplane()
+  {
     var airplane = FindCatchableAirplane();
     if (airplane?.Thrower == null) return false;
+    _catchWindowEndMs = 0;
+    CatchingAirplane = false;
     GD.Print ($"{DisplayName}: I snagged {airplane.Thrower.DisplayName}'s paper airplane out of the air!");
     _weaponPickupSound.Play(); // Satisfying grab chime, catcher-local (issue #123).
     if (airplane.ThrowerNetworkId == NetworkId) ReceiveAirplaneCatchRequest();
@@ -175,9 +220,17 @@ public partial class Player
     if (catcher == null) return;
     if (_liveAirplane!.GlobalPosition.DistanceTo (catcher.GlobalPosition + Vector3.Up) > AirplaneCatchSlackMeters) return;
     GD.Print ($"{DisplayName}: {catcher.DisplayName} caught my paper airplane!");
-    Spawner.SendAirplaneCatchRequest (catcherId);
+    GrantCaughtAirplaneTo (catcher);
+  }
+
+  // Ends the flight & hands the airplane over, on the flight's authority: both the
+  // catcher's request & a mid-swing impact land here (issue #102).
+  private void GrantCaughtAirplaneTo (Player catcher)
+  {
+    if (!IsAirplaneInFlight) return;
+    Spawner.SendAirplaneCatchRequest (catcher.NetworkId);
     EmitSignal (SignalName.AirplaneCaught, catcher.DisplayName); // HUD catch announcement (issue #102).
-    _liveAirplane.QueueFree();
+    _liveAirplane!.QueueFree();
     _liveAirplane = null;
     Rpc (MethodName.FreeVisualAirplane);
     HeldWeapon &= ~HeldWeapon.PaperAirplane;

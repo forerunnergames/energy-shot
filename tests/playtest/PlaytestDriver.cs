@@ -488,7 +488,12 @@ public partial class PlaytestDriver : Node
     // The victim fell & respawned earlier; wait for it to be back in the spawn room,
     // then throw from close by so the host can't wander into the flight path.
     await WaitUntil (() => victim.GlobalPosition.Y > 20.0f, 60, "victim back in the spawn room for the catch phase (#102)");
+    // Keep some distance: the glider needs a moment of flight for the catch to be
+    // catchable at all - throwing from a few meters lands it before anyone can swing.
     await WaitUntil (() => WalkedTo (victim.GlobalPosition, reach: 6.0f), 45, "walked near the victim for the airplane throw (#102)");
+    // The throw locks onto whoever is under the crosshair, & the idling host has
+    // wandered into the ray & stolen the lock - wait until the line is the victim's.
+    await WaitUntil (() => IsVictimTheNearestTarget (victim), 30, "clear line to the victim for the airplane throw (#102)");
     // A genuine punch-catch fires our own AirplaneCaught signal when the handoff is
     // validated (CodeRabbit on #180): a landing must NOT pass this phase.
     var airplaneCaught = false;
@@ -498,6 +503,7 @@ public partial class PlaytestDriver : Node
     for (var attempt = 0; attempt < 10 && _airplanesSpawned == airplanesBefore; ++attempt)
     {
       AimAt (victim.GlobalPosition + Vector3.Up);
+      if (!IsVictimTheNearestTarget (victim)) { await Task.Delay (250); continue; } // Host drifted into the ray again.
       PressAction ("shoot");
       await Task.Delay (80);
       ReleaseAction ("shoot");
@@ -649,6 +655,14 @@ public partial class PlaytestDriver : Node
   // the landing produced a real, claimable pickup. There's exactly one airplane in
   // the game (#102), so whoever is nearest legitimately wins the race - a bystander
   // beating us to it must not fail the phase.
+  // The airplane locks onto whoever the crosshair ray finds first (#102), so the
+  // throw is only aimed at the victim if no other player sits nearer along it.
+  private bool IsVictimTheNearestTarget (Player victim)
+  {
+    var toVictim = Self.GlobalPosition.DistanceTo (victim.GlobalPosition);
+    return _world.GetPlayers().All (player => player == Self || player == victim || player.GlobalPosition.DistanceTo (Self.GlobalPosition) > toVictim);
+  }
+
   private bool WalkedToRecoveryPickup()
   {
     if (_world.GetPlayers().Any (player => player.Holds (HeldWeapon.PaperAirplane))) return true;
