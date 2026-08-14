@@ -31,6 +31,17 @@ public partial class PlaytestDriver : Node
   // file mid-run; the version must match run-playtest.sh's version file content.
   private const string AdminAnnouncement = "Playtest admin announcement";
   private const string ServerVersion = "v9.9.9-playtest";
+  // Death-drop coverage (issue #169): the victim carries the deterministic playtest
+  // banana to this fixed spot to be zapped, so the drop lands metres clear of every
+  // playtest pickup spot - a drop search next to one of those could match it instead.
+  private static readonly Vector3 KillSpot = new(4.0f, 31.0f, 0.0f);
+  private static readonly Vector3 SpawnRoomCenter = new(0.0f, 31.0f, 0.0f);
+  // The drop grounds straight down from the death spot (#151), so it stays in that
+  // XZ column; the radius only has to cover RequestDrop's per-weapon side offsets.
+  private const float DropSearchRadius = 2.0f;
+  // Matches WeaponSpawner's MinGroundY (#172): anything below is the kill boundary
+  // under the arena, where a "grounded" drop is really an unreachable one.
+  private const float MinDropY = -50.0f;
   private World _world = null!;
   private string _role = string.Empty;
   private string _address = "127.0.0.1";
@@ -327,6 +338,7 @@ public partial class PlaytestDriver : Node
     // Death sequence (#152): the victim's body lies fallen at the death spot &
     // the replicated Fallen state must render the tip-over on this peer too.
     await WaitUntil (() => victim.Fallen, 10, "victim's fallen body replicated to shooter (#152)");
+    await RunDeathDropPhase (victim);
 
     // Victim must come back armored in the spawn room (~5s later now, #152).
     await WaitUntil (() => respawnArmorSeen, 20, "victim respawned with spawn armor");
@@ -506,6 +518,40 @@ public partial class PlaytestDriver : Node
     Assert (_adminMessages.All (message => !message.Contains ("FORGED")), "forged admin RPC was rejected (#158)");
   }
 
+  // Death-drop coverage (issue #169): the victim died holding the deterministic
+  // playtest banana, so RequestDrop's death path must have left a real, claimable
+  // pickup on the floor under the body. That path had zero playtest coverage until
+  // now - which is how the #167 regression (killed players' weapons vanishing into
+  // nothing) reached players.
+  private async Task RunDeathDropPhase (Player victim)
+  {
+    var deathSpot = victim.GlobalPosition;
+    await WaitUntil (() => DroppedBananaNear (deathSpot) != null, 15, "victim's banana dropped in the death spot's column (#169)");
+    var drop = DroppedBananaNear (deathSpot)!;
+    // Ray-grounded (#151/#172): the drop rests on the level below the death spot -
+    // never floating above it, never down on the kill boundary at y=-100.
+    Assert (drop.GlobalPosition.Y > MinDropY && drop.GlobalPosition.Y < deathSpot.Y + 2.0f, $"dropped banana ray-grounded below the death spot (#151/#172), drop y {drop.GlobalPosition.Y:0.00} vs death y {deathSpot.Y:0.00}");
+    // Claimable: take it through the real claim path, before the drop expires. The
+    // only other banana in the level is the playtest one down in the arena, so
+    // starting empty-handed is what makes the wait below mean "the drop was claimed".
+    Assert (!Self.Holds (HeldWeapon.Banana), "reached the death-drop phase with no banana of our own (#169)");
+    Self.Position = drop.GlobalPosition;
+    await WaitUntil (() => Self.Holds (HeldWeapon.Banana), 10, "victim's dropped banana was claimable (#169)");
+    Self.Position = SpawnRoomCenter; // Back where the phases below expect to run.
+    await Task.Delay (300); // Settle onto the floor.
+    // That pickup auto-equipped the banana (#128) & the phases below count laser
+    // bolts, so put the laser back in hand first.
+    PressAction ("weapon_2");
+    await Task.Delay (100);
+    ReleaseAction ("weapon_2");
+    Assert (Self.SelectedWeapon == SelectedWeapon.Laser, "laser re-selected after the death-drop phase (#169)");
+  }
+
+  // The nearest live banana pickup around a spot, measured flat: the drop grounds onto
+  // whatever lies below, so its height is the one thing this search must not assume.
+  private WeaponPickup? DroppedBananaNear (Vector3 spot) => _world.GetChildren().OfType <WeaponPickup>().FirstOrDefault (pickup => pickup.Weapon == HeldWeapon.Banana && !pickup.IsQueuedForDeletion() && FlatDistance (pickup.GlobalPosition, spot) < DropSearchRadius);
+  private static float FlatDistance (Vector3 a, Vector3 b) => new Vector2 (a.X - b.X, a.Z - b.Z).Length();
+
   // Movement & death-feel batch (#171/#147/#148/#149/#150): crouch un-stick, the
   // hold-to-crouch setting, slide-jump chaining, & standing slide expiry. Runs on
   // the open arena ground - the paper-thin slab is the exact surface the #171
@@ -614,7 +660,7 @@ public partial class PlaytestDriver : Node
     Assert (!Self.Crouching, "expired slide ended standing, not crouched (#150)");
 
     // Back to the spawn room for the boomerang & slingshot pickup phases.
-    Self.Position = new Vector3 (0.0f, 31.0f, 0.0f);
+    Self.Position = SpawnRoomCenter;
     await Task.Delay (300);
   }
 
@@ -678,11 +724,21 @@ public partial class PlaytestDriver : Node
     var partialLaserHits = 0;
     var healthAfterPunch = Self.Health;
     Self.HealthChanged += value => partialLaserHits += value > 0 && value < healthAfterPunch ? 1 : 0;
+    // Death-drop coverage (#169): arm up AFTER the punch (a punch has a drop chance of
+    // its own, which would empty our hands again) & carry the banana to the fixed kill
+    // spot, so the kill actually runs RequestDrop's death path. Teleporting to the
+    // pickup & to the kill spot follows the fall-penalty phase's precedent below.
+    Self.Position = WeaponSpawner.PlaytestBananaPosition; // Down in the empty arena, then straight back up.
+    await WaitUntil (() => Self.Holds (HeldWeapon.Banana), 20, "collected the playtest banana before the kill (#169)");
+    Self.Position = KillSpot;
     // Death sequence (#152): the kill drops us where we stand for ~DeathSequenceSeconds
     // with the pulled-back death camera live, & only then the usual armored respawn.
     await WaitUntil (() => Self.Fallen, 120, "own death started the lie-down (#152)");
     var fallenStartMs = Time.GetTicksMsec();
     Assert (Self.IsDeathViewActive, "death camera pulled back over the death spot (#152)");
+    // The death drop runs before the lie-down starts (#169), so our hands are already
+    // empty here - the shooter asserts the pickup itself landed & is claimable.
+    Assert (Self.HeldWeapon == HeldWeapon.None, $"death dropped every carried weapon (#169), still holding {Self.HeldWeapon}");
     await WaitUntil (() => Self.SpawnArmor && Self.Health == Self.MaxHealth, 120, "died & respawned with armor & full health");
     var lieDownMs = Time.GetTicksMsec() - fallenStartMs;
     Assert (lieDownMs >= (ulong)(Self.DeathSequenceSeconds * 1000.0f) - 500, $"lay at the death spot ~{Self.DeathSequenceSeconds}s before respawning (#152), got {lieDownMs}ms");
