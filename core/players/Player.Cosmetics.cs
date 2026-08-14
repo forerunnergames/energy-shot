@@ -156,6 +156,7 @@ public partial class Player
     _healthTag.Scale = originalHealthTagScale * healthTagScaleFactor;
     _healthTag.Position = new Vector3 (_healthTag.Position.X, NameTagBaseHeight + verticalOffset - tagSpacing, _healthTag.Position.Z);
     UpdateCrownPlacement (scaleFactor, verticalOffset);
+    UpdateEatTagPlacement (scaleFactor, verticalOffset); // The "nom nom nom" cue rides along (issue #192).
   }
 
   // The crown rides clearly above the name tag & scales with it, so the leader is

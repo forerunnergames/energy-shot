@@ -7,8 +7,9 @@ namespace com.forerunnergames.energyshot.players;
 // Weapon lifecycle & selection (issues #72 & #82): players spawn with fists only &
 // arm up from world pickups; death drops everything held at the death spot. Slot 1 =
 // fists (always available), slot 2 = laser, slot 3 = banana, slot 4 = boomerang (#98),
-// slot 5 = slingshot (#99); guns are selectable only while held. The server-side
-// WeaponSpawner owns pickup spawning & the weapon caps.
+// slot 5 = slingshot (#99), slot 6 = paper airplane (#102), slot 7 = bread (#209);
+// everything but fists is selectable only while held. The server-side WeaponSpawner
+// owns pickup spawning & the weapon caps.
 public partial class Player
 {
   // Replicated like SpawnArmor so every peer knows what this player carries & renders
@@ -86,6 +87,7 @@ public partial class Player
   private bool HasSlingshot => Holds (HeldWeapon.Slingshot);
   private bool HasPaperAirplane => Holds (HeldWeapon.PaperAirplane);
   private bool IsFistsSelected => _selectedWeapon == SelectedWeapon.Fists;
+  private bool IsBreadSelected => _selectedWeapon == SelectedWeapon.Bread; // Slot 7 (issue #209).
   private bool IsLaserSelected => _selectedWeapon == SelectedWeapon.Laser;
   private bool IsBananaSelected => _selectedWeapon == SelectedWeapon.Banana;
   private bool IsBoomerangSelected => _selectedWeapon == SelectedWeapon.Boomerang;
@@ -121,6 +123,7 @@ public partial class Player
 
     _bread.TryEat();
     HeldWeapon &= ~HeldWeapon.Bread;
+    DeselectUnheldWeapon(); // An eaten, wasted, or dropped loaf can't stay in slot 7 (issue #209).
   }
 
   // Losing the stolen weapon ends the revenge window (CodeRabbit on #96): a fresh
@@ -135,7 +138,8 @@ public partial class Player
   // Runs on every peer via the replicated HeldWeapon & SelectedWeapon properties.
   private void UpdateWeaponVisibility()
   {
-    if (_bananaLauncher == null || _boomerangHeld == null || _slingshotHeld == null || _airplaneHeld == null) return;
+    if (_bananaLauncher == null || _boomerangHeld == null || _slingshotHeld == null || _airplaneHeld == null || _breadHeld == null) return;
+    _breadHeld.Visible = IsBreadSelected && HasBread; // Slot 7 (issue #209): everyone sees the loaf in hand.
     _energyWeapon.Visible = IsLaserSelected && HasLaser;
     _bananaLauncher.Visible = IsBananaSelected && HasBanana;
     _boomerangHeld.Visible = IsBoomerangSelected && HasBoomerang && !IsBoomerangOut; // Empty hand while it's out flying (issue #98).
@@ -149,17 +153,20 @@ public partial class Player
   private void UpdateWeaponSelection()
   {
     if (!_isInputEnabled) return;
+    if (Eating) return; // The eating ritual locks the slot you started it with (issue #192).
     if (Input.IsActionJustPressed ("weapon_1")) SelectedWeapon = SelectedWeapon.Fists;
     if (Input.IsActionJustPressed ("weapon_2") && HasLaser) SelectedWeapon = SelectedWeapon.Laser;
     if (Input.IsActionJustPressed ("weapon_3") && HasBanana) SelectedWeapon = SelectedWeapon.Banana;
     if (Input.IsActionJustPressed ("weapon_4") && HasBoomerang) SelectedWeapon = SelectedWeapon.Boomerang; // Slot 4 (issue #98).
     if (Input.IsActionJustPressed ("weapon_5") && HasSlingshot) SelectedWeapon = SelectedWeapon.Slingshot; // Slot 5 (issue #99).
     if (Input.IsActionJustPressed ("weapon_6") && HasPaperAirplane) SelectedWeapon = SelectedWeapon.PaperAirplane; // Slot 6 (issue #102).
+    if (Input.IsActionJustPressed ("weapon_7") && HasBread) SelectedWeapon = SelectedWeapon.Bread; // Slot 7 (issue #209).
   }
 
   // A dropped or lost gun can't stay selected: fall back to fists (issue #82).
   private void DeselectUnheldWeapon()
   {
+    if (IsBreadSelected && !HasBread) SelectedWeapon = SelectedWeapon.Fists; // An eaten or lost loaf (issue #209).
     if (IsLaserSelected && !HasLaser) SelectedWeapon = SelectedWeapon.Fists;
     if (IsBananaSelected && !HasBanana) SelectedWeapon = SelectedWeapon.Fists;
     if (IsBoomerangSelected && !HasBoomerang) SelectedWeapon = SelectedWeapon.Fists;
@@ -171,8 +178,9 @@ public partial class Player
   // the claimed pickup for everyone.
   public void GrantWeapon (HeldWeapon type, string previousOwner = "")
   {
-    // Bread has no slot & nothing to equip (issue #190): collecting a loaf just
-    // restocks this life's snack, eaten with B like always.
+    // Bread lives in slot 7 now (issue #209), but it's the one pickup that never
+    // auto-equips (issue #128): swapping a gun for a snack mid-fight is the last
+    // thing anyone wants. Press 7 when you actually mean to eat.
     if (type == HeldWeapon.Bread)
     {
       SetBreadHeld (isHeld: true);
@@ -268,6 +276,7 @@ public partial class Player
     ApplyOverlayMaterials (_boomerangHeld);
     ApplyOverlayMaterials (_slingshotHeld); // Slot 5 (issue #99).
     ApplyOverlayMaterials (_airplaneHeld); // Slot 6 (issue #102).
+    ApplyOverlayMaterials (_breadHeld); // Slot 7 (issue #209).
   }
 
   private void ApplyOverlayMaterials (Node node)

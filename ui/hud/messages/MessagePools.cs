@@ -257,6 +257,18 @@ public static class MessagePools
     "{z} filed {v}'s paper airplane under 'mine now'"
   };
 
+  // Zapped out mid-bread-ritual (issue #192): three rooted seconds is a long time to
+  // stand still, & everyone could see the loaf going up.
+  public static readonly List <string> ZappedEating = new()
+  {
+    "{z} zapped {v} mid-munch. The loaf never stood a chance",
+    "{v} paused for a snack & {z} paused {v}",
+    "{v} will be remembered for almost finishing that loaf, thanks to {z}",
+    "{z} has no respect for lunch, as {v} just found out",
+    "{v} chose bread. {z} chose the trigger",
+    "{v} took three whole seconds off. {z} needed one"
+  };
+
   // {z} zapped {v} with the weapon {v} dropped earlier.
   public static readonly List <string> TheftRevenge = new()
   {
@@ -272,6 +284,7 @@ public static class MessagePools
     Fall, FallStreak, Zapped, ThroughWall, FullCharge, FullAuto, Punch, PunchedOutArmed, FistsVsFists,
     BananaBlast, BananaDirect, HoldingBananaGun, ComboSplatterPunch, JumpShot, SlideShotKiller,
     SlideShotVictim, ZapStreakTier3, ZapStreakTier5, ZapStreakTier7, StreakEnded, StreakLost,
-    ZappedStreak, Boomerang, Slingshot, SlungItem, PaperAirplane, Landmine, AirplaneCatch, TheftRevenge
+    ZappedStreak, Boomerang, Slingshot, SlungItem, PaperAirplane, Landmine, AirplaneCatch, TheftRevenge,
+    ZappedEating
   };
 }

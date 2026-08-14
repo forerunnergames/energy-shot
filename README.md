@@ -12,6 +12,7 @@ A fast, friendly multiplayer laser-tag arena FPS built with Godot 4 (.NET/C#). N
 - **Spawn room**: you respawn in a room above the arena & drop back in when you're ready.
 - **Slingshot universal ammo**: with the slingshot out & empty, walking onto any world item *loads* it instead of collecting it — a dropped laser, the boomerang, someone's bread, even the paper airplane. Slung items fly the slingshot's draw-scaled arc & become ordinary pickups again wherever they land.
 - **The paper airplane**: exactly one in the arena, in slot 6. Thrown, it locks onto whoever was under your crosshair & glides after them — *their* screen fills with a red ring beeping faster & faster, then they catch fire & pop, strictly single-target, nobody near them harmed. Punch it out of the air to catch it & throw it back. A glide that never lands its target comes down **armed**: a landmine that picks whoever steps on it, or slingshot ammo for anyone with a slingshot out.
+- **The bread ritual**: your one-per-life loaf is slot 7. Left-click to eat & you're healed to full — after standing perfectly still for three seconds, rooted, with a reverse meter draining on your screen, the loaf raised to your face, crumbs falling, & a tag over your name telling the whole arena what you're doing. You can't cancel it; anyone who lands a hit on you can, & the loaf is wasted.
 - **Death drops everything**: weapons, your uneaten bread, & whatever's nocked in your slingshot all land where you fell.
 - **Leaderboard**, streak & zap messages with appropriately dry humor, low-health vignette, & more.
 
@@ -24,9 +25,9 @@ Full reference: [docs/CONTROLS.md](docs/CONTROLS.md) (movement, all 6 weapon slo
 | W A S D / Mouse / Space | Move, look, jump |
 | Left mouse | Use selected weapon — punch with fists, hold to charge laser / draw slingshot (fires whatever the slingshot is loaded with) |
 | Right mouse | Unbound (reserved) |
-| 1-6 | Fists, laser, banana, boomerang, slingshot, paper airplane |
+| 1-7 | Fists, laser, banana, boomerang, slingshot, paper airplane, bread |
 | Shift / C / V | Slide, crouch, first-/third-person |
-| F / B / G | Full-auto burst, eat bread, dance |
+| F / G | Full-auto burst, dance |
 | Tab | Message history |
 | . / , | Music vote up / down |
 | Esc | Quit dialog |

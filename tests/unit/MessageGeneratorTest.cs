@@ -12,15 +12,16 @@ public class MessageGeneratorTest
   private static DeathContext Laser (float energy = 0.5f) => new() { Kind = DamageKind.Laser, Energy = energy };
 
   [TestCase]
-  public void ExactlyOneHundredTwentyEightUniqueMessageTemplates()
+  public void ExactlyOneHundredThirtyFourUniqueMessageTemplates()
   {
     // 100 from the content wave (issue #84) + 3 through-wall zaps (issue #94)
     // + 4 boomerang zap-outs (issue #98) + 4 slingshot zap-outs (issue #99)
     // + 6 paper airplane zap-outs & 3 airplane catches (issues #102 & #191)
-    // + 4 slung-item zap-outs (issue #190) + 4 landmines (issue #191).
+    // + 4 slung-item zap-outs (issue #190) + 4 landmines (issue #191)
+    // + 6 zapped-mid-bread-ritual (issue #192).
     var templates = MessagePools.All.SelectMany (pool => pool).ToList();
-    AssertInt (templates.Count).IsEqual (128);
-    AssertInt (templates.Distinct().Count()).IsEqual (128);
+    AssertInt (templates.Count).IsEqual (134);
+    AssertInt (templates.Distinct().Count()).IsEqual (134);
   }
 
   [TestCase]
@@ -35,8 +36,8 @@ public class MessageGeneratorTest
   [TestCase]
   public void EveryPoolIsInTheRegistry()
   {
-    // 29 scenario pools registered, none empty.
-    AssertInt (MessagePools.All.Count).IsEqual (29);
+    // 30 scenario pools registered, none empty.
+    AssertInt (MessagePools.All.Count).IsEqual (30);
     foreach (var pool in MessagePools.All) AssertBool (pool.Count > 0).IsTrue();
   }
 
@@ -115,6 +116,24 @@ public class MessageGeneratorTest
     var message = MessageGenerator.OnAirplaneCatch ("Alice", "Bob");
     AssertBool (message.Contains ("Alice")).IsTrue();
     AssertBool (message.Contains ("Bob")).IsTrue();
+  }
+
+  [TestCase]
+  public void EatingPoolSelectedWhenZappedMidRitual()
+  {
+    // Standing rooted for three seconds is the whole story of that death (issue #192),
+    // so it beats the stance & carried-weapon flavors below it...
+    var eating = Laser() with { VictimEating = true };
+    AssertObject (MessageGenerator.SelectZappedPool (eating)).IsSame (MessagePools.ZappedEating);
+    AssertObject (MessageGenerator.SelectZappedPool (eating with { VictimHeldBananaGun = true })).IsSame (MessagePools.ZappedEating);
+    AssertObject (MessageGenerator.SelectZappedPool (eating with { KillerSliding = true, KillerAirborne = true })).IsSame (MessagePools.ZappedEating);
+    // ...but never the scenarios above it, so a future reorder can't quietly promote it.
+    AssertObject (MessageGenerator.SelectZappedPool (eating with { VictimLostStreak = 5 })).IsSame (MessagePools.StreakEnded);
+    AssertObject (MessageGenerator.SelectZappedPool (eating with { SplatterActive = true, BlurActive = true })).IsSame (MessagePools.ComboSplatterPunch);
+    AssertObject (MessageGenerator.SelectZappedPool (eating with { Kind = DamageKind.Punch })).IsSame (MessagePools.Punch);
+    AssertObject (MessageGenerator.SelectZappedPool (eating with { Kind = DamageKind.Boomerang })).IsSame (MessagePools.Boomerang);
+    // Not eating: nothing changes.
+    AssertObject (MessageGenerator.SelectZappedPool (Laser())).IsSame (MessagePools.Zapped);
   }
 
   [TestCase]

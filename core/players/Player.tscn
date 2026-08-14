@@ -123,6 +123,9 @@ properties/21/replication_mode = 2
 properties/22/path = NodePath(".:Burning")
 properties/22/spawn = true
 properties/22/replication_mode = 1
+properties/23/path = NodePath(".:Eating")
+properties/23/spawn = true
+properties/23/replication_mode = 1
 
 [node name="Player" type="CharacterBody3D"]
 collision_layer = 2

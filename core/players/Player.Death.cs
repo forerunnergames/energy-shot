@@ -34,6 +34,7 @@ public partial class Player
     Sliding = false;
     Crouching = false;
     Dancing = false;
+    Eating = false; // A body doesn't finish its sandwich (issue #192).
     Fallen = true;
     _slideJumpCarrying = false; // A corpse (& the next life) inherits no slide-jump momentum (issue #149).
     SetInputEnabled (isEnabled: false);
