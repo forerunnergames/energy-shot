@@ -162,10 +162,11 @@ public partial class SlingshotStone : Node3D
 
     // First contact ends the flight (issue #99): a live stone that met a player
     // reports the hit; anything else just stops the stone. Resting a hair OFF the
-    // surface, not exactly on it (issue #190): the server grounds a slung item by
-    // casting down from where it stopped, & a ray that starts exactly on a floor
-    // passes straight through it - which dropped items through the spawn-room slab
-    // onto the arena far below.
+    // surface, not exactly on it (issue #190): a ray that starts exactly on a floor
+    // passes straight through it, which dropped slung items through the spawn-room
+    // slab onto the arena far below. Issue #196 has since lifted the server's ground
+    // ray a metre too, so this is belt & braces - & it also keeps the resting item
+    // from z-fighting with whatever it landed against.
     GlobalPosition = (Vector3)hit["position"] + (Vector3)hit["normal"] * SurfaceClearance;
     End (hit["collider"].AsGodotObject() as Player);
   }

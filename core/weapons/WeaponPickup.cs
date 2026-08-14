@@ -174,10 +174,13 @@ public partial class WeaponPickup : Area3D
     return (local.GlobalPosition + Vector3.Up).DistanceTo (GlobalPosition) <= ClaimRangeMeters ? local : null;
   }
 
-  // A slingshot-equipped player loads ANY world item (issue #190), so the
-  // already-holds rule doesn't apply to them; an armed airplane is a mine anyone can
-  // set off (issue #191), except while armored, already alight, or lying through a
-  // death sequence - none of which should hand out a free detonation.
+  // A body mid-death-sequence is scenery (issues #152 & #196), so it can't go
+  // shopping - or step on mines: dying on top of your own drop used to hand it
+  // straight back a second later, undoing the whole point of dropping what you
+  // carried. Beyond that, a slingshot-equipped player loads ANY world item (issue
+  // #190), so the already-holds rule doesn't apply to them; & an armed airplane is a
+  // mine anyone can set off (issue #191), except while armored or already alight -
+  // neither of which should hand out a free detonation.
   private bool IsEligibleCollector (Player player)
   {
     if (!player.IsMultiplayerAuthority() || player.Fallen) return false;
