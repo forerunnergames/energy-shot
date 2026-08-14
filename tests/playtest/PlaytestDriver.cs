@@ -39,9 +39,6 @@ public partial class PlaytestDriver : Node
   // The drop grounds straight down from the death spot (#151), so it stays in that
   // XZ column; the radius only has to cover RequestDrop's per-weapon side offsets.
   private const float DropSearchRadius = 2.0f;
-  // Matches WeaponSpawner's MinGroundY (#172): anything below is the kill boundary
-  // under the arena, where a "grounded" drop is really an unreachable one.
-  private const float MinDropY = -50.0f;
   private World _world = null!;
   private string _role = string.Empty;
   private string _address = "127.0.0.1";
@@ -528,9 +525,11 @@ public partial class PlaytestDriver : Node
     var deathSpot = victim.GlobalPosition;
     await WaitUntil (() => DroppedBananaNear (deathSpot) != null, 15, "victim's banana dropped in the death spot's column (#169)");
     var drop = DroppedBananaNear (deathSpot)!;
-    // Ray-grounded (#151/#172): the drop rests on the level below the death spot -
-    // never floating above it, never down on the kill boundary at y=-100.
-    Assert (drop.GlobalPosition.Y > MinDropY && drop.GlobalPosition.Y < deathSpot.Y + 2.0f, $"dropped banana ray-grounded below the death spot (#151/#172), drop y {drop.GlobalPosition.Y:0.00} vs death y {deathSpot.Y:0.00}");
+    // Ray-grounded AT the death spot (#151/#172/#196): on the surface the body was
+    // standing on, not floating above it & not a storey below - the ground ray used
+    // to start at the player's feet, miss the floor underfoot, & drop weapons into
+    // the arena 30m down (or nowhere at all, out on the arena floor).
+    Assert (drop.GlobalPosition.Y > deathSpot.Y - 2.0f && drop.GlobalPosition.Y < deathSpot.Y + 2.0f, $"dropped banana grounded at the death spot (#196), drop y {drop.GlobalPosition.Y:0.00} vs death y {deathSpot.Y:0.00}");
     // Claimable: take it through the real claim path, before the drop expires. The
     // only other banana in the level is the playtest one down in the arena, so
     // starting empty-handed is what makes the wait below mean "the drop was claimed".

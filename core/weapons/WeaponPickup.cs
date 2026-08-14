@@ -115,7 +115,10 @@ public partial class WeaponPickup : Area3D
     return (local.GlobalPosition + Vector3.Up).DistanceTo (GlobalPosition) <= ClaimRangeMeters ? local : null;
   }
 
-  private bool IsEligibleCollector (Player player) => player.IsMultiplayerAuthority() && !player.Holds (Weapon);
+  // A body mid-death-sequence is scenery (issue #152), so it can't go shopping: dying
+  // on top of your own drop used to hand it straight back a second later, undoing the
+  // whole point of dropping what you carried.
+  private bool IsEligibleCollector (Player player) => player.IsMultiplayerAuthority() && !player.Fallen && !player.Holds (Weapon);
 
   private void UpdateVisuals()
   {
