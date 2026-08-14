@@ -108,6 +108,7 @@ public partial class Hud : Control
     CreateBreadSounds();
     _world.SelfPlayerPunched += OnSelfPlayerPunched;
     _world.SelfPlayerSplattered += OnSelfPlayerSplattered;
+    _world.SelfPlayerAirplaneCaught += OnSelfPlayerAirplaneCaught;
     _world.SelfPlayerAteBread += OnSelfPlayerAteBread;
     _world.SelfPlayerBreadDenied += OnSelfPlayerBreadDenied;
     GetNode <Timer> ("LeaderboardTimer").Timeout += UpdateLeaderboard;
@@ -266,6 +267,10 @@ public partial class Hud : Control
     _blurIntensity = Mathf.Min (1.0f, _blurIntensity + 0.4f);
     _blur.SetShaderParameter ("intensity", _blurIntensity);
   }
+
+  // The thrower saw its own airplane get punch-caught (issue #102): it picks the
+  // line once & broadcasts it, so every peer sees the same text (#53).
+  private void OnSelfPlayerAirplaneCaught (string catcherName, string throwerName) => Announce (MessageGenerator.OnAirplaneCatch (throwerName, catcherName));
 
   private void OnSelfPlayerSplattered()
   {

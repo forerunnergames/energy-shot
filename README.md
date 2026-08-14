@@ -14,14 +14,14 @@ A fast, friendly multiplayer laser-tag arena FPS built with Godot 4 (.NET/C#). N
 
 ## Controls
 
-Full reference: [docs/CONTROLS.md](docs/CONTROLS.md) (movement, all 5 weapon slots, abilities, music voting, & hidden mechanics).
+Full reference: [docs/CONTROLS.md](docs/CONTROLS.md) (movement, all 6 weapon slots, abilities, music voting, & hidden mechanics).
 
 | Input | Action |
 |---|---|
 | W A S D / Mouse / Space | Move, look, jump |
 | Left mouse | Use selected weapon — punch with fists, hold to charge laser / draw slingshot |
 | Right mouse | Unbound (reserved) |
-| 1-5 | Fists, laser, banana, boomerang, slingshot |
+| 1-6 | Fists, laser, banana, boomerang, slingshot, paper airplane |
 | Shift / C / V | Slide, crouch, first-/third-person |
 | F / B / G | Full-auto burst, eat bread, dance |
 | Tab | Message history |

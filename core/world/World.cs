@@ -17,6 +17,8 @@ public partial class World : Node3D
   [Signal] public delegate void SelfPlayerHealthChangedEventHandler (string playerName, int health);
   [Signal] public delegate void SelfPlayerPunchedEventHandler();
   [Signal] public delegate void SelfPlayerSplatteredEventHandler();
+  // Someone caught our own thrown paper airplane (issue #102); the thrower's HUD announces it.
+  [Signal] public delegate void SelfPlayerAirplaneCaughtEventHandler (string catcherName, string throwerName);
   // Bread feedback (issue #160): eaten + soft denied cues, forwarded to the HUD.
   [Signal] public delegate void SelfPlayerAteBreadEventHandler();
   [Signal] public delegate void SelfPlayerBreadDeniedEventHandler (bool isOut);
@@ -425,6 +427,7 @@ public partial class World : Node3D
     selfPlayer.HealthChanged += value => EmitSignal (SignalName.SelfPlayerHealthChanged, selfPlayer.DisplayName, value);
     selfPlayer.Punched += () => EmitSignal (SignalName.SelfPlayerPunched);
     selfPlayer.Splattered += () => EmitSignal (SignalName.SelfPlayerSplattered);
+    selfPlayer.AirplaneCaught += catcherName => EmitSignal (SignalName.SelfPlayerAirplaneCaught, catcherName, selfPlayer.DisplayName); // Issue #102.
     selfPlayer.BreadEaten += _ => EmitSignal (SignalName.SelfPlayerAteBread); // Bread feedback (issue #160).
     selfPlayer.BreadDenied += isOut => EmitSignal (SignalName.SelfPlayerBreadDenied, isOut);
     selfPlayer.Scored += (playerName, shotPlayerName) => EmitSignal (SignalName.PlayerScored, ++_score, playerName, shotPlayerName);

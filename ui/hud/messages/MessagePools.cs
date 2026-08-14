@@ -218,6 +218,24 @@ public static class MessagePools
     "physics homework by {z}: the arc ended on {v}"
   };
 
+  // Paper airplane zap-outs (issue #102).
+  public static readonly List <string> PaperAirplane = new()
+  {
+    "{z}'s paper airplane finally caught up with {v}",
+    "{v} lost a staring contest with {z}'s stationery",
+    "special delivery from {z}, signed for by {v}'s forehead",
+    "{v} forgot {z}'s paper airplane never forgets"
+  };
+
+  // Someone punched an incoming paper airplane out of the air (issue #102):
+  // {z} = the catcher, {v} = the thrower it's being returned to.
+  public static readonly List <string> AirplaneCatch = new()
+  {
+    "{z} snagged {v}'s paper airplane right out of the air",
+    "return to sender: {z} caught {v}'s paper airplane",
+    "{z} filed {v}'s paper airplane under 'mine now'"
+  };
+
   // {z} zapped {v} with the weapon {v} dropped earlier.
   public static readonly List <string> TheftRevenge = new()
   {
@@ -233,6 +251,6 @@ public static class MessagePools
     Fall, FallStreak, Zapped, ThroughWall, FullCharge, FullAuto, Punch, PunchedOutArmed, FistsVsFists,
     BananaBlast, BananaDirect, HoldingBananaGun, ComboSplatterPunch, JumpShot, SlideShotKiller,
     SlideShotVictim, ZapStreakTier3, ZapStreakTier5, ZapStreakTier7, StreakEnded, StreakLost,
-    ZappedStreak, Boomerang, Slingshot, TheftRevenge
+    ZappedStreak, Boomerang, Slingshot, PaperAirplane, AirplaneCatch, TheftRevenge
   };
 }

@@ -8,5 +8,6 @@ public enum SelectedWeapon
   Laser = 1,
   Banana = 2,
   Boomerang = 3,
-  Slingshot = 4
+  Slingshot = 4,
+  PaperAirplane = 5
 }
