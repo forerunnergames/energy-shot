@@ -282,7 +282,7 @@ public partial class PlaytestDriver : Node
 
     // Spawn armor absorbs punches outright (#48), & a victim that just respawned
     // still has ~5s of it - wait it out rather than spending swings on it.
-    await TryWaitUntil (() => !victim.SpawnArmor, 15);
+    await WaitUntil (() => !victim.SpawnArmor, 30, "victim's spawn armor expired before the punch phase (#48)");
 
     // The punch stun is TRANSIENT - 3s from the last landed punch - & the dance-cancel
     // wait below can legitimately burn 5s before we ever look at it, so sample it
@@ -306,12 +306,16 @@ public partial class PlaytestDriver : Node
     // every attempt - the victim is running its own phases & wanders off, & the
     // punch ray hits the FIRST body, so we stand on the side opposite the idle host
     // (an unlucky spawn once put it in front of the victim for all 10 attempts).
-    for (var attempt = 0; attempt < 10 && victim.Health >= healthBeforePunch; ++attempt)
+    for (var attempt = 0; attempt < 20 && victim.Health >= healthBeforePunch; ++attempt)
     {
       var awayFromHost = victim.GlobalPosition - host.GlobalPosition;
       var flatAway = new Vector3 (awayFromHost.X, 0.0f, awayFromHost.Z);
       Self.Position = victim.GlobalPosition + (flatAway.Length() > 0.5f ? flatAway.Normalized() : Vector3.Right) * 1.5f;
       await Task.Delay (150); // Settle before swinging.
+      // Their position reaches us over the wire, so on a lagging runner it can be
+      // stale by the time we arrive - & the victim is moving through its own phases.
+      // Don't spend the swing on thin air; take the spot again next pass.
+      if (Self.GlobalPosition.DistanceTo (victim.GlobalPosition) > Self.PunchRange * 0.75f) continue;
       AimAt (victim.GlobalPosition + Vector3.Up);
       PressLeftClick();
       await Task.Delay (80);
@@ -385,7 +389,7 @@ public partial class PlaytestDriver : Node
 
     // Victim must come back armored in the spawn room (~5s later now, #152).
     await WaitUntil (() => respawnArmorSeen, 30, "victim respawned with spawn armor");
-    await WaitUntil (() => !victim.Fallen, 10, "victim's body stood back up on respawn (#152)");
+    await WaitUntil (() => !victim.Fallen, 30, "victim's body stood back up on respawn (#152)");
 
     // Streak glow bug (#88): the kill ended the victim's streak; the reset must
     // replicate here so the glow & pulsing leaderboard entry clear.
@@ -750,10 +754,20 @@ public partial class PlaytestDriver : Node
     PressAction ("slide");
     await WaitUntil (() => Self.Sliding, 10, "slide started for the window-expiry test (#149)");
     await Task.Delay (200);
-    PressAction ("jump");
-    await Task.Delay (100);
-    ReleaseAction ("jump");
-    await WaitUntil (() => !Self.Sliding, 10, "jump ended the window-expiry slide (#149)");
+    // Re-press like the chain test does: a swallowed press would otherwise let the
+    // slide expire on its own & the phase would pass having never jumped at all.
+    for (var attempt = 0; attempt < 5 && Self.Sliding; ++attempt)
+    {
+      PressAction ("jump");
+      await Task.Delay (100);
+      ReleaseAction ("jump");
+      await TryWaitUntil (() => !Self.Sliding, 2);
+    }
+
+    Assert (!Self.Sliding, "jump ended the window-expiry slide (#149)");
+    // Only a slide-JUMP clears the cooldown (#149); a slide that merely ran out
+    // leaves it recharging, so this is the evidence that the jump landed.
+    Assert (Self.SlideReadyFraction >= 1.0f, "the window-expiry slide was ended by a jump, not by expiry (#149)");
     ReleaseAction ("slide");
     await WaitUntil (() => Self.IsOnFloor(), 10, "landed from the window-expiry slide-jump (#149)");
     Input.ActionRelease ("move_forward");
