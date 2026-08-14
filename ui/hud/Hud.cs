@@ -25,12 +25,19 @@ public partial class Hud : Control
   private ShaderMaterial _vignette = null!;
   private ShaderMaterial _blur = null!;
   private ShaderMaterial _splatter = null!;
+  // The overlay nodes themselves, so they can be hidden while idle (issue #200):
+  // a visible full-screen ColorRect runs its fragment shader over every pixel of
+  // every frame even when it draws nothing at all.
+  private ColorRect _blurRect = null!;
+  private ColorRect _splatterRect = null!;
+  private ColorRect _vignetteRect = null!;
   private CooldownMeter _shotMeter = null!;
   private CooldownMeter _slideMeter = null!;
   private CooldownMeter _fullAutoMeter = null!;
   private CooldownMeter _bananaMeter = null!;
   private TextureRect _breadIcon = null!;
   private AudioStreamPlayer _munchSound = null!;
+  private AudioStreamPlayer _lockOnSound = null!;
   private AudioStreamPlayer _breadDeniedSound = null!;
   private ColorRect _deathOverlay = null!;
   private Label _deathCountdown = null!;
@@ -59,7 +66,11 @@ public partial class Hud : Control
   private void UpdateVignette (int health)
   {
     var threshold = 0.4f * (float)_healthBar.MaxValue;
-    _vignette.SetShaderParameter ("intensity", Mathf.Clamp (1.0f - health / threshold, 0.0f, 1.0f));
+    var intensity = Mathf.Clamp (1.0f - health / threshold, 0.0f, 1.0f);
+    _vignette.SetShaderParameter ("intensity", intensity);
+    // Above the threshold it draws nothing, so stop drawing it: three full-screen
+    // blended quads per frame is real fill-rate at retina resolutions (issue #200).
+    _vignetteRect.Visible = intensity > 0.0f;
   }
 
   private void UpdateLeaderboard()
@@ -99,17 +110,26 @@ public partial class Hud : Control
     _scoreLabel = GetNode <Label> ("VBoxContainer/Score/Label");
     _leaderboardEntries = GetNode <RichTextLabel> ("Leaderboard/MarginContainer/VBoxContainer/Entries");
     _vignette = (ShaderMaterial)GetNode <ColorRect> ("Vignette").Material;
-    _blur = (ShaderMaterial)GetNode <ColorRect> ("Blur").Material;
-    _splatter = (ShaderMaterial)GetNode <ColorRect> ("Splatter").Material;
+    _vignetteRect = GetNode <ColorRect> ("Vignette");
+    _blurRect = GetNode <ColorRect> ("Blur");
+    _splatterRect = GetNode <ColorRect> ("Splatter");
+    _blur = (ShaderMaterial)_blurRect.Material;
+    _splatter = (ShaderMaterial)_splatterRect.Material;
+    _blurRect.Visible = false;
+    _splatterRect.Visible = false;
+    _vignetteRect.Visible = false; // Shown by UpdateVignette once health drops (issue #200).
     _shotMeter = GetNode <CooldownMeter> ("CooldownMeters/Shot");
     _slideMeter = GetNode <CooldownMeter> ("CooldownMeters/Slide");
     _fullAutoMeter = GetNode <CooldownMeter> ("CooldownMeters/FullAuto");
     _bananaMeter = GetNode <CooldownMeter> ("CooldownMeters/Banana");
     _breadIcon = GetNode <TextureRect> ("VBoxContainer/Bread/Icon");
     CreateBreadSounds();
+    _lockOnSound = new AudioStreamPlayer { Stream = ProceduralSounds.LockOn(), MaxPolyphony = 2 }; // Issue #211.
+    AddChild (_lockOnSound);
     _world.SelfPlayerPunched += OnSelfPlayerPunched;
     _world.SelfPlayerSplattered += OnSelfPlayerSplattered;
     _world.SelfPlayerAirplaneCaught += OnSelfPlayerAirplaneCaught;
+    _world.SelfPlayerAirplaneLockAcquired += () => _lockOnSound.Play(); // Issue #211.
     _world.SelfPlayerAteBread += OnSelfPlayerAteBread;
     _world.SelfPlayerBreadDenied += OnSelfPlayerBreadDenied;
     GetNode <Timer> ("LeaderboardTimer").Timeout += UpdateLeaderboard;
@@ -193,7 +213,12 @@ public partial class Hud : Control
 
   // The ring only ever reads OUR own incoming-airplane threat (issue #191), so no
   // other player's screen can be lit up by somebody else's hazard.
-  private void UpdateTargetRing() => _targetRing.SetThreat (Visible ? _world.SelfPlayer?.AirplaneThreatFraction ?? 0.0f : 0.0f);
+  private void UpdateTargetRing()
+  {
+    var self = Visible ? _world.SelfPlayer : null;
+    _targetRing.SetThreat (self?.AirplaneThreatFraction ?? 0.0f);
+    _targetRing.SetLocked (self?.HasAirplaneLock ?? false); // Thrower's lock-on (issue #205).
+  }
 
   // Bread munch & soft denied cues are code-generated (issue #160): no downloaded assets.
   private void CreateBreadSounds()
@@ -231,6 +256,9 @@ public partial class Hud : Control
     var fadePerSecond = Mathf.Lerp (0.25f, 0.1f, _blurIntensity);
     _blurIntensity = Mathf.Max (0.0f, _blurIntensity - fadePerSecond * (float)delta);
     _blur.SetShaderParameter ("intensity", _blurIntensity);
+    // Sampling the screen texture forces a back-buffer copy, so the node only
+    // stays up while there's actually blur to draw (issue #200).
+    _blurRect.Visible = _blurIntensity > 0.0f;
   }
 
   // The splat slides slowly down the screen & fades out with the banana stun (issue #70).
@@ -241,6 +269,9 @@ public partial class Hud : Control
     _splatterSlide += SplatterSlidePerSecond * (float)delta;
     _splatter.SetShaderParameter ("slide", _splatterSlide);
     _splatter.SetShaderParameter ("intensity", _splatterSecondsLeft / SplatterSeconds);
+    // 24 wobbling goo chunks per pixel is a real cost, & it was being paid every
+    // frame of every match - the node only stays up while goo is on screen (#200).
+    _splatterRect.Visible = _splatterSecondsLeft > 0.0f;
   }
 
   // Tiny center-screen meters near the crosshair (issue #177), each visible only
@@ -281,6 +312,7 @@ public partial class Hud : Control
   private void OnSelfPlayerPunched()
   {
     _blurIntensity = Mathf.Min (1.0f, _blurIntensity + 0.4f);
+    _blurRect.Visible = true; // Idle-hidden until something actually blurs (issue #200).
     _blur.SetShaderParameter ("intensity", _blurIntensity);
   }
 
@@ -291,6 +323,7 @@ public partial class Hud : Control
   private void OnSelfPlayerSplattered()
   {
     _splatterSecondsLeft = SplatterSeconds;
+    _splatterRect.Visible = true; // Idle-hidden until there's goo to draw (issue #200).
     _splatterSlide = 0.0f;
     _splatter.SetShaderParameter ("slide", 0.0f);
     _splatter.SetShaderParameter ("intensity", 1.0f);
