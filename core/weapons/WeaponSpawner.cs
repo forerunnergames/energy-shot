@@ -34,6 +34,14 @@ public partial class WeaponSpawner : Node3D
   public static readonly Vector3 PlaytestBoomerangPosition = new(3.0f, 31.1f, 5.0f);
   // Playtest-only (#99): same idea for the slingshot draw/release phase.
   public static readonly Vector3 PlaytestSlingshotPosition = new(-3.0f, 31.1f, 5.0f);
+  // Playtest-only (#169): the victim arms up here before the kill phase, so the death
+  // drop has something to drop - RequestDrop's death path had no coverage at all,
+  // which is how the #167 vanishing-weapon regression reached players. Down in the
+  // empty arena rather than the spawn room: every spot in that small room is within
+  // claim reach of the +/-4 random spawn scatter (observed: a joining peer grabbed
+  // it seconds after spawning), & a stray banana in someone's hands would make the
+  // death-drop phase's claim assert meaningless.
+  public static readonly Vector3 PlaytestBananaPosition = new(0.0f, 0.9f, -40.0f);
   // Playtest-only (#191): same idea for the landmine phase. Tucked into the spawn
   // room's far corner - clear of the other three pickups AND of the +/-4 random
   // spawn scatter, so nobody trips the mine just by spawning next to it.
@@ -193,13 +201,14 @@ public partial class WeaponSpawner : Node3D
   }
 
   // Playtest-only (#72 & #98): keeps deterministic pickups available in the spawn
-  // room for the driver's collection, shooting, & throw/catch phases.
+  // room for the driver's collection, shooting, throw/catch, & death-drop phases.
   private void EnsurePlaytestPickups (List <WeaponPickup> pickups)
   {
     if (!_isPlaytest) return;
     EnsurePlaytestPickup (HeldWeapon.Laser, PlaytestLaserPosition, pickups);
     EnsurePlaytestPickup (HeldWeapon.Boomerang, PlaytestBoomerangPosition, pickups);
     EnsurePlaytestPickup (HeldWeapon.Slingshot, PlaytestSlingshotPosition, pickups); // Issue #99.
+    EnsurePlaytestPickup (HeldWeapon.Banana, PlaytestBananaPosition, pickups); // Issue #169.
   }
 
   private void EnsurePlaytestPickup (HeldWeapon type, Vector3 position, List <WeaponPickup> pickups)
