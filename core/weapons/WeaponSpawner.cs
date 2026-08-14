@@ -211,6 +211,17 @@ public partial class WeaponSpawner : Node3D
       return;
     }
 
+    // A body mid-death-sequence is scenery (issue #152), so it can't claim anything
+    // (CodeRabbit on #199): the collector's own peer already refuses, but the server
+    // is what actually awards, so it enforces the rule too.
+    var collector = Players().FirstOrDefault (player => player.NetworkId == collectorId);
+
+    if (collector is { Fallen: true })
+    {
+      ServerLog.Event (collectorId, $"weapon deny: pickup [{pickupName}] claimed while lying dead");
+      return;
+    }
+
     var pickup = GetParent().GetNodeOrNull <WeaponPickup> (pickupName);
     ServerLog.Event (collectorId, $"weapon claim: pickup [{pickupName}]");
 
