@@ -1,6 +1,8 @@
-[gd_scene load_steps=15 format=3 uid="uid://cobme7o27cxru"]
+[gd_scene load_steps=16 format=3 uid="uid://cobme7o27cxru"]
 
 [ext_resource type="Script" path="res://ui/hud/Hud.cs" id="1_5s36p"]
+[ext_resource type="Script" path="res://ui/hud/CooldownMeter.cs" id="1_cldmtr"]
+[ext_resource type="Texture2D" uid="uid://bgn55fmmm2khe" path="res://assets/items/Bread.png" id="2_bread"]
 [ext_resource type="PackedScene" uid="uid://huun2vjv0k1v" path="res://ui/hud/messages/MessageScroller.tscn" id="1_6ovnf"]
 [ext_resource type="PackedScene" uid="uid://bmpjrf8pqokyu" path="res://ui/dialogs/confirm/ConfirmationDialog2.tscn" id="3_v7kl8"]
 [ext_resource type="Shader" path="res://ui/hud/vignette.gdshader" id="4_vgntt"]
@@ -20,6 +22,7 @@ shader_parameter/intensity = 0.0
 shader = ExtResource("6_spltr")
 shader_parameter/intensity = 0.0
 shader_parameter/slide = 0.0
+shader_parameter/seed = 0.0
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_ldrbd"]
 bg_color = Color(0, 0, 0, 0.392157)
@@ -117,85 +120,19 @@ max_value = 200.0
 value = 200.0
 show_percentage = false
 
-[node name="Cooldowns" type="VBoxContainer" parent="VBoxContainer"]
+[node name="Bread" type="MarginContainer" parent="VBoxContainer"]
 layout_mode = 2
-theme_override_constants/separation = 4
+theme_override_constants/margin_left = 15
+theme_override_constants/margin_top = 5
 
-[node name="Shot" type="HBoxContainer" parent="VBoxContainer/Cooldowns"]
+[node name="Icon" type="TextureRect" parent="VBoxContainer/Bread"]
+custom_minimum_size = Vector2(56, 56)
 layout_mode = 2
-
-[node name="Label" type="Label" parent="VBoxContainer/Cooldowns/Shot"]
-custom_minimum_size = Vector2(220, 0)
-layout_mode = 2
-theme_override_font_sizes/font_size = 28
-text = "Shot"
-
-[node name="Bar" type="ProgressBar" parent="VBoxContainer/Cooldowns/Shot"]
-custom_minimum_size = Vector2(0, 22)
-layout_mode = 2
-size_flags_horizontal = 3
-size_flags_vertical = 4
-max_value = 1.0
-step = 0.01
-value = 1.0
-show_percentage = false
-
-[node name="Slide" type="HBoxContainer" parent="VBoxContainer/Cooldowns"]
-layout_mode = 2
-
-[node name="Label" type="Label" parent="VBoxContainer/Cooldowns/Slide"]
-custom_minimum_size = Vector2(220, 0)
-layout_mode = 2
-theme_override_font_sizes/font_size = 28
-text = "Slide"
-
-[node name="Bar" type="ProgressBar" parent="VBoxContainer/Cooldowns/Slide"]
-custom_minimum_size = Vector2(0, 22)
-layout_mode = 2
-size_flags_horizontal = 3
-size_flags_vertical = 4
-max_value = 1.0
-step = 0.01
-value = 1.0
-show_percentage = false
-
-[node name="FullAuto" type="HBoxContainer" parent="VBoxContainer/Cooldowns"]
-layout_mode = 2
-
-[node name="Label" type="Label" parent="VBoxContainer/Cooldowns/FullAuto"]
-custom_minimum_size = Vector2(220, 0)
-layout_mode = 2
-theme_override_font_sizes/font_size = 28
-text = "Full-Auto"
-
-[node name="Bar" type="ProgressBar" parent="VBoxContainer/Cooldowns/FullAuto"]
-custom_minimum_size = Vector2(0, 22)
-layout_mode = 2
-size_flags_horizontal = 3
-size_flags_vertical = 4
-max_value = 1.0
-step = 0.01
-value = 1.0
-show_percentage = false
-
-[node name="Banana" type="HBoxContainer" parent="VBoxContainer/Cooldowns"]
-layout_mode = 2
-
-[node name="Label" type="Label" parent="VBoxContainer/Cooldowns/Banana"]
-custom_minimum_size = Vector2(220, 0)
-layout_mode = 2
-theme_override_font_sizes/font_size = 28
-text = "Banana"
-
-[node name="Bar" type="ProgressBar" parent="VBoxContainer/Cooldowns/Banana"]
-custom_minimum_size = Vector2(0, 22)
-layout_mode = 2
-size_flags_horizontal = 3
-size_flags_vertical = 4
-max_value = 1.0
-step = 0.01
-value = 1.0
-show_percentage = false
+size_flags_horizontal = 0
+mouse_filter = 2
+texture = ExtResource("2_bread")
+expand_mode = 1
+stretch_mode = 5
 
 [node name="Score" type="MarginContainer" parent="VBoxContainer"]
 layout_mode = 2
@@ -206,6 +143,126 @@ layout_mode = 2
 theme_override_font_sizes/font_size = 60
 text = "Score: 0"
 vertical_alignment = 1
+
+[node name="CooldownMeters" type="VBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -78.0
+offset_top = 34.0
+offset_right = 78.0
+offset_bottom = 110.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 3
+mouse_filter = 2
+
+[node name="Shot" type="HBoxContainer" parent="CooldownMeters"]
+modulate = Color(1, 1, 1, 0)
+layout_mode = 2
+theme_override_constants/separation = 8
+mouse_filter = 2
+script = ExtResource("1_cldmtr")
+
+[node name="Label" type="Label" parent="CooldownMeters/Shot"]
+custom_minimum_size = Vector2(52, 0)
+layout_mode = 2
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 3
+theme_override_font_sizes/font_size = 13
+text = "Shot"
+horizontal_alignment = 2
+
+[node name="Bar" type="ProgressBar" parent="CooldownMeters/Shot"]
+custom_minimum_size = Vector2(96, 6)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+max_value = 1.0
+step = 0.01
+value = 1.0
+show_percentage = false
+
+[node name="Slide" type="HBoxContainer" parent="CooldownMeters"]
+modulate = Color(1, 1, 1, 0)
+layout_mode = 2
+theme_override_constants/separation = 8
+mouse_filter = 2
+script = ExtResource("1_cldmtr")
+
+[node name="Label" type="Label" parent="CooldownMeters/Slide"]
+custom_minimum_size = Vector2(52, 0)
+layout_mode = 2
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 3
+theme_override_font_sizes/font_size = 13
+text = "Slide"
+horizontal_alignment = 2
+
+[node name="Bar" type="ProgressBar" parent="CooldownMeters/Slide"]
+custom_minimum_size = Vector2(96, 6)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+max_value = 1.0
+step = 0.01
+value = 1.0
+show_percentage = false
+
+[node name="FullAuto" type="HBoxContainer" parent="CooldownMeters"]
+modulate = Color(1, 1, 1, 0)
+layout_mode = 2
+theme_override_constants/separation = 8
+mouse_filter = 2
+script = ExtResource("1_cldmtr")
+
+[node name="Label" type="Label" parent="CooldownMeters/FullAuto"]
+custom_minimum_size = Vector2(52, 0)
+layout_mode = 2
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 3
+theme_override_font_sizes/font_size = 13
+text = "Auto"
+horizontal_alignment = 2
+
+[node name="Bar" type="ProgressBar" parent="CooldownMeters/FullAuto"]
+custom_minimum_size = Vector2(96, 6)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+max_value = 1.0
+step = 0.01
+value = 1.0
+show_percentage = false
+
+[node name="Banana" type="HBoxContainer" parent="CooldownMeters"]
+modulate = Color(1, 1, 1, 0)
+layout_mode = 2
+theme_override_constants/separation = 8
+mouse_filter = 2
+script = ExtResource("1_cldmtr")
+
+[node name="Label" type="Label" parent="CooldownMeters/Banana"]
+custom_minimum_size = Vector2(52, 0)
+layout_mode = 2
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 3
+theme_override_font_sizes/font_size = 13
+text = "Banana"
+horizontal_alignment = 2
+
+[node name="Bar" type="ProgressBar" parent="CooldownMeters/Banana"]
+custom_minimum_size = Vector2(96, 6)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+max_value = 1.0
+step = 0.01
+value = 1.0
+show_percentage = false
 
 [node name="Leaderboard" type="PanelContainer" parent="."]
 layout_mode = 1

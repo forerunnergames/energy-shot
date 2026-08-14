@@ -5,7 +5,7 @@ A fast, friendly multiplayer laser-tag arena FPS built with Godot 4 (.NET/C#). N
 ## How it plays
 
 - **Charge-up lasers**: hold the trigger to spin up your energy weapon — the longer the charge, the faster, bigger, & meaner the bolt (blue → red). Release to fire a visible laser burst that travels (with a little drop), so shots can be dodged.
-- **Punching**: right-click for close-range brawling. Getting punched blurs your screen for a bit.
+- **Punching**: with fists out (slot 1), left-click for close-range brawling. Getting punched blurs your screen for a bit.
 - **Full-auto ability**: press F for 3 seconds of low-damage rapid fire (15 s cooldown).
 - **Difficulty handicap**: pick Beginner / Intermediate / Expert when you join. Lower tiers get bigger health pools *and* hit higher tiers harder, so mixed-skill lobbies stay fair.
 - **Spawn armor**: 5 seconds of invulnerability after every spawn (white glow). Firing or punching cancels it.
@@ -19,8 +19,8 @@ Full reference: [docs/CONTROLS.md](docs/CONTROLS.md) (movement, all 6 weapon slo
 | Input | Action |
 |---|---|
 | W A S D / Mouse / Space | Move, look, jump |
-| Left mouse | Fire selected weapon (hold to charge laser / draw slingshot) |
-| Right mouse | Punch (fists) |
+| Left mouse | Use selected weapon — punch with fists, hold to charge laser / draw slingshot |
+| Right mouse | Unbound (reserved) |
 | 1-6 | Fists, laser, banana, boomerang, slingshot, paper airplane |
 | Shift / C / V | Slide, crouch, first-/third-person |
 | F / B / G | Full-auto burst, eat bread, dance |

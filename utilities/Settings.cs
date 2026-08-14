@@ -15,8 +15,10 @@ public static class Settings
     set => Set ("name", value);
   }
 
-  // First-time players get the official dedicated server pre-filled.
-  public const string OfficialServerAddress = "137.184.43.105";
+  // First-time players get the official dedicated server pre-filled. A hostname
+  // instead of a raw IP (issue #138): ENet resolves it, & the client survives any
+  // future server IP change.
+  public const string OfficialServerAddress = "es1.forerunner.games";
 
   public static string LastJoinAddress
   {

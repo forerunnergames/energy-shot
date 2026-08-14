@@ -40,6 +40,14 @@ public partial class WeaponSpawner : Node3D
   // between the grab & the thrower's catch, so the caps still count them.
   private readonly record struct BoomerangCargo (int OwnerId, HeldWeapon Type, string PreviousOwner);
   private readonly List <BoomerangCargo> _escrow = new();
+  // Award->replication bridge (issue #154): between despawning a claimed pickup (or
+  // delivering escrowed cargo) & the collector's replicated HeldWeapon showing the
+  // weapon, the count dips below the cap - a reconcile pass in that window would
+  // spawn a duplicate. Pending grants keep the weapon counted until the flag lands;
+  // the timeout covers a collector that vanishes mid-grant (the caps then respawn it).
+  private readonly record struct PendingGrant (int CollectorId, HeldWeapon Type, ulong ExpiresAtMs);
+  private readonly List <PendingGrant> _pendingGrants = new();
+  private const float PendingGrantTimeoutSeconds = 3.0f;
   private readonly RandomNumberGenerator _rng = new();
   private readonly List <Vector3> _laserPoints = new();
   private PackedScene _pickupScene = null!;
@@ -64,7 +72,12 @@ public partial class WeaponSpawner : Node3D
   // The paper airplane's catch handoff (issue #102) rides the same grace: between
   // the thrower's replicated clear & the catcher's replicated grant, the thrower
   // still counts it, so the exactly-one invariant holds across the handoff.
-  private int Count (HeldWeapon type, List <WeaponPickup> pickups, List <Player> players) => pickups.Count (pickup => pickup.Weapon == type) + players.Count (player => (player.HeldOrRecentlyHeld & type) != 0) + _escrow.Count (cargo => cargo.Type == type);
+  // Pending grants bridge the award->replication window the same way (issue #154).
+  private int Count (HeldWeapon type, List <WeaponPickup> pickups, List <Player> players) => pickups.Count (pickup => pickup.Weapon == type) + players.Count (player => (player.HeldOrRecentlyHeld & type) != 0) + _escrow.Count (cargo => cargo.Type == type) + _pendingGrants.Count (grant => grant.Type == type);
+  private void TrackPendingGrant (int collectorId, HeldWeapon type) => _pendingGrants.Add (new PendingGrant (collectorId, type, Time.GetTicksMsec() + (ulong)(PendingGrantTimeoutSeconds * 1000.0f))); // Issue #154.
+  // A pending grant ends when the collector's replicated HeldWeapon shows the weapon
+  // (it counts as held from then on) or the timeout passes (issue #154).
+  private void PrunePendingGrants (List <Player> players) => _pendingGrants.RemoveAll (grant => Time.GetTicksMsec() > grant.ExpiresAtMs || players.Any (player => player.NetworkId == grant.CollectorId && player.Holds (grant.Type)));
   private void GrantToSelf (int type, string previousOwner) => (GetParent() as World)?.SelfPlayer?.GrantWeapon ((HeldWeapon)type, previousOwner);
   [Rpc] private void ConfirmPickup (int type, string previousOwner) => GrantToSelf (type, previousOwner);
   // A direct (non-RPC) call means the host itself sent it, so there's no remote sender.
@@ -124,6 +137,7 @@ public partial class WeaponSpawner : Node3D
     _escrow.RemoveAll (cargo => players.All (player => player.NetworkId != cargo.OwnerId));
     // Same for airplane flights whose thrower disconnected (CodeRabbit on #180).
     _airplaneFlights.RemoveWhere (throwerId => players.All (player => player.NetworkId != throwerId));
+    PrunePendingGrants (players); // Delivered or expired award bridges stop counting (issue #154).
     var freePoints = _laserPoints.Where (point => IsFree (point, pickups)).ToList();
     var laserCount = Count (HeldWeapon.Laser, pickups, players);
 
@@ -198,6 +212,15 @@ public partial class WeaponSpawner : Node3D
   private void RequestPickup (string pickupName, int collectorId)
   {
     if (!Multiplayer.IsServer()) return;
+
+    // Claims are always filed by the collecting player's own peer (CodeRabbit on
+    // #184): a forged collectorId can't award (or deny) weapons to someone else.
+    if (collectorId != SenderOrSelf())
+    {
+      ServerLog.Event (SenderOrSelf(), $"weapon deny: claim for another peer [{collectorId}]");
+      return;
+    }
+
     var pickup = GetParent().GetNodeOrNull <WeaponPickup> (pickupName);
     ServerLog.Event (collectorId, $"weapon claim: pickup [{pickupName}]");
 
@@ -214,10 +237,11 @@ public partial class WeaponSpawner : Node3D
 
     if (collectorId == Multiplayer.GetUniqueId())
     {
-      GrantToSelf ((int)type, previousOwner);
+      GrantToSelf ((int)type, previousOwner); // Synchronous: the server's own HeldWeapon shows it immediately.
       return;
     }
 
+    TrackPendingGrant (collectorId, type); // Bridge until the collector's HeldWeapon replicates back (issue #154).
     RpcId (collectorId, MethodName.ConfirmPickup, (int)type, previousOwner);
   }
 
@@ -299,6 +323,17 @@ public partial class WeaponSpawner : Node3D
   {
     if (!Multiplayer.IsServer()) return;
     var throwerId = SenderOrSelf();
+    var thrower = Players().FirstOrDefault (player => player.NetworkId == throwerId);
+
+    // Server-side state check (CodeRabbit on #184, the #145/#167 convention): only a
+    // boomerang carrier can have one out flying to scoop with (the flag stays set
+    // through the whole flight).
+    if (thrower == null || (thrower.HeldOrRecentlyHeld & HeldWeapon.Boomerang) == 0)
+    {
+      ServerLog.Event (throwerId, "boomerang scoop deny: sender does not hold a boomerang");
+      return;
+    }
+
     var pickup = GetParent().GetNodeOrNull <WeaponPickup> (pickupName);
 
     if (pickup == null || pickup.IsQueuedForDeletion())
@@ -315,14 +350,35 @@ public partial class WeaponSpawner : Node3D
   // A boomerang hit stole the victim's held weapon. The victim reports its own loss
   // (it owns its replicated HeldWeapon), so the theft attribution for the revenge
   // messages (issue #84) comes from the RPC sender - never client-supplied text.
+  // The surrendered type is validated the same way (CodeRabbit on #184, the
+  // #145/#167 convention): it must show in the victim's replicated state (current
+  // or drop-grace), reduced to a single flag so a forged multi-flag mask can't
+  // conjure weapons into escrow.
   [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
   private void RequestBoomerangEscrow (int throwerId, int type)
   {
     if (!Multiplayer.IsServer()) return;
     var victimId = SenderOrSelf();
-    var victimName = Players().FirstOrDefault (player => player.NetworkId == victimId)?.DisplayName ?? string.Empty;
-    _escrow.Add (new BoomerangCargo (throwerId, (HeldWeapon)type, victimName));
-    ServerLog.Event (victimId, $"boomerang steal: {(HeldWeapon)type} taken from [{victimName}] for peer {throwerId}");
+    var victim = Players().FirstOrDefault (player => player.NetworkId == victimId);
+    var surrendered = FirstFlag ((HeldWeapon)type & (victim?.HeldOrRecentlyHeld ?? HeldWeapon.None));
+
+    if (surrendered == HeldWeapon.None)
+    {
+      ServerLog.Event (victimId, $"boomerang steal deny: mask [{(HeldWeapon)type}] not held by sender");
+      return;
+    }
+
+    var victimName = victim!.DisplayName; // Non-null: the mask intersection above proved the sender exists.
+    _escrow.Add (new BoomerangCargo (throwerId, surrendered, victimName));
+    ServerLog.Event (victimId, $"boomerang steal: {surrendered} taken from [{victimName}] for peer {throwerId}");
+  }
+
+  // Escrow & pickups carry exactly one weapon each: reduce a validated mask to its
+  // first flag so downstream Spawn/Deliver never see a multi-flag type (issue #184).
+  private static HeldWeapon FirstFlag (HeldWeapon mask)
+  {
+    foreach (var flag in new[] { HeldWeapon.Laser, HeldWeapon.Banana, HeldWeapon.Boomerang, HeldWeapon.Slingshot }) { if ((mask & flag) != 0) return flag; }
+    return HeldWeapon.None;
   }
 
   // The thrower caught the boomerang: deliver all escrowed cargo. Grants reuse the
@@ -357,10 +413,11 @@ public partial class WeaponSpawner : Node3D
 
     if (throwerId == Multiplayer.GetUniqueId())
     {
-      GrantToSelf ((int)cargo.Type, cargo.PreviousOwner);
+      GrantToSelf ((int)cargo.Type, cargo.PreviousOwner); // Synchronous: the server's own HeldWeapon shows it immediately.
       return;
     }
 
+    TrackPendingGrant (throwerId, cargo.Type); // Bridge until the thrower's HeldWeapon replicates back (issue #154).
     RpcId (throwerId, MethodName.ConfirmPickup, (int)cargo.Type, cargo.PreviousOwner);
   }
 
@@ -456,29 +513,48 @@ public partial class WeaponSpawner : Node3D
   {
     if (!Multiplayer.IsServer()) return;
     var throwerId = SenderOrSelf();
-    var spot = GroundedSpot (position);
+    var thrower = Players().FirstOrDefault (player => player.NetworkId == throwerId);
+    // Server-side state check (CodeRabbit on #184, the #145/#167 convention): only a
+    // sender whose replicated HeldWeapon shows a boomerang (current or drop-grace)
+    // can release one - a forged request can't conjure pickups.
+    if (thrower == null || (thrower.HeldOrRecentlyHeld & HeldWeapon.Boomerang) == 0)
+    {
+      ServerLog.Event (throwerId, "boomerang release deny: sender does not hold a boomerang");
+      return;
+    }
+
+    // No ground beneath the release point (CodeRabbit on #184): skip the spawns like
+    // RequestDrop does - draining the escrow lets the caps respawn boomerang & cargo
+    // at spawn points instead of leaving unreachable floating pickups.
+    if (!TryFindGround (position, out var spot))
+    {
+      TakeEscrowFor (throwerId);
+      ServerLog.Event (throwerId, $"boomerang release skip: no ground beneath {position}; boomerang & cargo return via the caps");
+      return;
+    }
+
     ServerLog.Event (throwerId, $"boomerang release: dropped at {spot}");
     Spawn (HeldWeapon.Boomerang, spot, expires: true);
     var offset = 0;
     foreach (var cargo in TakeEscrowFor (throwerId)) Spawn (cargo.Type, spot + Vector3.Right * (0.8f * ++offset), expires: true, cargo.PreviousOwner);
   }
 
-  private Vector3 GroundedSpot (Vector3 position)
-  {
-    TryFindGround (position, out var spot);
-    return spot; // Over the void this keeps the raw position; the pickup expires & the caps respawn it.
-  }
-
   // Level geometry only (collision layer 1): another player below isn't a shelf.
   private const uint WorldLayer = 1;
+  // The kill boundary under the arena (y=-100) shares the world layer, & the ground
+  // ray was treating it as a floor - spawning unreachable pickups at y=-99 (issue
+  // #172). No real level surface sits below this, so anything deeper is the void.
+  private const float MinGroundY = -50.0f;
 
   // Finds the first level surface beneath the point (hover height above it); false
-  // over the void, where there's nothing for a pickup to rest on (issue #151).
+  // over the void, where there's nothing for a pickup to rest on (issue #151) - the
+  // kill boundary below the arena doesn't count (issue #172).
   private bool TryFindGround (Vector3 position, out Vector3 spot)
   {
     var query = PhysicsRayQueryParameters3D.Create (position, position + Vector3.Down * 100.0f, collisionMask: WorldLayer);
     var hit = GetWorld3D().DirectSpaceState.IntersectRay (query);
-    spot = hit.Count == 0 ? position : (Vector3)hit["position"] + Vector3.Up * PickupHoverHeight;
-    return hit.Count > 0;
+    var grounded = hit.Count > 0 && ((Vector3)hit["position"]).Y >= MinGroundY;
+    spot = grounded ? (Vector3)hit["position"] + Vector3.Up * PickupHoverHeight : position;
+    return grounded;
   }
 }

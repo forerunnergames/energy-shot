@@ -45,6 +45,19 @@ public partial class Player
   // dancing blocks charging - the press cancels the dance instead (issue #103).
   private bool IsChargingWeapon() => _isInputEnabled && !Dancing && IsLaserSelected && HasLaser && !IsFullAutoActive() && Input.IsActionPressed ("shoot");
   private bool IsDischargingWeapon() => _isInputEnabled && IsLaserSelected && HasLaser && _energyWeapon.IsSpinningUp && Input.IsActionJustReleased ("shoot");
+
+  // Leaving the laser slot cancels the charge (issue #156): ResetCharge spins down,
+  // resets the accumulated energy, stops the charging sound, & clears the full-charge
+  // lock-in (#113); the x-ray reveal (#105) keys off IsFullyCharged & clears on the
+  // next UpdateXrayReveal poll. Poll-based like the slingshot's CancelSlingshotDraw,
+  // so weapon switches, drops, theft, death, & respawn all self-heal through the one
+  // path instead of each needing its own hook.
+  private void CancelStaleLaserCharge()
+  {
+    if (!_energyWeapon.IsSpinningUp) return;
+    if (IsLaserSelected && HasLaser) return;
+    _energyWeapon.ResetCharge();
+  }
   private void ChargeWeapon() => _energyWeapon.Charge();
   private void DischargeWeapon() => _energyWeapon.Discharge();
   // Capped at 200: only banana energies exceed 1.0, & the sticky one-hit kill needs
@@ -295,11 +308,24 @@ public partial class Player
     Call ("DropHeldWeapon");
   }
 
-  // One-per-life full heal (issue #62): restocked on every (re)spawn.
+  // One-per-life full heal (issue #62): restocked on every (re)spawn. A press that
+  // can't eat is never silent anymore (issue #160): it emits a soft denied cue.
   private void UpdateBread()
   {
     if (!_isInputEnabled || !Input.IsActionJustPressed ("eat_bread")) return;
-    if (Health >= MaxHealth) return; // Don't waste the bread at full health.
+
+    if (!_bread.IsAvailable)
+    {
+      EmitSignal (SignalName.BreadDenied, true); // No bread left this life (issue #160).
+      return;
+    }
+
+    if (Health >= MaxHealth)
+    {
+      EmitSignal (SignalName.BreadDenied, false); // Don't waste the bread at full health.
+      return;
+    }
+
     if (!_bread.TryEat()) return;
     Health = MaxHealth;
     GD.Print ($"{DisplayName}: I ate my bread & feel brand new!");
@@ -352,7 +378,13 @@ public partial class Player
     var horizontal = new Vector3 (away.X, 0.0f, away.Z);
     if (horizontal.LengthSquared() < 0.001f) return;
     var strength = KnockbackStrength * energy * scale;
-    Velocity += horizontal.Normalized() * strength + Vector3.Up * strength * 0.3f;
+    var push = horizontal.Normalized() * strength;
+    // Mostly-horizontal shove (issue #163): the up-pop compounded with energy & scale
+    // & stacked additively across rapid hits, launching full-draw slingshot victims
+    // sky-high. Knockback may never push upward speed past the cap; an already-faster
+    // ascent (a jump, a rocket boost) keeps its own speed.
+    var poppedUp = Mathf.Min (Velocity.Y + strength * 0.3f, KnockbackUpPopCap);
+    Velocity = new Vector3 (Velocity.X + push.X, Mathf.Max (Velocity.Y, poppedUp), Velocity.Z + push.Z);
   }
 
   [Rpc (MultiplayerApi.RpcMode.AnyPeer)]

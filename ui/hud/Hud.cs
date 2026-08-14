@@ -24,10 +24,13 @@ public partial class Hud : Control
   private ShaderMaterial _vignette = null!;
   private ShaderMaterial _blur = null!;
   private ShaderMaterial _splatter = null!;
-  private ProgressBar _shotBar = null!;
-  private ProgressBar _slideBar = null!;
-  private ProgressBar _fullAutoBar = null!;
-  private ProgressBar _bananaBar = null!;
+  private CooldownMeter _shotMeter = null!;
+  private CooldownMeter _slideMeter = null!;
+  private CooldownMeter _fullAutoMeter = null!;
+  private CooldownMeter _bananaMeter = null!;
+  private TextureRect _breadIcon = null!;
+  private AudioStreamPlayer _munchSound = null!;
+  private AudioStreamPlayer _breadDeniedSound = null!;
   private float _blurIntensity;
   private float _splatterSecondsLeft;
   private float _splatterSlide;
@@ -62,15 +65,17 @@ public partial class Hud : Control
   }
 
   // 3+ streak entries glow & pulse so the hot player stands out (see issue #77); the
-  // current leader wears the crown (issue #107) & every entry shows its ping (issue #100).
-  // Entries are ranked by sorted position, ties keep list order (issue #126).
+  // crown holder wears the crown here too - only above zero points, & ties don't
+  // steal it (issues #107/#178) - & every entry shows its ping (issue #100).
+  // Entries are ranked by sorted position; equal scores order by ascending display
+  // name (issue #126), matching World.PickCrownHolder's tie ordering (issue #178).
   // Names are tinted with each player's chosen body color (issue #43).
   private static string LeaderboardEntry (players.Player player, int rank)
   {
     var name = $"[color=#{players.PlayerColors.TextHex (player.ColorIndex)}]{player.DisplayName}[/color]";
     var entry = $"{rank}. {name}  {player.Score}  ({Mathf.Max (0, player.PingMs)}ms)";
     if (player.IsOnStreak) entry = $"[pulse freq=1.5 color=#ffd24d ease=-2.0][wave amp=18.0 freq=4.0][b]{entry}[/b][/wave][/pulse]";
-    return rank == 1 ? $"\U0001F451 {entry}" : entry;
+    return player.IsCrowned ? $"\U0001F451 {entry}" : entry;
   }
 
   // Score can also drop (fall penalty), so the label reads the replicated value.
@@ -91,13 +96,17 @@ public partial class Hud : Control
     _vignette = (ShaderMaterial)GetNode <ColorRect> ("Vignette").Material;
     _blur = (ShaderMaterial)GetNode <ColorRect> ("Blur").Material;
     _splatter = (ShaderMaterial)GetNode <ColorRect> ("Splatter").Material;
-    _shotBar = GetNode <ProgressBar> ("VBoxContainer/Cooldowns/Shot/Bar");
-    _slideBar = GetNode <ProgressBar> ("VBoxContainer/Cooldowns/Slide/Bar");
-    _fullAutoBar = GetNode <ProgressBar> ("VBoxContainer/Cooldowns/FullAuto/Bar");
-    _bananaBar = GetNode <ProgressBar> ("VBoxContainer/Cooldowns/Banana/Bar");
+    _shotMeter = GetNode <CooldownMeter> ("CooldownMeters/Shot");
+    _slideMeter = GetNode <CooldownMeter> ("CooldownMeters/Slide");
+    _fullAutoMeter = GetNode <CooldownMeter> ("CooldownMeters/FullAuto");
+    _bananaMeter = GetNode <CooldownMeter> ("CooldownMeters/Banana");
+    _breadIcon = GetNode <TextureRect> ("VBoxContainer/Bread/Icon");
+    CreateBreadSounds();
     _world.SelfPlayerPunched += OnSelfPlayerPunched;
     _world.SelfPlayerSplattered += OnSelfPlayerSplattered;
     _world.SelfPlayerAirplaneCaught += OnSelfPlayerAirplaneCaught;
+    _world.SelfPlayerAteBread += OnSelfPlayerAteBread;
+    _world.SelfPlayerBreadDenied += OnSelfPlayerBreadDenied;
     GetNode <Timer> ("LeaderboardTimer").Timeout += UpdateLeaderboard;
     _quitDialog = GetNode <ConfirmationDialog2> ("QuitDialog");
     _quitDialog.Confirmed += () => EmitSignal (SignalName.GameQuit);
@@ -126,7 +135,17 @@ public partial class Hud : Control
   {
     UpdateBlur (delta);
     UpdateSplatter (delta);
-    UpdateCooldownBars();
+    UpdateCooldownMeters();
+    UpdateBreadIcon();
+  }
+
+  // Bread munch & soft denied cues are code-generated (issue #160): no downloaded assets.
+  private void CreateBreadSounds()
+  {
+    _munchSound = new AudioStreamPlayer { Stream = ProceduralSounds.Munch() };
+    _breadDeniedSound = new AudioStreamPlayer { Stream = ProceduralSounds.Denied() };
+    AddChild (_munchSound);
+    AddChild (_breadDeniedSound);
   }
 
   // Punch blur stacks per hit & fades back to sharp; a heavy stack fades slower, so
@@ -149,14 +168,38 @@ public partial class Hud : Control
     _splatter.SetShaderParameter ("intensity", _splatterSecondsLeft / SplatterSeconds);
   }
 
-  private void UpdateCooldownBars()
+  // Tiny center-screen meters near the crosshair (issue #177), each visible only
+  // while its cooldown is recovering; the fade & ready-flash live in CooldownMeter.
+  private void UpdateCooldownMeters()
   {
     var self = _world.SelfPlayer;
     if (self == null || !Visible) return;
-    _shotBar.Value = self.ShotReadyFraction;
-    _slideBar.Value = self.SlideReadyFraction; // The slide bar replaced the punch bar (issue #127).
-    _fullAutoBar.Value = self.FullAutoReadyFraction;
-    _bananaBar.Value = self.BananaReadyFraction;
+    _shotMeter.SetFraction (self.ShotReadyFraction);
+    _slideMeter.SetFraction (self.SlideReadyFraction); // The slide meter replaced the punch bar (issue #127).
+    _fullAutoMeter.SetFraction (self.FullAutoReadyFraction);
+    _bananaMeter.SetFraction (self.BananaReadyFraction);
+  }
+
+  // The bread icon dims once the loaf is eaten & brightens when a respawn restocks
+  // it (issue #160); polling covers the restock, which has no signal.
+  private void UpdateBreadIcon()
+  {
+    var self = _world.SelfPlayer;
+    if (self == null || !Visible) return;
+    _breadIcon.Modulate = self.HasBread ? Colors.White : new Color (0.4f, 0.4f, 0.4f, 0.35f);
+  }
+
+  private void OnSelfPlayerAteBread()
+  {
+    _munchSound.Play();
+    PrintMessage ("You scarf your bread & feel brand new!", MessageScroller.MessageImportance.High);
+  }
+
+  // Soft denied cues (issue #160): a pressed B that can't eat is never silent.
+  private void OnSelfPlayerBreadDenied (bool isOut)
+  {
+    _breadDeniedSound.Play();
+    PrintMessage (isOut ? "No bread left this life" : "Already at full health");
   }
 
   // ~3 hits reach max blur (issue #68): the shader's top LOD is a near-whiteout.
@@ -176,6 +219,7 @@ public partial class Hud : Control
     _splatterSlide = 0.0f;
     _splatter.SetShaderParameter ("slide", 0.0f);
     _splatter.SetShaderParameter ("intensity", 1.0f);
+    _splatter.SetShaderParameter ("seed", GD.Randf() * 100.0f); // Fresh splat layout per hit (issue #165).
   }
 
   private void OnNewGameStarted (string selfPlayerName, int selfMaxHealth)

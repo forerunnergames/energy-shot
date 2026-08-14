@@ -1,24 +1,51 @@
 shader_type canvas_item;
 
-// Banana splatter (issue #70): procedural semi-transparent yellow blobs that slide
-// slowly down the screen & fade out, synced with the banana stun. No external assets.
+// Banana splatter (issues #70 & #165): a dense layer of goopy splat chunks at
+// randomized positions & sizes (re-seeded per hit), opaque enough to genuinely
+// block the view - getting banana'd should be brutal to see through, but the tone
+// stays goofy banana goo. Chunks slide slowly down at varied speeds & drop off
+// piece by piece as the 5s stun fades. No external assets.
 uniform float intensity : hint_range(0.0, 1.0) = 0.0;
 uniform float slide = 0.0;
+uniform float seed = 0.0;
 
-float blob(vec2 uv, vec2 center, float radius) {
-	return 1.0 - smoothstep(radius * 0.55, radius, distance(uv, center));
+float hash(float n) {
+	return fract(sin(n * 91.17 + seed * 13.73) * 43758.5453);
+}
+
+vec2 hash2(float n) {
+	return vec2(hash(n), hash(n + 57.31));
+}
+
+// An irregular blob: the radius wobbles around the rim so chunks read as goo, not circles.
+float splat(vec2 uv, vec2 center, float radius, float wobble) {
+	vec2 d = uv - center;
+	float angle = atan(d.y, d.x);
+	float rim = radius * (0.68 + 0.20 * sin(angle * 5.0 + wobble * 6.28) + 0.12 * sin(angle * 9.0 + wobble * 12.6));
+	return 1.0 - smoothstep(rim * 0.75, rim, length(d));
 }
 
 void fragment() {
-	vec2 uv = vec2(UV.x, UV.y - slide);
-	float a = 0.0;
-	a = max(a, blob(uv, vec2(0.18, 0.22), 0.16));
-	a = max(a, blob(uv, vec2(0.52, 0.10), 0.22));
-	a = max(a, blob(uv, vec2(0.82, 0.28), 0.14));
-	a = max(a, blob(uv, vec2(0.30, 0.52), 0.19));
-	a = max(a, blob(uv, vec2(0.68, 0.60), 0.17));
-	a = max(a, blob(uv, vec2(0.10, 0.75), 0.13));
-	a = max(a, blob(uv, vec2(0.90, 0.80), 0.18));
-	a = max(a, blob(uv, vec2(0.45, 0.85), 0.15));
-	COLOR = vec4(0.95, 0.82, 0.15, a * intensity * 0.85);
+	float goo = 0.0;
+	float shade = 0.0;
+	for (int i = 0; i < 48; i++) {
+		float fi = float(i);
+		vec2 rnd = hash2(fi * 7.31);
+		float sizeRnd = hash(fi * 3.77);
+		float radius = mix(0.03, 0.17, sizeRnd * sizeRnd); // Lots of small bits, a few huge ones.
+		float fall = 0.5 + 1.0 * hash(fi * 5.13); // Heavier goo slides at its own pace.
+		vec2 center = vec2(rnd.x * 1.15 - 0.075, rnd.y * 1.15 - 0.075 + slide * fall);
+		// Chunks let go one at a time through the stun instead of one uniform fade.
+		float dropAt = 0.45 * hash(fi * 9.29);
+		float life = smoothstep(dropAt, dropAt + 0.12, intensity);
+		float body = splat(UV, center, radius, hash(fi * 11.71)) * life;
+		goo = max(goo, body);
+		shade = max(shade, body * hash(fi * 2.71));
+	}
+	// Mostly-opaque goo with per-chunk tonal variety; a final global fade near the end.
+	vec3 bright = vec3(0.98, 0.87, 0.30);
+	vec3 dark = vec3(0.78, 0.62, 0.08);
+	vec3 color = mix(bright, dark, shade);
+	float alpha = smoothstep(0.05, 0.6, goo) * 0.96 * smoothstep(0.0, 0.22, intensity);
+	COLOR = vec4(color, alpha);
 }
