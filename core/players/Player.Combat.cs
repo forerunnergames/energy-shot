@@ -307,11 +307,24 @@ public partial class Player
     Call ("DropHeldWeapon");
   }
 
-  // One-per-life full heal (issue #62): restocked on every (re)spawn.
+  // One-per-life full heal (issue #62): restocked on every (re)spawn. A press that
+  // can't eat is never silent anymore (issue #160): it emits a soft denied cue.
   private void UpdateBread()
   {
     if (!_isInputEnabled || !Input.IsActionJustPressed ("eat_bread")) return;
-    if (Health >= MaxHealth) return; // Don't waste the bread at full health.
+
+    if (!_bread.IsAvailable)
+    {
+      EmitSignal (SignalName.BreadDenied, true); // No bread left this life (issue #160).
+      return;
+    }
+
+    if (Health >= MaxHealth)
+    {
+      EmitSignal (SignalName.BreadDenied, false); // Don't waste the bread at full health.
+      return;
+    }
+
     if (!_bread.TryEat()) return;
     Health = MaxHealth;
     GD.Print ($"{DisplayName}: I ate my bread & feel brand new!");

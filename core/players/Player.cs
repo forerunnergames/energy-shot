@@ -41,6 +41,9 @@ public partial class Player : CharacterBody3D
 
   [Signal] public delegate void HealthChangedEventHandler (int value);
   [Signal] public delegate void BreadEatenEventHandler (string playerName);
+  // Soft feedback for a bread press that can't eat (issue #160): isOut = the loaf is
+  // gone this life; otherwise the player is already at full health.
+  [Signal] public delegate void BreadDeniedEventHandler (bool isOut);
   [Signal] public delegate void PunchedEventHandler();
   [Signal] public delegate void ScoredEventHandler (string playerName, string shotPlayerName);
   [Signal] public delegate void RespawnedShotEventHandler (string playerName, string shotByPlayerName);
@@ -235,6 +238,8 @@ public partial class Player : CharacterBody3D
   [Export] public float HealthTagNameTagMaxSpacing = 3.0f;
   [Export] public float NameTagBaseHeight = 2.3f;
   public int NetworkId => Name.ToString().ToInt();
+  // Whether the one-per-life loaf is still uneaten, for the HUD bread icon (issue #160).
+  public bool HasBread => _bread.IsAvailable;
   public float LastZapEnergy { get; private set; }
   // Whether the last zap this player took came through a pierced barrier (issue #94).
   public bool LastZapThroughBarrier { get; private set; }

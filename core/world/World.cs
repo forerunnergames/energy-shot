@@ -17,6 +17,9 @@ public partial class World : Node3D
   [Signal] public delegate void SelfPlayerHealthChangedEventHandler (string playerName, int health);
   [Signal] public delegate void SelfPlayerPunchedEventHandler();
   [Signal] public delegate void SelfPlayerSplatteredEventHandler();
+  // Bread feedback (issue #160): eaten + soft denied cues, forwarded to the HUD.
+  [Signal] public delegate void SelfPlayerAteBreadEventHandler();
+  [Signal] public delegate void SelfPlayerBreadDeniedEventHandler (bool isOut);
   [Signal] public delegate void RemoteMessageReceivedEventHandler (string message);
   [Signal] public delegate void AdminMessageReceivedEventHandler (string message);
   [Signal] public delegate void KickedFromServerEventHandler (string reason);
@@ -422,6 +425,8 @@ public partial class World : Node3D
     selfPlayer.HealthChanged += value => EmitSignal (SignalName.SelfPlayerHealthChanged, selfPlayer.DisplayName, value);
     selfPlayer.Punched += () => EmitSignal (SignalName.SelfPlayerPunched);
     selfPlayer.Splattered += () => EmitSignal (SignalName.SelfPlayerSplattered);
+    selfPlayer.BreadEaten += _ => EmitSignal (SignalName.SelfPlayerAteBread); // Bread feedback (issue #160).
+    selfPlayer.BreadDenied += isOut => EmitSignal (SignalName.SelfPlayerBreadDenied, isOut);
     selfPlayer.Scored += (playerName, shotPlayerName) => EmitSignal (SignalName.PlayerScored, ++_score, playerName, shotPlayerName);
     GD.Print ($"{_selfPlayer.NetworkId}: Registered my player {_selfPlayer.DisplayName}");
     EmitSignal (SignalName.NewGameStarted, _selfPlayer.DisplayName, _selfPlayer.MaxHealth);
