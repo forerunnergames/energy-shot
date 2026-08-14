@@ -36,6 +36,11 @@ public partial class PlaytestDriver : Node
   // playtest pickup spot - a drop search next to one of those could match it instead.
   private static readonly Vector3 KillSpot = new(4.0f, 31.0f, 0.0f);
   private static readonly Vector3 SpawnRoomCenter = new(0.0f, 31.0f, 0.0f);
+  // Fixed marks for the airplane throw/catch (#102), out in the empty arena well
+  // clear of the spawn room where the host idles: 8m apart, so the glider gets a
+  // real flight & nobody else can wander into the throw's aim ray.
+  private static readonly Vector3 CatchMark = new(40.0f, 1.0f, -40.0f);
+  private static readonly Vector3 CatchThrowMark = new(40.0f, 1.0f, -32.0f);
   // The drop grounds straight down from the death spot (#151), so it stays in that
   // XZ column; the radius only has to cover RequestDrop's per-weapon side offsets.
   private const float DropSearchRadius = 2.0f;
@@ -520,13 +525,15 @@ public partial class PlaytestDriver : Node
     Assert (Self.SelectedWeapon == SelectedWeapon.PaperAirplane, "paper airplane selected in slot 6 (#102)");
     // The victim fell & respawned earlier; wait for it to be back in the spawn room,
     // then throw from close by so the host can't wander into the flight path.
-    await WaitUntil (() => victim.GlobalPosition.Y > 20.0f, 60, "victim back in the spawn room for the catch phase (#102)");
     // Keep some distance: the glider needs a moment of flight for the catch to be
     // catchable at all - throwing from a few meters lands it before anyone can swing.
-    await WaitUntil (() => WalkedTo (victim.GlobalPosition, reach: 6.0f), 45, "walked near the victim for the airplane throw (#102)");
-    // The throw locks onto whoever is under the crosshair, & the idling host has
-    // wandered into the ray & stolen the lock - wait until the line is the victim's.
-    await WaitUntil (() => IsVictimTheNearestTarget (victim), 30, "clear line to the victim for the airplane throw (#102)");
+    // Both of us take fixed marks in the empty arena for this phase (#102): the
+    // spawn room's three-bot traffic kept putting the idle host under the crosshair,
+    // & the throw locks onto whoever the ray finds first. Here the line is ours, &
+    // the 8m gap gives the glider enough flight to actually be catchable.
+    Self.Position = CatchThrowMark;
+    await Task.Delay (500); // Settle onto the ground.
+    await WaitUntil (() => victim.GlobalPosition.DistanceTo (CatchMark) < 3.0f, 60, "victim took its mark for the airplane catch (#102)");
     // A genuine punch-catch fires our own AirplaneCaught signal when the handoff is
     // validated (CodeRabbit on #180): a landing must NOT pass this phase.
     var airplaneCaught = false;
@@ -803,6 +810,12 @@ public partial class PlaytestDriver : Node
     // Respawned from the fall; the shooter's paper airplane phase needs us standing
     // in the spawn room (#102).
     await WaitUntil (() => Self.GlobalPosition.Y > 20.0f, 30, "respawned in the spawn room after the fall");
+    // Take up a fixed mark out in the empty arena for the catch (#102): the three
+    // bots milling about the spawn room made this phase a lottery - the idle host
+    // kept wandering under the shooter's crosshair & stealing the airplane's target
+    // lock. Down here the line between the two of us is ours alone.
+    Self.Position = CatchMark;
+    await Task.Delay (500); // Settle onto the ground.
     // The throw replicates (#102): the shooter's flying airplane must appear here as
     // a visual copy before there's anything to catch.
     await WaitUntil (() => _world.GetChildren().OfType <PaperAirplaneProjectile>().Any(), 150, "shooter's thrown airplane replicated as a flying copy (#102)");
@@ -853,11 +866,25 @@ public partial class PlaytestDriver : Node
   // the game (#102), so whoever is nearest legitimately wins the race - a bystander
   // beating us to it must not fail the phase.
   // The airplane locks onto whoever the crosshair ray finds first (#102), so the
-  // throw is only aimed at the victim if no other player sits nearer along it.
-  private bool IsVictimTheNearestTarget (Player victim)
+  // throw only reaches the victim while no one else is standing on the line to it.
+  // Merely being closer to us doesn't matter - the idle host often parks nearby but
+  // well off the line, & requiring it to be farther away than the victim never came
+  // true. This is the condition the ray itself cares about.
+  private bool IsVictimTheNearestTarget (Player victim) => FindThrowBlocker (victim) == null;
+
+  private Player? FindThrowBlocker (Player victim)
   {
-    var toVictim = Self.GlobalPosition.DistanceTo (victim.GlobalPosition);
-    return _world.GetPlayers().All (player => player == Self || player == victim || player.GlobalPosition.DistanceTo (Self.GlobalPosition) > toVictim);
+    var from = Self.GlobalPosition + Vector3.Up;
+    var to = victim.GlobalPosition + Vector3.Up;
+    return _world.GetPlayers().FirstOrDefault (player => player != Self && player != victim && DistanceToSegment (player.GlobalPosition + Vector3.Up, from, to) <= 2.0f);
+  }
+
+  private static float DistanceToSegment (Vector3 point, Vector3 from, Vector3 to)
+  {
+    var line = to - from;
+    var lengthSquared = line.LengthSquared();
+    if (lengthSquared < 0.001f) return point.DistanceTo (from);
+    return point.DistanceTo (from + line * Mathf.Clamp ((point - from).Dot (line) / lengthSquared, 0.0f, 1.0f));
   }
 
   private bool WalkedToRecoveryPickup()
