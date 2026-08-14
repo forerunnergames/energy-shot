@@ -70,6 +70,13 @@ public static class Settings
     set => Set ("third_person_view", value);
   }
 
+  // Crouch as hold-while-pressed instead of the default toggle (issue #147).
+  public static bool HoldToCrouch
+  {
+    get => GetBool ("hold_to_crouch", false);
+    set => Set ("hold_to_crouch", value);
+  }
+
   // Mini music player visibility (issue #137): hiding it never stops the music.
   public static bool ShowMusicPlayer
   {

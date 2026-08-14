@@ -7,6 +7,8 @@ set -u
 GODOT_BIN="${GODOT_BIN:?Set GODOT_BIN to the Godot .NET binary}"
 DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 LOGS="$DIR/reports/playtest"
+# Overridable so parallel local runs don't collide on one port.
+PORT="${PLAYTEST_PORT:-55599}"
 mkdir -p "$LOGS"
 
 echo "== Importing & building =="
@@ -20,13 +22,13 @@ ADMIN_FILE="$LOGS/admin-message"
 VERSION_FILE="$LOGS/server-version"
 : > "$ADMIN_FILE"
 echo "v9.9.9-playtest" > "$VERSION_FILE"
-"$GODOT_BIN" --headless --path "$DIR" -- --playtest host --admin-message-file "$ADMIN_FILE" --version-file "$VERSION_FILE" > "$LOGS/host.log" 2>&1 &
+"$GODOT_BIN" --headless --path "$DIR" -- --playtest host --port "$PORT" --admin-message-file "$ADMIN_FILE" --version-file "$VERSION_FILE" > "$LOGS/host.log" 2>&1 &
 HOST=$!
 sleep 5
-"$GODOT_BIN" --headless --path "$DIR" -- --playtest victim > "$LOGS/victim.log" 2>&1 &
+"$GODOT_BIN" --headless --path "$DIR" -- --playtest victim --port "$PORT" > "$LOGS/victim.log" 2>&1 &
 VICTIM=$!
 sleep 3
-"$GODOT_BIN" --headless --path "$DIR" -- --playtest shooter > "$LOGS/shooter.log" 2>&1 &
+"$GODOT_BIN" --headless --path "$DIR" -- --playtest shooter --port "$PORT" > "$LOGS/shooter.log" 2>&1 &
 SHOOTER=$!
 
 # Watchdog: kill everything if the scenario hangs.

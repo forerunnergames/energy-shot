@@ -8,9 +8,9 @@ Current as of v0.8.14.
 |---|---|
 | W A S D | Move |
 | Mouse | Look / aim |
-| Space | Jump (also cancels a slide, with headroom) |
-| Shift | Slide (5s cooldown; press slide/crouch/jump to cancel early) |
-| C | Crouch (toggle - press again to stand) |
+| Space | Jump (jumping out of a slide keeps its momentum & skips the cooldown - land into another slide to chain for speed, up to 2x) |
+| Shift | Slide (up to 7s, 5s cooldown; press slide or crouch to cancel early - the timer ends standing when there's headroom) |
+| C | Crouch (toggle - press again to stand; switch to hold-to-crouch in the pause dialog, saved between sessions) |
 | V | Toggle first-/third-person view (saved between sessions) |
 
 ## Weapons
@@ -47,5 +47,6 @@ Slot keys select what's in your hands. You spawn with fists only; everything els
 ## Good to know
 
 - White glow = spawn armor (5s of invulnerability after spawning; firing or punching cancels it).
+- Getting zapped out drops your body at the death spot for ~5s - the camera pulls back so you can watch the aftermath - then you auto-respawn with spawn armor.
 - Kills heal you 50 HP. Falling off the world costs a point - your score can go negative.
 - Difficulty picks your health pool (Beginner 400 / Intermediate 300 / Expert 200), and lower-tier players hit higher-tier players harder.
