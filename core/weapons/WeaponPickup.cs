@@ -1,4 +1,5 @@
 using System.Linq;
+using com.forerunnergames.energyshot.items;
 using com.forerunnergames.energyshot.players;
 using com.forerunnergames.energyshot.utilities;
 using Godot;
@@ -8,6 +9,10 @@ namespace com.forerunnergames.energyshot.weapons;
 // Floating, slowly rotating weapon pickup (issue #72), claimed by walking into it.
 // The walking player's own peer detects the overlap & asks the server-side
 // WeaponSpawner to award the weapon & despawn the pickup for everyone.
+//
+// Walking into one now means three different things (issues #190 & #191): a
+// slingshot-equipped player LOADS it as ammo, anyone else stepping on the grounded
+// paper airplane TRIGGERS its landmine, & everything else is a normal pickup.
 public partial class WeaponPickup : Area3D
 {
   // Replicated at spawn so every peer shows the right weapon model.
@@ -19,6 +24,23 @@ public partial class WeaponPickup : Area3D
     {
       _weapon = value;
       UpdateVisuals();
+    }
+  }
+
+  // Armed (issue #191): true only for a paper airplane that came down FROM FLIGHT -
+  // a glide that never found anyone, or a slung one that missed. Those are live
+  // landmines: walking onto one targets you instead of collecting it. A fresh
+  // spawn-point airplane (& one dropped from a dead player's hands) is unarmed &
+  // collects normally, which is how anyone gets it into slot 6 in the first place.
+  // Replicated at spawn so every peer renders & treats it the same way.
+  [Export]
+  public bool Armed
+  {
+    get => _armed;
+    set
+    {
+      _armed = value;
+      UpdateArmedLight();
     }
   }
 
@@ -42,8 +64,14 @@ public partial class WeaponPickup : Area3D
   private MeshInstance3D _bananaVisual = null!;
   private Node3D _boomerangVisual = null!;
   private Node3D _slingshotVisual = null!;
+  private Node3D _breadVisual = null!;
   private Node3D _airplaneVisual = null!;
+  private OmniLight3D? _armedLight;
+  private bool _armed;
   private WeaponSpawner _spawner = null!;
+  // How fast an armed airplane's warning light blinks while it waits (issue #191).
+  private const float ArmedBlinksPerSecond = 1.4f;
+  private static readonly Color ArmedRed = new(1.0f, 0.15f, 0.12f);
   private float _ageSeconds;
   private float _retryCooldownLeft;
   private float _expiryLeft;
@@ -61,11 +89,23 @@ public partial class WeaponPickup : Area3D
     _visual.AddChild (_boomerangVisual);
     _slingshotVisual = SlingshotStone.CreateSlingshotVisual(); // Code-built, shared with the held model (issue #99).
     _visual.AddChild (_slingshotVisual);
+    _breadVisual = Bread.CreateVisual(); // Death drops the loaf too (issue #190).
+    _visual.AddChild (_breadVisual);
     _airplaneVisual = PaperAirplaneProjectile.CreateVisual(); // Code-built, shared with the projectile (issue #102).
     _visual.AddChild (_airplaneVisual);
     _spawner = GetNode <WeaponSpawner> ("/root/World/WeaponSpawner");
     _expiryLeft = ExpirySeconds;
     UpdateVisuals();
+    UpdateArmedLight(); // Spawn-state sync ran before this, when the node refs were null.
+  }
+
+  // An armed airplane advertises itself (issue #191): a small red light so a landmine
+  // is never an invisible trap - you can always see what you're about to step on.
+  private void UpdateArmedLight()
+  {
+    if (!IsInsideTree()) return;
+    if (_armed && _armedLight == null) { _armedLight = new OmniLight3D { LightColor = ArmedRed, LightEnergy = 3.0f, OmniRange = 4.0f }; AddChild (_armedLight); return; }
+    if (!_armed && _armedLight != null) { _armedLight.QueueFree(); _armedLight = null; }
   }
 
   // Cosmetic float & spin, animated locally on every peer around the replicated base position.
@@ -74,6 +114,8 @@ public partial class WeaponPickup : Area3D
     _ageSeconds += (float)delta;
     _visual.RotateY (Mathf.Tau * RotationsPerSecond * (float)delta);
     _visual.Position = Vector3.Up * (BobHeight * Mathf.Sin (Mathf.Tau * BobsPerSecond * _ageSeconds));
+    // An armed airplane winks at everyone while it waits (issue #191).
+    if (_armedLight != null) _armedLight.Visible = Mathf.PosMod (_ageSeconds * ArmedBlinksPerSecond, 1.0f) < 0.5f;
   }
 
   public override void _PhysicsProcess (double delta)
@@ -100,8 +142,22 @@ public partial class WeaponPickup : Area3D
     var collector = FindLocalCollector();
     if (collector == null) return;
     _retryCooldownLeft = RetryCooldownSeconds;
+    SendClaim (collector);
+  }
+
+  // Which of the three claims this walk-in is (issues #190 & #191). Every branch is
+  // just a request: the server decides & first request wins, so two players reaching
+  // the same item (or the same mine) in the same tick still resolve to exactly one.
+  private void SendClaim (Player collector)
+  {
+    if (collector.IsLoadingAmmo) { _spawner.SendAmmoLoadRequest (Name); return; }
+    if (IsArmedMine) { _spawner.SendMineTriggerRequest (Name); return; }
     _spawner.SendPickupRequest (Name, collector.NetworkId);
   }
+
+  // An airplane that came down from flight (issue #191). Anything else - including a
+  // fresh spawn-point airplane - is an ordinary pickup you can put in slot 6 (#102).
+  private bool IsArmedMine => Weapon == HeldWeapon.PaperAirplane && Armed;
 
   // Sphere radius (1.2) + the player capsule's reach, against the player's center.
   private const float ClaimRangeMeters = 1.7f;
@@ -118,18 +174,29 @@ public partial class WeaponPickup : Area3D
     return (local.GlobalPosition + Vector3.Up).DistanceTo (GlobalPosition) <= ClaimRangeMeters ? local : null;
   }
 
-  // A body mid-death-sequence is scenery (issue #152), so it can't go shopping: dying
-  // on top of your own drop used to hand it straight back a second later, undoing the
-  // whole point of dropping what you carried.
-  private bool IsEligibleCollector (Player player) => player.IsMultiplayerAuthority() && !player.Fallen && !player.Holds (Weapon);
+  // A body mid-death-sequence is scenery (issues #152 & #196), so it can't go
+  // shopping - or step on mines: dying on top of your own drop used to hand it
+  // straight back a second later, undoing the whole point of dropping what you
+  // carried. Beyond that, a slingshot-equipped player loads ANY world item (issue
+  // #190), so the already-holds rule doesn't apply to them; & an armed airplane is a
+  // mine anyone can set off (issue #191), except while armored or already alight -
+  // neither of which should hand out a free detonation.
+  private bool IsEligibleCollector (Player player)
+  {
+    if (!player.IsMultiplayerAuthority() || player.Fallen) return false;
+    if (player.IsLoadingAmmo) return true;
+    if (IsArmedMine) return !player.SpawnArmor && !player.Burning;
+    return !player.Holds (Weapon);
+  }
 
   private void UpdateVisuals()
   {
-    if (_laserVisual == null || _boomerangVisual == null || _slingshotVisual == null || _airplaneVisual == null) return;
+    if (_laserVisual == null || _boomerangVisual == null || _slingshotVisual == null || _breadVisual == null || _airplaneVisual == null) return;
     _laserVisual.Visible = Weapon == HeldWeapon.Laser;
     _bananaVisual.Visible = Weapon == HeldWeapon.Banana;
     _boomerangVisual.Visible = Weapon == HeldWeapon.Boomerang;
     _slingshotVisual.Visible = Weapon == HeldWeapon.Slingshot; // Issue #99.
+    _breadVisual.Visible = Weapon == HeldWeapon.Bread; // Issue #190.
     _airplaneVisual.Visible = Weapon == HeldWeapon.PaperAirplane; // Issue #102.
   }
 }

@@ -52,7 +52,12 @@ public static class MessageGenerator
     if (context.Kind == DamageKind.Punch && context.VictimArmed) return MessagePools.PunchedOutArmed;
     if (context.Kind == DamageKind.Punch && context.KillerUnarmed) return MessagePools.FistsVsFists;
     if (context.Kind == DamageKind.Punch) return MessagePools.Punch;
+    // The airplane picked you personally, so it outranks every stance & weapon
+    // flavor below it: that's the whole story of the death (issues #102 & #191).
+    if (context.Kind == DamageKind.Landmine) return MessagePools.Landmine; // Issue #191.
+    if (context.Kind == DamageKind.PaperAirplane) return MessagePools.PaperAirplane; // Issues #102 & #191.
     if (context.Kind == DamageKind.Boomerang) return MessagePools.Boomerang; // Issue #98.
+    if (context.Kind == DamageKind.SlungItem) return MessagePools.SlungItem; // Issue #190.
     if (context.Kind == DamageKind.Slingshot) return MessagePools.Slingshot; // Issue #99.
     if (context.Kind == DamageKind.PaperAirplane) return MessagePools.PaperAirplane; // Issue #102.
     if (context.VictimHeldBananaGun) return MessagePools.HoldingBananaGun;

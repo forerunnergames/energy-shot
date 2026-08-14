@@ -7,13 +7,16 @@ namespace com.forerunnergames.energyshot.players;
 // locks onto the player under the crosshair & banks slowly toward them. The
 // signature mechanic: the target (or anyone in its path) can punch the incoming
 // airplane to catch it - it goes straight into their hand & they can throw it back.
-// An uncaught hit deals moderate victim-authoritative damage with modest knockback,
-// then the airplane lands as a pickup nearby. Exactly one airplane exists in the
-// game (see WeaponSpawner).
+// Exactly one airplane exists in the game (see WeaponSpawner).
+//
+// An UNCAUGHT hit is no longer a paper cut (issue #191): it hands the airplane's
+// hazard sequence to that one player - alight for ~2s, then a personal pop, with no
+// blast radius (Player.AirplaneHazard.cs). A glide that never finds anyone comes down
+// ARMED instead of as a plain pickup, so a grounded airplane is a landmine that
+// targets whoever steps on it - unless they have a slingshot out, in which case they
+// load it as ammo instead (issue #190).
 public partial class Player
 {
-  [Export] public float PaperAirplaneEnergy = 0.3f;
-  [Export] public float PaperAirplaneKnockbackScale = 0.5f;
   // Punch-catch reach (issue #102): the swing grabs any airplane this close.
   // Matches PunchRange (issue #71): if your fist reaches a player at 4m it reaches
   // an airplane at 4m. The catch is the fun part & the glider closes a meter every
@@ -34,6 +37,11 @@ public partial class Player
   private PaperAirplaneProjectile? _liveAirplane;
   private PaperAirplaneProjectile? _visualAirplane;
   private Node3D _airplaneHeld = null!;
+  // The flight already went somewhere else - a catch handoff or a strike - so the
+  // landing report that follows it in the same frame must not ALSO place an airplane
+  // (issues #102 & #191). FlyStep emits HitPlayer & then Landed back to back, so
+  // without this a mid-swing catch would mint a second airplane as an armed mine.
+  private bool _airplaneFlightConsumed;
   // Playtest-observable (issue #102): true from the throw until the catch or landing.
   public bool IsAirplaneInFlight => _liveAirplane != null && IsInstanceValid (_liveAirplane);
   // Every peer renders this player's empty hand while their airplane is out flying.
@@ -80,15 +88,26 @@ public partial class Player
   [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
   private void SpawnVisualAirplane (Vector3 origin, Vector3 direction, int targetId)
   {
+    if (!IsFromOwner()) return;
     ClearArmorDisplayOnRemoteAttack();
     var target = targetId == 0 ? null : GetParent().GetNodeOrNull <Player> ($"{targetId}");
-    _visualAirplane = SpawnAirplane (origin, direction, isLive: false, target);
-    _visualAirplane.TreeExited += OnVisualAirplaneGone;
+    FreeVisualAirplane(); // A previous copy would otherwise leak & keep chasing.
+    var spawned = SpawnAirplane (origin, direction, isLive: false, target);
+    _visualAirplane = spawned;
+    // The exit callback captures ITS OWN copy (CodeRabbit): a stale exit event
+    // clearing the newer reference put the hand back mid-flight.
+    spawned.TreeExited += () => OnVisualAirplaneGone (spawned);
     UpdateWeaponVisibility();
   }
 
-  private void OnVisualAirplaneGone()
+  // Only this player's own peer narrates their airplane (CodeRabbit): otherwise any
+  // peer could spawn or free the visual copy on somebody else's node. A direct local
+  // call has no remote sender, which is the authority calling itself.
+  private bool IsFromOwner() => Multiplayer.GetRemoteSenderId() is var sender && (sender == 0 || sender == NetworkId);
+
+  private void OnVisualAirplaneGone (PaperAirplaneProjectile gone)
   {
+    if (_visualAirplane != gone) return; // A newer flight already owns the hand.
     _visualAirplane = null;
     if (IsInsideTree()) UpdateWeaponVisibility();
   }
@@ -98,6 +117,9 @@ public partial class Player
     var airplane = new PaperAirplaneProjectile();
     GetParent().AddChild (airplane);
     airplane.Launch (origin, direction, isLive, this, target);
+    // Runs on every peer, on the TARGET's own node: only their HUD gets the closing
+    // warning ring & its accelerating beep (issue #191).
+    target?.NoteIncomingAirplane (airplane);
     if (!isLive) return airplane;
     airplane.HitPlayer += OnAirplaneHitPlayer;
     airplane.Landed += OnAirplaneLanded;
@@ -118,40 +140,44 @@ public partial class Player
     if (victim.CatchingAirplane)
     {
       GD.Print ($"{DisplayName}: {victim.DisplayName} caught my paper airplane mid-swing!");
+      _airplaneFlightConsumed = true;
       GrantCaughtAirplaneTo (victim);
       return;
     }
 
+    // The airplane doesn't paper-cut anymore (issue #191): it picks this one player
+    // & hands them the ignite-then-pop sequence. The server validates that we really
+    // had a flight registered before it tells them to light up, & the airplane is
+    // consumed by the strike - so no landing, no pickup, & the caps fold a new one.
     GD.Print ($"{DisplayName}: My paper airplane found {victim.DisplayName}!");
     _hitmarkerSound.Play();
-    ReportToServer ($"paper airplane: {DisplayName} hit {victim.DisplayName}");
-    victim.RpcId (victim.NetworkId, MethodName.ReceivePaperAirplaneHit, DisplayName);
+    ReportToServer ($"paper airplane: {DisplayName} lit up {victim.DisplayName}");
+    _airplaneFlightConsumed = true;
+    Spawner.SendAirplaneStrikeRequest (victim.NetworkId);
+    ReleaseAirplaneFromHands();
   }
 
-  [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
-  private void ReceivePaperAirplaneHit (string thrownByPlayerName)
-  {
-    if (!IsMultiplayerAuthority()) return;
-    if (SpawnArmor) return;
-    GD.Print ($"{DisplayName}: I was paper-cut by {thrownByPlayerName}'s airplane!");
-    LastDamageKind = DamageKind.PaperAirplane; // Message context (issue #84).
-    // Moderate & survivable by the numbers (30 base, issue #102), modest knockback.
-    ApplyDamage (PaperAirplaneEnergy, thrownByPlayerName, PaperAirplaneKnockbackScale);
-  }
-
-  // The flight ended (a hit, geometry, or the flutter reaching ground): the airplane
-  // becomes a pickup where it stopped. Request BEFORE clearing (CodeRabbit on #145 &
-  // issue #167): the server validates the drop mask against this player's replicated
-  // HeldWeapon & grounds the spot onto the level beneath (issue #151).
+  // The flight ended without finding anyone (geometry, or the flutter reaching the
+  // ground): the airplane comes down ARMED where it stopped & waits there as a
+  // landmine (issue #191). Request BEFORE clearing (CodeRabbit on #145 & issue #167):
+  // the server validates against this player's replicated HeldWeapon & grounds the
+  // spot onto the level beneath (issue #151).
   private void OnAirplaneLanded (Vector3 position)
   {
     _liveAirplane = null;
     Rpc (MethodName.FreeVisualAirplane); // Visual copies may lag the landing slightly.
-    Spawner.SendDropRequest (position, HeldWeapon.PaperAirplane);
+    if (_airplaneFlightConsumed) { _airplaneFlightConsumed = false; return; } // A catch or a strike already consumed it.
+    Spawner.SendAirplaneLandRequest (position);
+    ReleaseAirplaneFromHands();
+    GD.Print ($"{DisplayName}: My paper airplane came down armed!");
+  }
+
+  // Our hands stop showing the airplane once its flight is over, however it ended.
+  private void ReleaseAirplaneFromHands()
+  {
     HeldWeapon &= ~HeldWeapon.PaperAirplane;
     ForgetTheft (HeldWeapon.PaperAirplane);
     DeselectUnheldWeapon();
-    GD.Print ($"{DisplayName}: My paper airplane landed!");
   }
 
   // The punch branch calls this first (issue #102): a swing with any airplane in
@@ -229,7 +255,6 @@ public partial class Player
   {
     if (!IsAirplaneInFlight) return;
     Spawner.SendAirplaneCatchRequest (catcher.NetworkId);
-    EmitSignal (SignalName.AirplaneCaught, catcher.DisplayName); // HUD catch announcement (issue #102).
     _liveAirplane!.QueueFree();
     _liveAirplane = null;
     Rpc (MethodName.FreeVisualAirplane);
@@ -238,8 +263,10 @@ public partial class Player
     DeselectUnheldWeapon();
   }
 
-  // Zapping out (or falling off the world) mid-flight: the airplane lands as a
-  // pickup wherever it currently is, same as the boomerang release (issue #98).
+  // Zapping out (or falling off the world) mid-flight: the airplane comes down where
+  // it was, & since it came down FROM FLIGHT it comes down armed (issue #191) - a
+  // thrower who gets zapped out mid-glide leaves a landmine behind them, not a plain
+  // pickup. It travels the same OnAirplaneLanded path every other flight end uses.
   private void ReleaseAirplaneInFlight()
   {
     if (!IsAirplaneInFlight) { _liveAirplane = null; return; }
@@ -248,9 +275,18 @@ public partial class Player
     OnAirplaneLanded (position);
   }
 
+  // The server confirmed the handoff actually committed (CodeRabbit): only then does
+  // the thrower announce it, so a denied catch can never be broadcast as a real one.
+  public void NotifyAirplaneCaught (string catcherName)
+  {
+    if (!IsMultiplayerAuthority()) return;
+    EmitSignal (SignalName.AirplaneCaught, catcherName); // HUD catch announcement (issue #102).
+  }
+
   [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
   private void FreeVisualAirplane()
   {
+    if (!IsFromOwner()) return; // Only this player's own peer frees their copy (CodeRabbit).
     if (_visualAirplane == null || !IsInstanceValid (_visualAirplane)) return;
     _visualAirplane.QueueFree();
   }

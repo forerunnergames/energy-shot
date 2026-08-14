@@ -218,13 +218,34 @@ public static class MessagePools
     "physics homework by {z}: the arc ended on {v}"
   };
 
-  // Paper airplane zap-outs (issue #102).
+  // Zapped out by a world item slung out of a slingshot (issue #190).
+  public static readonly List <string> SlungItem = new()
+  {
+    "{z} found something on the floor & returned it to {v} at speed",
+    "{v} was retired by ordinary arena litter, aimed by {z}",
+    "{z} proved anything is a projectile if {v} is standing there",
+    "{v} got recycled. {z} did the sorting"
+  };
+
+  // Paper airplane zap-outs (issue #102), now the ignite-then-pop it became in
+  // issue #191 - it picks one player & only that player ever feels it.
   public static readonly List <string> PaperAirplane = new()
   {
     "{z}'s paper airplane finally caught up with {v}",
     "{v} lost a staring contest with {z}'s stationery",
     "special delivery from {z}, signed for by {v}'s forehead",
-    "{v} forgot {z}'s paper airplane never forgets"
+    "{v} forgot {z}'s paper airplane never forgets",
+    "{z}'s paper airplane picked {v} personally. Just {v}",
+    "{v} went out in a small, tidy puff of stationery, courtesy of {z}"
+  };
+
+  // Stepped on a grounded, armed airplane (issue #191).
+  public static readonly List <string> Landmine = new()
+  {
+    "{v} stepped on the paper airplane. The paper airplane stepped back",
+    "{v} found the airplane the hard way",
+    "{v} learned that origami holds a grudge",
+    "beep, beep, beep, pop: goodnight {v}"
   };
 
   // Someone punched an incoming paper airplane out of the air (issue #102):
@@ -251,6 +272,6 @@ public static class MessagePools
     Fall, FallStreak, Zapped, ThroughWall, FullCharge, FullAuto, Punch, PunchedOutArmed, FistsVsFists,
     BananaBlast, BananaDirect, HoldingBananaGun, ComboSplatterPunch, JumpShot, SlideShotKiller,
     SlideShotVictim, ZapStreakTier3, ZapStreakTier5, ZapStreakTier7, StreakEnded, StreakLost,
-    ZappedStreak, Boomerang, Slingshot, PaperAirplane, AirplaneCatch, TheftRevenge
+    ZappedStreak, Boomerang, Slingshot, SlungItem, PaperAirplane, Landmine, AirplaneCatch, TheftRevenge
   };
 }

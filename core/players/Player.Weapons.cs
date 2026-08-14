@@ -50,7 +50,10 @@ public partial class Player
     var removed = _heldWeapon & ~incoming;
     if (removed == HeldWeapon.None) return;
     var until = Time.GetTicksMsec() + (ulong)(RecentlyHeldGraceSeconds * 1000.0f);
-    foreach (var flag in new[] { HeldWeapon.Laser, HeldWeapon.Banana, HeldWeapon.Boomerang, HeldWeapon.Slingshot, HeldWeapon.PaperAirplane }) { if ((removed & flag) != 0) _recentlyHeldUntilMs[flag] = until; } // PaperAirplane too (issue #102): its landing & catch handoff ride the same grace.
+    // PaperAirplane rides the grace too (issue #102): its landing & catch handoff
+    // depend on it. So does bread (issue #190): the death drop clears the loaf right
+    // after sending the drop RPC, so without the grace the server denies it.
+    foreach (var flag in new[] { HeldWeapon.Laser, HeldWeapon.Banana, HeldWeapon.Boomerang, HeldWeapon.Slingshot, HeldWeapon.PaperAirplane, HeldWeapon.Bread }) { if ((removed & flag) != 0) _recentlyHeldUntilMs[flag] = until; }
   }
 
   // Which slot is out (issue #82). Replicated so every peer renders the right model
@@ -74,6 +77,9 @@ public partial class Player
   private string _stolenFrom = string.Empty;
   private WeaponSpawner? _weaponSpawner;
   public bool Holds (HeldWeapon type) => (_heldWeapon & type) != 0;
+  // A loaf is not a weapon (issue #190): "armed" & "unarmed" still mean guns only,
+  // so carrying bread can't flip the death-message scenarios (issue #84).
+  public bool IsUnarmed => (_heldWeapon & ~HeldWeapon.Bread) == HeldWeapon.None;
   private bool HasLaser => Holds (HeldWeapon.Laser);
   private bool HasBanana => Holds (HeldWeapon.Banana);
   private bool HasBoomerang => Holds (HeldWeapon.Boomerang);
@@ -93,9 +99,28 @@ public partial class Player
   {
     ReleaseBoomerangInFlight(); // A boomerang out flying still drops where it is (issue #98).
     ReleaseAirplaneInFlight(); // Same for a paper airplane mid-glide (issue #102).
+    DropLoadedAmmo(); // Anything nocked in the slingshot lands too (issue #190).
     ForgetTheft (_heldWeapon);
+    SetBreadHeld (isHeld: false); // The loaf leaves with everything else (issue #190).
     HeldWeapon = HeldWeapon.None;
     SelectedWeapon = SelectedWeapon.Fists;
+  }
+
+  // The one-per-life loaf rides the HeldWeapon mask (issue #190) so it flows through
+  // the same pickup, cap-free drop, & universal-ammo machinery as the guns, while
+  // the Bread item keeps owning the eat rule (issue #62). This single helper is the
+  // only place the two are written, so they can't drift apart.
+  private void SetBreadHeld (bool isHeld)
+  {
+    if (isHeld)
+    {
+      _bread.Restock();
+      HeldWeapon |= HeldWeapon.Bread;
+      return;
+    }
+
+    _bread.TryEat();
+    HeldWeapon &= ~HeldWeapon.Bread;
   }
 
   // Losing the stolen weapon ends the revenge window (CodeRabbit on #96): a fresh
@@ -146,6 +171,16 @@ public partial class Player
   // the claimed pickup for everyone.
   public void GrantWeapon (HeldWeapon type, string previousOwner = "")
   {
+    // Bread has no slot & nothing to equip (issue #190): collecting a loaf just
+    // restocks this life's snack, eaten with B like always.
+    if (type == HeldWeapon.Bread)
+    {
+      SetBreadHeld (isHeld: true);
+      _weaponPickupSound.Play();
+      GD.Print ($"{DisplayName}: I picked up a loaf of bread!");
+      return;
+    }
+
     HeldWeapon |= type;
     // Every pickup auto-equips (issue #128), boomerang (#98), slingshot (#99), & paper airplane (#102) included.
     SelectedWeapon = type switch { HeldWeapon.Banana => SelectedWeapon.Banana, HeldWeapon.Boomerang => SelectedWeapon.Boomerang, HeldWeapon.Slingshot => SelectedWeapon.Slingshot, HeldWeapon.PaperAirplane => SelectedWeapon.PaperAirplane, _ => SelectedWeapon.Laser };
@@ -190,7 +225,8 @@ public partial class Player
 
   // Selected gun first, then any other carried one. A boomerang or paper airplane
   // that's out flying isn't in the hand, so it can't be knocked loose or stolen
-  // from it (issues #98 & #102).
+  // from it (issues #98 & #102). Bread is never on this list (issue #190): punches &
+  // boomerangs take weapons, not lunch - only dying drops the loaf.
   private HeldWeapon PickDroppableWeapon()
   {
     var preferred = _selectedWeapon switch { SelectedWeapon.Banana => HeldWeapon.Banana, SelectedWeapon.Boomerang => HeldWeapon.Boomerang, SelectedWeapon.Slingshot => HeldWeapon.Slingshot, SelectedWeapon.PaperAirplane => HeldWeapon.PaperAirplane, _ => HeldWeapon.Laser };
@@ -206,14 +242,16 @@ public partial class Player
     return HeldWeapon.None;
   }
 
-  // Death drops everything carried at the death spot (issue #72); a boomerang out
-  // flying drops where the boomerang is instead (issue #98). Request before clear,
-  // same as DropHeldWeapon: the server validates the mask against the replicated
-  // HeldWeapon (CodeRabbit on #145).
+  // Death drops EVERYTHING carried at the death spot (issues #72 & #190): guns, the
+  // uneaten loaf, & anything nocked in the slingshot. A boomerang out flying drops
+  // where the boomerang is instead (issue #98). Request before clear, same as
+  // DropHeldWeapon: the server validates the mask against the replicated HeldWeapon
+  // (CodeRabbit on #145).
   private void DropAllHeldWeapons()
   {
     ReleaseBoomerangInFlight();
-    ReleaseAirplaneInFlight(); // A mid-glide airplane drops where the airplane is (issue #102).
+    ReleaseAirplaneInFlight(); // A mid-glide airplane lands where the airplane is (issues #102 & #191).
+    DropLoadedAmmo();
     if (_heldWeapon == HeldWeapon.None) return;
     Spawner.SendDropRequest (GlobalPosition, _heldWeapon);
     ClearHeldWeapons();

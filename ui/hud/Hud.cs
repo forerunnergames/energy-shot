@@ -34,6 +34,7 @@ public partial class Hud : Control
   private AudioStreamPlayer _breadDeniedSound = null!;
   private ColorRect _deathOverlay = null!;
   private Label _deathCountdown = null!;
+  private TargetRing _targetRing = null!;
   private ulong _deathOverlayEndMs;
   private float _blurIntensity;
   private float _splatterSecondsLeft;
@@ -128,7 +129,17 @@ public partial class Hud : Control
     _world.KickedFromServer += OnKickedFromServer;
     _world.ServerShutDown += OnServerShutDown;
     CreateDeathOverlay();
+    CreateTargetRing();
     AddCrouchModeToggleToPauseDialog();
+  }
+
+  // Paper airplane warning ring (issue #191): built in code like the death overlay,
+  // & only ever visible on the screen of the player the airplane is locked onto.
+  private void CreateTargetRing()
+  {
+    _targetRing = new TargetRing();
+    AddChild (_targetRing);
+    MoveChild (_targetRing, 1); // Above the death wash, under the messages & leaderboard.
   }
 
   // Death overlay (issue #152): a dim wash + countdown while the body lies at the
@@ -177,7 +188,12 @@ public partial class Hud : Control
     UpdateCooldownMeters();
     UpdateBreadIcon();
     UpdateDeathOverlay();
+    UpdateTargetRing();
   }
+
+  // The ring only ever reads OUR own incoming-airplane threat (issue #191), so no
+  // other player's screen can be lit up by somebody else's hazard.
+  private void UpdateTargetRing() => _targetRing.SetThreat (Visible ? _world.SelfPlayer?.AirplaneThreatFraction ?? 0.0f : 0.0f);
 
   // Bread munch & soft denied cues are code-generated (issue #160): no downloaded assets.
   private void CreateBreadSounds()
@@ -342,7 +358,7 @@ public partial class Hud : Control
       self?.LostStreakCount ?? 0,
       killer?.Sliding ?? false,
       killer?.IsLikelyAirborne() ?? false,
-      killer?.HeldWeapon == HeldWeapon.None,
+      killer?.IsUnarmed ?? false, // Bread doesn't count as being armed (issue #190).
       _splatterSecondsLeft > 0.0f,
       _blurIntensity > 0.0f,
       self?.LastZapThroughBarrier ?? false);

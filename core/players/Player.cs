@@ -340,6 +340,9 @@ public partial class Player : CharacterBody3D
     CreateSlingshotHeld(); // Same, for the slot-5 slingshot (issue #99).
     CreateAirplaneHeld(); // Same, for the slot-6 paper airplane (issue #102).
     UpdateWeaponVisibility();
+    // Spawn-state sync runs before _Ready, when the slingshot node was still null,
+    // so re-apply or a late joiner never sees an already-nocked item (issue #190).
+    UpdateSlingshotAmmoVisual();
     CreateHands();
     _crossHairs = GetNode <Sprite3D> ("Camera3D/Crosshairs");
     _jumpTimer = GetNode <Timer> ("JumpTimer");
@@ -396,6 +399,7 @@ public partial class Player : CharacterBody3D
     _holdToCrouch = Settings.HoldToCrouch; // Toggle-vs-hold crouch preference (issue #147).
     Input.MouseMode = Input.MouseModeEnum.Captured;
     Position = CalculateRandomSpawnPosition();
+    SetBreadHeld (isHeld: true); // The starting loaf rides the HeldWeapon mask (issue #190).
     ActivateSpawnArmor();
     ApplySavedViewPreference(); // Third-person view survives restarts (issue #119).
   }

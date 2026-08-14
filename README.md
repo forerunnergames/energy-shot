@@ -10,6 +10,9 @@ A fast, friendly multiplayer laser-tag arena FPS built with Godot 4 (.NET/C#). N
 - **Difficulty handicap**: pick Beginner / Intermediate / Expert when you join. Lower tiers get bigger health pools *and* hit higher tiers harder, so mixed-skill lobbies stay fair.
 - **Spawn armor**: 5 seconds of invulnerability after every spawn (white glow). Firing or punching cancels it.
 - **Spawn room**: you respawn in a room above the arena & drop back in when you're ready.
+- **Slingshot universal ammo**: with the slingshot out & empty, walking onto any world item *loads* it instead of collecting it — a dropped laser, the boomerang, someone's bread, even the paper airplane. Slung items fly the slingshot's draw-scaled arc & become ordinary pickups again wherever they land.
+- **The paper airplane**: exactly one in the arena, in slot 6. Thrown, it locks onto whoever was under your crosshair & glides after them — *their* screen fills with a red ring beeping faster & faster, then they catch fire & pop, strictly single-target, nobody near them harmed. Punch it out of the air to catch it & throw it back. A glide that never lands its target comes down **armed**: a landmine that picks whoever steps on it, or slingshot ammo for anyone with a slingshot out.
+- **Death drops everything**: weapons, your uneaten bread, & whatever's nocked in your slingshot all land where you fell.
 - **Leaderboard**, streak & zap messages with appropriately dry humor, low-health vignette, & more.
 
 ## Controls
@@ -19,7 +22,7 @@ Full reference: [docs/CONTROLS.md](docs/CONTROLS.md) (movement, all 6 weapon slo
 | Input | Action |
 |---|---|
 | W A S D / Mouse / Space | Move, look, jump |
-| Left mouse | Use selected weapon — punch with fists, hold to charge laser / draw slingshot |
+| Left mouse | Use selected weapon — punch with fists, hold to charge laser / draw slingshot (fires whatever the slingshot is loaded with) |
 | Right mouse | Unbound (reserved) |
 | 1-6 | Fists, laser, banana, boomerang, slingshot, paper airplane |
 | Shift / C / V | Slide, crouch, first-/third-person |

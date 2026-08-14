@@ -12,30 +12,38 @@ public partial class BananaDebris : MeshInstance3D
   private const float GravityAcceleration = 24.0f;
   private const float LaunchSpeedMin = 4.0f;
   private const float LaunchSpeedMax = 12.0f;
+  // A resting chunk this close to a slingshot-equipped player gets loaded as ammo (issue #190).
+  private const float ScoopRangeMeters = 1.8f;
   private static readonly Color BananaYellow = new(0.92f, 0.78f, 0.12f);
   private static readonly RandomNumberGenerator Rng = new();
   private Vector3 _velocity;
   private Vector3 _spinRadiansPerSecond;
+  private Color _color = BananaYellow;
   private float _age;
   private bool _resting;
   private StandardMaterial3D _material = null!;
 
-  public static void Scatter (Node parent, Vector3 origin)
+  public static void Scatter (Node parent, Vector3 origin) => Scatter (parent, origin, BananaYellow);
+
+  // Recolored bursts reuse the same chunks (issue #191): the paper airplane's pop
+  // scatters white paper scraps instead of banana pieces - non-gory either way.
+  public static void Scatter (Node parent, Vector3 origin, Color color)
   {
     for (var i = 0; i < ChunkCount; ++i)
     {
-      var chunk = CreateChunk();
+      var chunk = CreateChunk (color);
       parent.AddChild (chunk);
       chunk.GlobalPosition = origin;
     }
   }
 
-  private static BananaDebris CreateChunk()
+  private static BananaDebris CreateChunk (Color color)
   {
     var size = Rng.RandfRange (0.08f, 0.2f);
     return new BananaDebris
     {
       Mesh = new BoxMesh { Size = new Vector3 (size, size * 0.6f, size * 1.6f) },
+      _color = color,
       _velocity = RandomLaunchVelocity(),
       _spinRadiansPerSecond = new Vector3 (Rng.RandfRange (-6.0f, 6.0f), Rng.RandfRange (-6.0f, 6.0f), Rng.RandfRange (-6.0f, 6.0f))
     };
@@ -49,7 +57,7 @@ public partial class BananaDebris : MeshInstance3D
 
   public override void _Ready()
   {
-    _material = new StandardMaterial3D { AlbedoColor = BananaYellow, Roughness = 0.5f, Transparency = BaseMaterial3D.TransparencyEnum.Alpha };
+    _material = new StandardMaterial3D { AlbedoColor = _color, Roughness = 0.5f, Transparency = BaseMaterial3D.TransparencyEnum.Alpha };
     MaterialOverride = _material;
   }
 
@@ -64,8 +72,8 @@ public partial class BananaDebris : MeshInstance3D
       return;
     }
 
-    _material.AlbedoColor = new Color (BananaYellow, 1.0f - _age / LifetimeSeconds);
-    if (_resting) return;
+    _material.AlbedoColor = new Color (_color, 1.0f - _age / LifetimeSeconds);
+    if (_resting) { TryLoadIntoSlingshot(); return; }
     Rotation += _spinRadiansPerSecond * dt;
     var from = GlobalPosition;
     _velocity.Y -= GravityAcceleration * dt;
@@ -80,5 +88,18 @@ public partial class BananaDebris : MeshInstance3D
 
     GlobalPosition = (Vector3)hit["position"] + (Vector3)hit["normal"] * 0.05f;
     _resting = true; // Chunks stay where they land - visual-only, so no bouncing needed.
+  }
+
+  // Universal ammo (issue #190): a slingshot-equipped player walking over a resting
+  // chunk nocks it. Purely local - debris is cosmetic scenery that no cap tracks &
+  // that no player ever "holds", so there's nothing for the server to grant, & the
+  // chunk each peer sees simply fades out on its own timer.
+  private void TryLoadIntoSlingshot()
+  {
+    var local = players.Player.Local;
+    if (local == null || !local.IsLoadingAmmo) return;
+    if (local.GlobalPosition.DistanceTo (GlobalPosition) > ScoopRangeMeters) return;
+    local.LoadCosmeticAmmo (HeldWeapon.BananaChunk);
+    QueueFree();
   }
 }

@@ -11,5 +11,10 @@ public enum DamageKind
   Banana,
   Boomerang,
   Slingshot,
-  PaperAirplane
+  // A world item slung out of a slingshot instead of a stone (issue #190).
+  SlungItem,
+  // The paper airplane's ignite-then-pop, thrown or slung onto you (issues #102 & #191)...
+  PaperAirplane,
+  // ...or set off by stepping on a grounded, armed one (issue #191).
+  Landmine
 }

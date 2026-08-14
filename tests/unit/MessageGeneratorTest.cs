@@ -12,14 +12,15 @@ public class MessageGeneratorTest
   private static DeathContext Laser (float energy = 0.5f) => new() { Kind = DamageKind.Laser, Energy = energy };
 
   [TestCase]
-  public void ExactlyOneHundredEighteenUniqueMessageTemplates()
+  public void ExactlyOneHundredTwentyEightUniqueMessageTemplates()
   {
     // 100 from the content wave (issue #84) + 3 through-wall zaps (issue #94)
     // + 4 boomerang zap-outs (issue #98) + 4 slingshot zap-outs (issue #99)
-    // + 4 paper airplane zap-outs & 3 airplane catches (issue #102).
+    // + 6 paper airplane zap-outs & 3 airplane catches (issues #102 & #191)
+    // + 4 slung-item zap-outs (issue #190) + 4 landmines (issue #191).
     var templates = MessagePools.All.SelectMany (pool => pool).ToList();
-    AssertInt (templates.Count).IsEqual (118);
-    AssertInt (templates.Distinct().Count()).IsEqual (118);
+    AssertInt (templates.Count).IsEqual (128);
+    AssertInt (templates.Distinct().Count()).IsEqual (128);
   }
 
   [TestCase]
@@ -34,8 +35,8 @@ public class MessageGeneratorTest
   [TestCase]
   public void EveryPoolIsInTheRegistry()
   {
-    // 27 scenario pools registered, none empty.
-    AssertInt (MessagePools.All.Count).IsEqual (27);
+    // 29 scenario pools registered, none empty.
+    AssertInt (MessagePools.All.Count).IsEqual (29);
     foreach (var pool in MessagePools.All) AssertBool (pool.Count > 0).IsTrue();
   }
 
@@ -79,10 +80,32 @@ public class MessageGeneratorTest
   }
 
   [TestCase]
-  public void PaperAirplanePoolSelectedByDamageKind()
+  public void SlungItemPoolSelectedByDamageKind()
   {
-    // Paper airplane zap-outs get their own flavor (issue #102).
-    AssertObject (MessageGenerator.SelectZappedPool (new DeathContext { Kind = DamageKind.PaperAirplane, Energy = 0.3f })).IsSame (MessagePools.PaperAirplane);
+    // A world item slung out of a slingshot reads differently from a stone (issue #190).
+    AssertObject (MessageGenerator.SelectZappedPool (new DeathContext { Kind = DamageKind.SlungItem, Energy = 0.5f })).IsSame (MessagePools.SlungItem);
+  }
+
+  [TestCase]
+  public void AirplanePoolsSplitOnHowItFoundYou()
+  {
+    // Thrown or slung onto you vs. stepped on: same hazard, different story (issues #102 & #191).
+    AssertObject (MessageGenerator.SelectZappedPool (new DeathContext { Kind = DamageKind.PaperAirplane, Energy = 2.0f })).IsSame (MessagePools.PaperAirplane);
+    AssertObject (MessageGenerator.SelectZappedPool (new DeathContext { Kind = DamageKind.Landmine, Energy = 2.0f })).IsSame (MessagePools.Landmine);
+  }
+
+  [TestCase]
+  public void AirplanePoolsOutrankStanceAndCharge()
+  {
+    // The airplane picked you personally, so stance & charge flavor never wins (issue #191).
+    var airplane = new DeathContext { Kind = DamageKind.PaperAirplane, Energy = 2.0f };
+    AssertObject (MessageGenerator.SelectZappedPool (airplane with { KillerSliding = true, KillerAirborne = true })).IsSame (MessagePools.PaperAirplane);
+    AssertObject (MessageGenerator.SelectZappedPool (airplane with { Kind = DamageKind.Landmine, VictimHeldBananaGun = true })).IsSame (MessagePools.Landmine);
+    // ...but the scenarios ABOVE it still win, so a future reorder can't quietly
+    // promote the airplane past them (issue #84's ordering).
+    AssertObject (MessageGenerator.SelectZappedPool (airplane with { VictimLostStreak = 5 })).IsSame (MessagePools.StreakEnded);
+    AssertObject (MessageGenerator.SelectZappedPool (airplane with { VictimLostStreak = 3 })).IsSame (MessagePools.StreakLost);
+    AssertObject (MessageGenerator.SelectZappedPool (airplane with { SplatterActive = true, BlurActive = true })).IsSame (MessagePools.ComboSplatterPunch);
   }
 
   [TestCase]

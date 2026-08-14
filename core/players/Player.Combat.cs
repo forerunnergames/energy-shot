@@ -328,7 +328,7 @@ public partial class Player
       return;
     }
 
-    if (!_bread.TryEat()) return;
+    SetBreadHeld (isHeld: false); // Eating clears the loaf & its HeldWeapon flag together (issue #190).
     Health = MaxHealth;
     GD.Print ($"{DisplayName}: I ate my bread & feel brand new!");
     EmitSignal (SignalName.BreadEaten, DisplayName);

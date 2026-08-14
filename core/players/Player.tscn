@@ -117,6 +117,12 @@ properties/19/replication_mode = 1
 properties/20/path = NodePath(".:CatchingAirplane")
 properties/20/spawn = true
 properties/20/replication_mode = 1
+properties/21/path = NodePath(".:SlingshotAmmo")
+properties/21/spawn = true
+properties/21/replication_mode = 2
+properties/22/path = NodePath(".:Burning")
+properties/22/spawn = true
+properties/22/replication_mode = 1
 
 [node name="Player" type="CharacterBody3D"]
 collision_layer = 2
