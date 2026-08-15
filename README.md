@@ -18,7 +18,7 @@ A fast, friendly multiplayer laser-tag arena FPS built with Godot 4 (.NET/C#). N
 
 ## Controls
 
-Full reference: [docs/CONTROLS.md](docs/CONTROLS.md) (movement, all 6 weapon slots, abilities, music voting, & hidden mechanics).
+Full reference: [docs/CONTROLS.md](docs/CONTROLS.md) (movement, all 7 weapon slots, abilities, music voting, & hidden mechanics).
 
 | Input | Action |
 |---|---|

@@ -347,6 +347,10 @@ public partial class Player
       attacker?.RpcId (attackerId, MethodName.NotifyScored, DisplayName);
       RespawnShot (attackerName);
     }
+    // Survived it (CodeRabbit on #214): the capture is only ever the death snapshot's
+    // context, so a nonlethal interruption must not still read as "died eating" when
+    // a later, unrelated hit finishes the job.
+    else _wasEatingWhenHit = false;
 
     EmitSignal (SignalName.HealthChanged, Health);
   }
