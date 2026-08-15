@@ -3,9 +3,11 @@ using Godot;
 namespace com.forerunnergames.energyshot.items;
 
 // One-per-life healing snack (issue #62): every (re)spawn restocks it, & eating it
-// (the eat_bread action) restores the player to full health. Since issue #190 the
-// loaf also rides the HeldWeapon mask, so dying drops it as a world pickup & a
-// slingshot can load it as ammo; Player owns that projection (Player.Weapons.cs).
+// restores the player to full health. Since issue #190 the loaf also rides the
+// HeldWeapon mask, so dying drops it as a world pickup & a slingshot can load it as
+// ammo; since issue #209 it also owns weapon slot 7, & primary fire starts the 3s
+// eating ritual (issue #192). Player owns both projections (Player.Weapons.cs &
+// Player.Bread.cs); this class only owns the one-per-life rule.
 public class Bread
 {
   private static readonly Color CrustBrown = new(0.62f, 0.42f, 0.18f);

@@ -310,31 +310,6 @@ public partial class Player
     Call ("DropHeldWeapon");
   }
 
-  // One-per-life full heal (issue #62): restocked on every (re)spawn. A press that
-  // can't eat is never silent anymore (issue #160): it emits a soft denied cue.
-  private void UpdateBread()
-  {
-    if (!_isInputEnabled || !Input.IsActionJustPressed ("eat_bread")) return;
-
-    if (!_bread.IsAvailable)
-    {
-      EmitSignal (SignalName.BreadDenied, true); // No bread left this life (issue #160).
-      return;
-    }
-
-    if (Health >= MaxHealth)
-    {
-      EmitSignal (SignalName.BreadDenied, false); // Don't waste the bread at full health.
-      return;
-    }
-
-    SetBreadHeld (isHeld: false); // Eating clears the loaf & its HeldWeapon flag together (issue #190).
-    Health = MaxHealth;
-    GD.Print ($"{DisplayName}: I ate my bread & feel brand new!");
-    EmitSignal (SignalName.BreadEaten, DisplayName);
-    EmitSignal (SignalName.HealthChanged, Health);
-  }
-
   private void ApplyDamage (float energy, string attackerName, float knockbackScale, bool isSurvivableAtFullHealth = false, bool throughBarrier = false)
     => ApplyDamageFrom (Multiplayer.GetRemoteSenderId(), energy, attackerName, knockbackScale, isSurvivableAtFullHealth, throughBarrier);
 
@@ -350,6 +325,8 @@ public partial class Player
     // Intermediate->Expert 1.5x). Attacking downward is unchanged - the bigger health
     // pool already is the handicap.
     Dancing = false; // Getting zapped mid-dance ends the groove on every peer (issue #103).
+    _wasEatingWhenHit = Eating; // Death-message context, captured before the interrupt clears it (issue #192).
+    InterruptEating(); // YOU can't cancel the ritual; an attacker can - & the loaf is wasted (issue #192).
     var attacker = GetParent().GetNodeOrNull <Player> ($"{attackerId}");
     var handicap = 1.0f + 0.5f * Mathf.Max (0, TierOf (MaxHealth) - TierOf (attacker?.MaxHealth ?? MaxHealth));
     var decrease = Mathf.RoundToInt (CalculateHealthDecrease (energy) * handicap);
@@ -370,6 +347,10 @@ public partial class Player
       attacker?.RpcId (attackerId, MethodName.NotifyScored, DisplayName);
       RespawnShot (attackerName);
     }
+    // Survived it (CodeRabbit on #214): the capture is only ever the death snapshot's
+    // context, so a nonlethal interruption must not still read as "died eating" when
+    // a later, unrelated hit finishes the job.
+    else _wasEatingWhenHit = false;
 
     EmitSignal (SignalName.HealthChanged, Health);
   }

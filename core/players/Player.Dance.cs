@@ -45,7 +45,8 @@ public partial class Player
     StartDance();
   }
 
-  private bool StartsDance() => _isInputEnabled && !IsStunned && !Sliding && Input.IsActionJustPressed ("dance");
+  // The eating ritual blocks the groove too (issue #192): no input escapes the 3s.
+  private bool StartsDance() => _isInputEnabled && !IsStunned && !Sliding && !Eating && Input.IsActionJustPressed ("dance");
 
   private void StartDance()
   {

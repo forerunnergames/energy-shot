@@ -334,6 +334,8 @@ public partial class PlaytestDriver : Node
     // riskiest base-color path, since it used to restore a hardcoded default.
     await WaitUntil (() => victimBody.AlbedoColor.IsEqualApprox (PlayerColors.At (VictimColor)), 15, "victim's body returned to its chosen color after the hit flash (#43)");
 
+    await RunBreadEatCompletionPhase(); // Issues #209 & #192.
+
     // Weapon lifecycle (#72): everyone spawns unarmed, so collect the deterministic
     // laser pickup the WeaponSpawner keeps in the spawn room in --playtest mode.
     await WaitUntil (() => WalkedTo (WeaponSpawner.PlaytestLaserPosition), 45, "walked to the playtest laser pickup");
@@ -394,6 +396,8 @@ public partial class PlaytestDriver : Node
     // Streak glow bug (#88): the kill ended the victim's streak; the reset must
     // replicate here so the glow & pulsing leaderboard entry clear.
     await WaitUntil (() => victim.ZapStreakCount == 0, 30, "victim's streak reset replicated to shooter");
+
+    await RunPunchTheEaterPhase (victim); // Issue #192.
 
     // Third-person view (#119): toggle mid-run so the fire-rate & full-auto phases
     // below prove bolts still spawn from the aim ray with the chase camera live.
@@ -627,6 +631,156 @@ public partial class PlaytestDriver : Node
     // Our forged admin RPC from the start of the run was dropped by the server:
     // it never echoed back here through any relay (#158).
     Assert (_adminMessages.All (message => !message.Contains ("FORGED")), "forged admin RPC was rejected (#158)");
+  }
+
+  // The eater's half of the bread ritual (issues #209 & #192): bread is a real weapon
+  // slot you spawn with, left click starts a 3s ritual you can't move during, & the
+  // whole three seconds heals you to full.
+  //
+  // Self-contained on our own spawn loaf: knuckles vs. wall (#122) is the cheapest
+  // way below full health, which the don't-waste-the-loaf rule (#160) requires before
+  // an eat can start at all. Covers the slot key, the moving rejection, the rooting,
+  // & the heal. (The victim's later phase covers the interruption, on ITS loaf: an
+  // interrupted loaf is wasted, so spending this one twice isn't an option.)
+  private async Task RunBreadEatCompletionPhase()
+  {
+    await TakeBreadEatingPosition();
+    Assert (Self.Health < Self.MaxHealth, $"punching the wall dented our own health (#122), health {Self.Health}/{Self.MaxHealth}");
+    Assert (Self.Holds (HeldWeapon.Bread), "still carrying this life's loaf (#190)");
+    await SelectBreadSlot();
+    await AssertEatingOnTheMoveIsRejected();
+    await StartEating ("standing still with bread out");
+    await AssertEatingRootsUsInPlace();
+    await WaitUntil (() => !Self.Eating, 15, "the ritual ran its full three seconds (#192)");
+    Assert (Self.Health == Self.MaxHealth, $"the completed eat healed to full (#62), health {Self.Health}/{Self.MaxHealth}");
+    Assert (!Self.Holds (HeldWeapon.Bread), "the completed eat consumed the loaf (#190)");
+    Assert (Self.SelectedWeapon == SelectedWeapon.Fists, "the emptied bread slot fell back to fists (#209)");
+    Self.Position = SpawnRoomCenter; // Back where the phases below expect to run.
+    await Task.Delay (300);
+  }
+
+  // The attacker's half (#192): a rooted, eating player must be VISIBLE to every peer
+  // - that's the whole risk/reward of the ritual - & a hit must cancel it, wasting
+  // the loaf & healing nothing. The victim's replicated bread slot is our only cue
+  // that it's about to eat, which is exactly what a real opponent has to go on.
+  private async Task RunPunchTheEaterPhase (Player victim)
+  {
+    await WaitUntil (() => victim.SelectedWeapon == SelectedWeapon.Bread, 120, "victim's bread slot replicated to shooter (#209)");
+    // Spawn armor absorbs punches outright (#48), so a still-armored victim would eat
+    // the whole loaf uninterrupted - the same guard the punch phase uses (#213).
+    await WaitUntil (() => !victim.SpawnArmor, 30, "victim's spawn armor expired before the bread interrupt (#48)");
+    // Take the spot BEFORE it starts eating: the victim holds its one-per-life loaf
+    // until it can see us standing in punching range, so this is the handshake.
+    Self.Position = victim.GlobalPosition + new Vector3 (0.0f, 0.0f, -2.0f); // Behind it, off the wall it punched.
+    await Task.Delay (400); // Settle onto the floor.
+    PressAction ("weapon_1"); // Fists, so the swing is a real punch (#82).
+    await Task.Delay (100);
+    ReleaseAction ("weapon_1");
+    // The eating state replicates WHILE the ritual is in progress, not just after it.
+    await WaitUntil (() => victim.Eating, 90, "victim's in-progress eating state replicated to shooter (#192)");
+    await Task.Delay (700); // Leave the victim its own window to prove the ritual roots it.
+
+    // The whole ritual is only 3s, so swing about as fast as the punch cooldown allows.
+    // Re-take the punching spot every attempt & skip a swing rather than spend it on
+    // thin air (#213): a rooted victim can't dodge, but its position still reaches us
+    // over the wire & can be stale on a lagging runner.
+    for (var attempt = 0; attempt < 20 && victim.Eating; ++attempt)
+    {
+      Self.Position = victim.GlobalPosition + new Vector3 (0.0f, 0.0f, -2.0f); // Behind it, off the wall it punched.
+      await Task.Delay (100); // Settle before swinging.
+      if (Self.GlobalPosition.DistanceTo (victim.GlobalPosition) > Self.PunchRange * 0.75f) continue;
+      AimAt (victim.GlobalPosition + Vector3.Up);
+      PressLeftClick();
+      await Task.Delay (60);
+      ReleaseLeftClick();
+      await Task.Delay (130);
+    }
+
+    // 30s, not 5 (#213): the ritual's own 3s expiry ends it either way, & the health
+    // assert below is what tells a canceled eat from a completed one.
+    await WaitUntil (() => !victim.Eating, 30, "our punch canceled the victim's eat (#192)");
+    Assert (victim.Health < victim.MaxHealth, $"the canceled eat healed nobody (#192), victim health {victim.Health}/{victim.MaxHealth}");
+    Self.Position = SpawnRoomCenter;
+    await Task.Delay (300);
+    PressAction ("weapon_2"); // The bolt-counting phases below need the laser back.
+    await Task.Delay (100);
+    ReleaseAction ("weapon_2");
+    Assert (Self.SelectedWeapon == SelectedWeapon.Laser, "laser re-selected after the bread interrupt phase (#192)");
+  }
+
+  // The bread mark: the spawn-room corner where the wall at z=6 is point-blank, so a
+  // few fist-fulls of wall get us below full health (#122) without touching anyone.
+  private async Task TakeBreadEatingPosition()
+  {
+    Self.Position = new Vector3 (5.0f, 31.0f, 5.0f);
+    await Task.Delay (400); // Settle onto the floor.
+    PressAction ("weapon_1");
+    await Task.Delay (100);
+    ReleaseAction ("weapon_1");
+    AimAt (new Vector3 (5.0f, 31.0f, 6.0f)); // Mid-height of the wall ahead.
+
+    for (var attempt = 0; attempt < 12 && Self.Health >= Self.MaxHealth; ++attempt)
+    {
+      PressLeftClick();
+      await Task.Delay (80);
+      ReleaseLeftClick();
+      await Task.Delay (350);
+    }
+  }
+
+  private async Task SelectBreadSlot()
+  {
+    PressAction ("weapon_7");
+    await Task.Delay (100);
+    ReleaseAction ("weapon_7");
+    Assert (Self.SelectedWeapon == SelectedWeapon.Bread, "bread is selectable in its own slot (#209)");
+  }
+
+  // Moving rejects the eat (#192): no ritual ever starts while we're walking, & the
+  // refused attempt costs nothing.
+  private async Task AssertEatingOnTheMoveIsRejected()
+  {
+    var mark = Self.Position;
+    Input.ActionPress ("move_back"); // Away from the wall we've been punching.
+    await Task.Delay (350);
+    PressLeftClick();
+    await Task.Delay (200);
+    ReleaseLeftClick();
+    Assert (!Self.Eating, "eating while moving was rejected (#192)");
+    Assert (Self.Holds (HeldWeapon.Bread), "the rejected attempt cost us nothing (#192)");
+    Input.ActionRelease ("move_back");
+    Self.Position = mark; // Back on the mark, so an attacker's rendezvous still holds.
+    await WaitUntil (() => new Vector2 (Self.Velocity.X, Self.Velocity.Z).Length() < 0.5f, 10, "came to a full stop before eating (#192)");
+  }
+
+  // Rooted (#192): movement & jump input produce no motion at all, & neither escapes
+  // the ritual.
+  private async Task AssertEatingRootsUsInPlace()
+  {
+    var rootedFrom = Self.GlobalPosition;
+    Input.ActionPress ("move_forward");
+    PressAction ("jump");
+    await Task.Delay (400);
+    ReleaseAction ("jump");
+    Input.ActionRelease ("move_forward");
+    Assert (Self.Eating, "no movement or jump input escaped the ritual (#192)");
+    Assert (Self.GlobalPosition.DistanceTo (rootedFrom) < 0.3f, $"eating rooted us in place (#192), drifted {Self.GlobalPosition.DistanceTo (rootedFrom):0.00}m");
+  }
+
+  // Left click with the loaf out starts the ritual (#192), retried until it takes:
+  // the stationary check is honest about settling velocity & knockback shoves, so a
+  // rejected press just means "not quite still yet".
+  private async Task StartEating (string description)
+  {
+    for (var attempt = 0; attempt < 15 && !Self.Eating; ++attempt)
+    {
+      PressLeftClick();
+      await Task.Delay (60);
+      ReleaseLeftClick();
+      await Task.Delay (200);
+    }
+
+    Assert (Self.Eating, $"left click started the eating ritual (#192): {description}");
   }
 
   // Death-drop coverage (issue #169): the victim died holding the deterministic
@@ -946,6 +1100,10 @@ public partial class PlaytestDriver : Node
     // Streak glow (#77/#88): the shooter's kill streak must replicate to the victim's
     // copy of the shooter node, since that drives the glow & leaderboard pulsing here.
     await WaitUntil (() => FindPlayer (ShooterName)?.ZapStreakCount >= 1, 30, "shooter's streak replicated to victim");
+    // The bread ritual (#192) runs on THIS life's fresh loaf, after the death-drop
+    // phase has already proved the previous one landed as a pickup: an interrupted
+    // eat wastes the loaf, so it can't be the one the death drop is counting on.
+    await RunBreadInterruptedPhase();
     // Fall penalty goes negative (issue #108): step off the world at score 0 & verify -1.
     Assert (Self.Score == 0, $"own score is 0 before the fall, got {Self.Score}");
     Self.Position = new Vector3 (120.0f, 5.0f, 120.0f); // Beyond the arena: nothing below but the kill boundary.
@@ -953,6 +1111,8 @@ public partial class PlaytestDriver : Node
     // Respawned from the fall; the shooter's paper airplane phase needs us standing
     // in the spawn room (#102).
     await WaitUntil (() => Self.GlobalPosition.Y > 20.0f, 30, "respawned in the spawn room after the fall");
+    await WaitForTheShooterToClearTheCatchMark();
+    await DitchStraySlingshot(); // Before leaving the spawn room, so the drop stays here.
     // Take up a fixed mark out in the empty arena for the catch (#102): the three
     // bots milling about the spawn room made this phase a lottery - the idle host
     // kept wandering under the shooter's crosshair & stealing the airplane's target
@@ -987,6 +1147,35 @@ public partial class PlaytestDriver : Node
     // The shooter's forged admin RPC must never have been relayed to us: the
     // server drops admin messages from any sender but peer 1 (#158).
     Assert (_adminMessages.All (message => !message.Contains ("FORGED")), "forged admin RPC never relayed to the victim (#158)");
+  }
+
+  // The interrupted half of the bread ritual (issue #192): YOU can't cancel the three
+  // seconds, but an attacker can. The shooter watches our replicated bread slot &
+  // eating state - the same cues a real opponent gets - & swings; the hit must end
+  // the ritual, WASTE the loaf, heal nothing, & drop the empty slot back to fists.
+  //
+  // Runs at the bread mark (the spawn-room corner with the wall at z=6 point-blank):
+  // a fresh life starts at full health, & the don't-waste-the-loaf rule (#160) refuses
+  // an eat there, so a few knuckles vs. wall (#122) open the ritual up.
+  private async Task RunBreadInterruptedPhase()
+  {
+    Assert (Self.Holds (HeldWeapon.Bread), "this life restocked the loaf (#62/#190)");
+    await WaitUntil (() => !Self.SpawnArmor, 30, "spawn armor expired before the bread ritual (#192)");
+    await TakeBreadEatingPosition();
+    Assert (Self.Health < Self.MaxHealth, $"punching the wall dented our own health (#122), health {Self.Health}/{Self.MaxHealth}");
+    await SelectBreadSlot(); // The shooter watches for this before coming over.
+    await AssertEatingOnTheMoveIsRejected();
+    // Only start once the shooter has taken its punching position: the loaf is
+    // one-per-life, so a ritual nobody can reach would just be wasted.
+    await WaitUntil (() => FindPlayer (ShooterName)?.GlobalPosition.DistanceTo (Self.GlobalPosition) < 3.5f, 120, "shooter took punching position (#192)");
+    await StartEating ("standing still with bread out");
+    await AssertEatingRootsUsInPlace();
+    // The shooter is swinging now: the hit must end it. A completed eat would have
+    // healed us to full instead, which is exactly what the health assert catches.
+    await WaitUntil (() => !Self.Eating, 30, "the incoming punch canceled the eat (#192)");
+    Assert (Self.Health < Self.MaxHealth, $"the canceled eat granted no heal (#192), health {Self.Health}/{Self.MaxHealth}");
+    Assert (!Self.Holds (HeldWeapon.Bread), "the interrupted loaf was wasted (#192)");
+    Assert (Self.SelectedWeapon == SelectedWeapon.Fists, "the emptied bread slot fell back to fists (#209)");
   }
 
   // Landing & landmine (#102 & #191): the caught airplane is thrown into the floor
@@ -1030,6 +1219,44 @@ public partial class PlaytestDriver : Node
     Assert (!Self.Burning, "a fresh life never inherits the fire (#191)");
     // Exactly one airplane, always (#102/#191): the caps fold a new one straight away.
     await WaitUntil (() => AirplaneCount() == 1, 25, "exactly one paper airplane back in the level (#102/#191)");
+  }
+
+  // The shooter's movement batch (#148/#149/#150) teleports onto the very corner we
+  // park on for the airplane catch (#102), & a body already standing there is
+  // something to ride up & off: its slide leaves the floor, so the slide-jump that
+  // ends it is swallowed (#149 needs IsOnFloor) & the chain phase wedges. Its trip
+  // DOWN into the arena & back UP to the spawn room afterwards is the all-clear.
+  // Waited out from a quiet spot away from the spawn room's pickups, so idling here
+  // can't auto-claim one (#128).
+  private async Task WaitForTheShooterToClearTheCatchMark()
+  {
+    Self.Position = new Vector3 (5.0f, 31.0f, -3.0f); // Clear of all four deterministic pickup spots.
+    await Task.Delay (300); // Settle onto the floor.
+    var wentDown = false;
+
+    await WaitUntil (() =>
+    {
+      var shooter = FindPlayer (ShooterName);
+      if (shooter == null) return false;
+      wentDown |= shooter.GlobalPosition.Y < 20.0f;
+      return wentDown && shooter.GlobalPosition.Y > 20.0f;
+    }, 240, "shooter finished its arena phases & cleared the catch mark (#149)");
+  }
+
+  // The spawn room's deterministic pickups (#72) sit inside the +/-4 random spawn
+  // scatter, so a respawn can land right on one & auto-claim it (#128) - the same
+  // hazard the shooter's spawn snapshot guards against. A stray slingshot is the one
+  // that breaks the landmine phase below: an equipped slingshot LOADS an armed
+  // airplane as ammo instead of setting it off (#190). Dropped here, in the spawn
+  // room, so the drop is left far behind when we take our mark in the arena.
+  private async Task DitchStraySlingshot()
+  {
+    if (!Self.Holds (HeldWeapon.Slingshot)) return;
+    PressAction ("weapon_5"); // DropHeldWeapon prefers the selected slot (#82).
+    await Task.Delay (100);
+    ReleaseAction ("weapon_5");
+    Self.DropHeldWeapon();
+    await WaitUntil (() => !Self.Holds (HeldWeapon.Slingshot), 30, "ditched a slingshot auto-claimed by an unlucky respawn (#128)"); // Server-side drop, so a wire budget (#213).
   }
 
   // Every airplane anywhere: pickups on the ground plus whatever is in someone's

@@ -21,9 +21,10 @@ public partial class World : Node3D
   [Signal] public delegate void SelfPlayerAirplaneCaughtEventHandler (string catcherName, string throwerName);
   // Our own airplane lock landing on somebody (issue #211); the HUD chirps.
   [Signal] public delegate void SelfPlayerAirplaneLockAcquiredEventHandler();
-  // Bread feedback (issue #160): eaten + soft denied cues, forwarded to the HUD.
+  // Bread feedback (issues #160 & #192): eaten, refused, & interrupted cues, forwarded to the HUD.
   [Signal] public delegate void SelfPlayerAteBreadEventHandler();
-  [Signal] public delegate void SelfPlayerBreadDeniedEventHandler (bool isOut);
+  [Signal] public delegate void SelfPlayerBreadDeniedEventHandler (string reason);
+  [Signal] public delegate void SelfPlayerBreadInterruptedEventHandler();
   [Signal] public delegate void RemoteMessageReceivedEventHandler (string message);
   [Signal] public delegate void AdminMessageReceivedEventHandler (string message);
   [Signal] public delegate void KickedFromServerEventHandler (string reason);
@@ -434,7 +435,8 @@ public partial class World : Node3D
     selfPlayer.AirplaneCaught += catcherName => EmitSignal (SignalName.SelfPlayerAirplaneCaught, catcherName, selfPlayer.DisplayName); // Issue #102.
     selfPlayer.AirplaneLockAcquired += () => EmitSignal (SignalName.SelfPlayerAirplaneLockAcquired); // Issue #211.
     selfPlayer.BreadEaten += _ => EmitSignal (SignalName.SelfPlayerAteBread); // Bread feedback (issue #160).
-    selfPlayer.BreadDenied += isOut => EmitSignal (SignalName.SelfPlayerBreadDenied, isOut);
+    selfPlayer.BreadDenied += reason => EmitSignal (SignalName.SelfPlayerBreadDenied, reason);
+    selfPlayer.BreadInterrupted += () => EmitSignal (SignalName.SelfPlayerBreadInterrupted); // A hit ended the ritual (issue #192).
     selfPlayer.Scored += (playerName, shotPlayerName) => EmitSignal (SignalName.PlayerScored, ++_score, playerName, shotPlayerName);
     GD.Print ($"{_selfPlayer.NetworkId}: Registered my player {_selfPlayer.DisplayName}");
     EmitSignal (SignalName.NewGameStarted, _selfPlayer.DisplayName, _selfPlayer.MaxHealth);
