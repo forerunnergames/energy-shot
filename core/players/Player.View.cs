@@ -65,8 +65,20 @@ public partial class Player
     _thirdPersonArm = new SpringArm3D { Position = ChaseViewOffset(), SpringLength = ThirdPersonBackMeters, CollisionMask = 1, Margin = 0.3f };
     _thirdPersonArm.AddExcludedObject (GetRid());
     _camera.AddChild (_thirdPersonArm);
-    _thirdPersonCamera = new Camera3D { Rotation = ChaseViewAim() };
+    _thirdPersonCamera = new Camera3D { Rotation = ChaseViewAim (ThirdPersonBackMeters) };
     _thirdPersonArm.AddChild (_thirdPersonCamera);
+  }
+
+  // The spring arm SHORTENS against world geometry (issue #187): an aim computed once
+  // from the full length stops pointing at the crosshair the moment the camera is
+  // pulled in - which is exactly when you're backed against a wall & need the shot
+  // line most. Re-aimed every physics frame from the arm's ACTUAL current length, so
+  // the crosshair stays truthful at any extension. The death view owns the rotation
+  // itself (it LookAts the body), so it is left alone.
+  private void UpdateChaseViewAim()
+  {
+    if (_deathView || !_thirdPerson || _thirdPersonCamera == null) return;
+    _thirdPersonCamera.Rotation = ChaseViewAim (_thirdPersonArm!.GetHitLength());
   }
 
   // Shoulder & height offset in the head camera's own space (issue #187), so the rig
@@ -77,10 +89,11 @@ public partial class Player
   // #187), compensating both the shoulder offset (yaw) & the height (pitch) - so
   // whatever the crosshair covers is what a bolt fired from the head camera hits, &
   // the view no longer reads top-down. The spring arm hangs the camera at
-  // (right, up, back) from the head, so the crosshair sits that far off its axis.
-  private Vector3 ChaseViewAim()
+  // (right, up, backMeters) from the head, so the crosshair sits that far off its
+  // axis; backMeters is the arm's CURRENT length, which wall clipping can shorten.
+  private Vector3 ChaseViewAim (float backMeters)
   {
-    var forward = ThirdPersonBackMeters + CrosshairDistanceMeters;
+    var forward = backMeters + CrosshairDistanceMeters;
     return new Vector3 (-Mathf.Atan (ThirdPersonUpMeters / forward), Mathf.Atan (ThirdPersonRightMeters / forward), 0.0f);
   }
 
@@ -93,6 +106,9 @@ public partial class Player
   // frame, in camera-local meters - negative X is left of center & negative Y is
   // below it, which is exactly the over-the-shoulder framing this view is tuned for.
   public Vector3 ChaseViewBodyOffset => _thirdPersonCamera == null ? Vector3.Zero : _thirdPersonCamera.ToLocal (_camera.GlobalPosition);
+  // Playtest-observable (issue #187): the arm's CURRENT length, which wall clipping
+  // shortens - so a test can prove it really clipped before judging the re-aim.
+  public float ChaseViewArmLengthMeters => _thirdPersonArm?.GetHitLength() ?? 0.0f;
   private Vector3 CrosshairPoint() => _camera.GlobalPosition - _camera.GlobalTransform.Basis.Z * CrosshairDistanceMeters;
 
   // Death view (issue #152): the same spring-arm rig from #119, stretched back & up
@@ -126,7 +142,7 @@ public partial class Player
     _deathView = false;
     _thirdPersonArm!.Position = ChaseViewOffset(); // Back over the shoulder (issue #187).
     _thirdPersonArm.SpringLength = ThirdPersonBackMeters;
-    _thirdPersonCamera!.Rotation = ChaseViewAim();
+    _thirdPersonCamera!.Rotation = ChaseViewAim (ThirdPersonBackMeters); // UpdateChaseViewAim re-aims from the live length next frame.
     SetThirdPerson (_thirdPerson);
   }
 }

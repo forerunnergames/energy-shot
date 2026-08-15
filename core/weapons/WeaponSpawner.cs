@@ -450,15 +450,20 @@ public partial class WeaponSpawner : Node3D
     // Cosmetic ammo (banana chunks) is scenery no cap tracks: it just splatters.
     if (ammo.Type == HeldWeapon.BananaChunk) return;
 
+    // The side step is applied BEFORE grounding (issue #212), never after: grounding
+    // the death spot & then sliding the pickup 1.6m sideways would land it wherever
+    // that ray happened to stop - floating over a ledge, or buried in a step up - so
+    // the ray has to run from the spot the item actually ends up on.
+    var target = isDeathDrop ? position + DeathAmmoOffset : position;
+
     // Nothing beneath it (over the void): skip the spawn like RequestDrop does & let
     // the caps put the item back at a spawn point instead of floating it out of reach.
-    if (!TryFindGround (position, out var ground))
+    if (!TryFindGround (target, out var spot))
     {
-      ServerLog.Event (loaderId, $"ammo land skip: no ground beneath {position}; [{ammo.Type}] returns via the caps");
+      ServerLog.Event (loaderId, $"ammo land skip: no ground beneath {target}; [{ammo.Type}] returns via the caps");
       return;
     }
 
-    var spot = isDeathDrop ? ground + DeathAmmoOffset : ground;
     ServerLog.Event (loaderId, $"ammo land: {ammo.Type} at {spot}{(isDeathDrop ? " (released by its dead loader, issue #212)" : "")}");
     // A slung airplane that missed comes down ARMED (issue #191): it re-arms as the
     // landmine right where it fell & never expires, since it's the only one there is.

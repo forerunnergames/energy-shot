@@ -453,6 +453,7 @@ public partial class Player : CharacterBody3D
     UpdateCameraKick (delta);
     UpdateCameraShake (delta);
     UpdateDeathView(); // Keeps the fallen body framed during the lie-down (issue #152).
+    UpdateChaseViewAim(); // Re-aims the chase camera when wall clipping shortens the arm (issue #187).
     UpdateStun (delta);
     UpdateSlide (delta);
     UpdateCrouch();
