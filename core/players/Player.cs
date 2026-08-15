@@ -215,9 +215,11 @@ public partial class Player : CharacterBody3D
   [Export] public float CameraKickRecoverySpeed = 0.4f;
   [Export] public float Speed = 7.0f;
   [Export] public float SlideSpeedMultiplier = 2.0f;
-  // 5s -> 7s (issue #148): the duration cap is what actually ends a held slide -
-  // slide speed never decays - so longer simply means farther.
-  [Export] public float SlideDurationSeconds = 7.0f;
+  // 7s -> 3.5s (issue #148, reversing the earlier lengthening): the duration cap is
+  // what actually ends a held slide - slide speed never decays - so 7s played as a
+  // long glide across half the arena. A slide is meant to be a burst of movement.
+  // Slide-jump chaining (#149) & the standing expiry (#150) are untouched.
+  [Export] public float SlideDurationSeconds = 3.5f;
   [Export] public float SlideCooldownSeconds = 5.0f;
   // Slide-jump chaining (issue #149): each slide chained inside the landing window
   // carries its landing speed boosted by this much, capped at the scale below
@@ -451,6 +453,7 @@ public partial class Player : CharacterBody3D
     UpdateCameraKick (delta);
     UpdateCameraShake (delta);
     UpdateDeathView(); // Keeps the fallen body framed during the lie-down (issue #152).
+    UpdateChaseViewAim(); // Re-aims the chase camera when wall clipping shortens the arm (issue #187).
     UpdateStun (delta);
     UpdateSlide (delta);
     UpdateCrouch();

@@ -11,12 +11,18 @@ namespace com.forerunnergames.energyshot.players;
 public partial class Player
 {
   [Export] public float ThirdPersonBackMeters = 2.8f;
-  [Export] public float ThirdPersonUpMeters = 1.2f;
+  // Over-the-shoulder framing (issue #187): the rig sits to the RIGHT of the head, so
+  // your own body hangs toward the lower-left of the frame instead of squatting dead
+  // center on top of whatever you're trying to shoot.
+  [Export] public float ThirdPersonRightMeters = 0.8f;
+  // 1.2m -> 0.5m (issue #187): near eye level rather than looking over the head. The
+  // old height read as a slightly top-down view, which made aiming hard.
+  [Export] public float ThirdPersonUpMeters = 0.5f;
   // Death view (issue #152): a wider pull-back over the death spot than the chase view.
   [Export] public float DeathViewBackMeters = 6.0f;
   [Export] public float DeathViewUpMeters = 3.0f;
   // The crosshair sprite sits 10m down the aim ray (Player.tscn); the chase camera
-  // pitches down just enough to keep it centered on screen.
+  // aims at that exact point so the crosshair stays dead center & truthful.
   private const float CrosshairDistanceMeters = 10.0f;
   private bool _thirdPerson;
   private bool _deathView;
@@ -56,14 +62,54 @@ public partial class Player
   // slide camera heights, camera kick, & aim pitch for free.
   private void CreateThirdPersonRig()
   {
-    _thirdPersonArm = new SpringArm3D { Position = new Vector3 (0.0f, ThirdPersonUpMeters, 0.0f), SpringLength = ThirdPersonBackMeters, CollisionMask = 1, Margin = 0.3f };
+    _thirdPersonArm = new SpringArm3D { Position = ChaseViewOffset(), SpringLength = ThirdPersonBackMeters, CollisionMask = 1, Margin = 0.3f };
     _thirdPersonArm.AddExcludedObject (GetRid());
     _camera.AddChild (_thirdPersonArm);
-    _thirdPersonCamera = new Camera3D { Rotation = new Vector3 (ChaseViewPitch(), 0.0f, 0.0f) };
+    _thirdPersonCamera = new Camera3D { Rotation = ChaseViewAim (ThirdPersonBackMeters) };
     _thirdPersonArm.AddChild (_thirdPersonCamera);
   }
 
-  private float ChaseViewPitch() => -Mathf.Atan (ThirdPersonUpMeters / (ThirdPersonBackMeters + CrosshairDistanceMeters));
+  // The spring arm SHORTENS against world geometry (issue #187): an aim computed once
+  // from the full length stops pointing at the crosshair the moment the camera is
+  // pulled in - which is exactly when you're backed against a wall & need the shot
+  // line most. Re-aimed every physics frame from the arm's ACTUAL current length, so
+  // the crosshair stays truthful at any extension. The death view owns the rotation
+  // itself (it LookAts the body), so it is left alone.
+  private void UpdateChaseViewAim()
+  {
+    if (_deathView || !_thirdPerson || _thirdPersonCamera == null) return;
+    _thirdPersonCamera.Rotation = ChaseViewAim (_thirdPersonArm!.GetHitLength());
+  }
+
+  // Shoulder & height offset in the head camera's own space (issue #187), so the rig
+  // still inherits crouch/slide camera heights, camera kick, & aim pitch for free.
+  private Vector3 ChaseViewOffset() => new(ThirdPersonRightMeters, ThirdPersonUpMeters, 0.0f);
+
+  // The chase camera aims at the crosshair point on the HEAD camera's ray (issue
+  // #187), compensating both the shoulder offset (yaw) & the height (pitch) - so
+  // whatever the crosshair covers is what a bolt fired from the head camera hits, &
+  // the view no longer reads top-down. The spring arm hangs the camera at
+  // (right, up, backMeters) from the head, so the crosshair sits that far off its
+  // axis; backMeters is the arm's CURRENT length, which wall clipping can shorten.
+  private Vector3 ChaseViewAim (float backMeters)
+  {
+    var forward = backMeters + CrosshairDistanceMeters;
+    return new Vector3 (-Mathf.Atan (ThirdPersonUpMeters / forward), Mathf.Atan (ThirdPersonRightMeters / forward), 0.0f);
+  }
+
+  // Playtest-observable (issue #187): how far off the chase camera's center the
+  // crosshair point sits, in degrees. Near zero = the crosshair is truthful to the
+  // shot line in third person too. Positive infinity while there's no chase rig.
+  public float ChaseViewCrosshairErrorDegrees => _thirdPersonCamera == null ? float.PositiveInfinity : Mathf.RadToDeg ((-_thirdPersonCamera.GlobalTransform.Basis.Z).AngleTo (CrosshairPoint() - _thirdPersonCamera.GlobalPosition));
+
+  // Playtest-observable (issue #187): where our own head sits in the chase camera's
+  // frame, in camera-local meters - negative X is left of center & negative Y is
+  // below it, which is exactly the over-the-shoulder framing this view is tuned for.
+  public Vector3 ChaseViewBodyOffset => _thirdPersonCamera == null ? Vector3.Zero : _thirdPersonCamera.ToLocal (_camera.GlobalPosition);
+  // Playtest-observable (issue #187): the arm's CURRENT length, which wall clipping
+  // shortens - so a test can prove it really clipped before judging the re-aim.
+  public float ChaseViewArmLengthMeters => _thirdPersonArm?.GetHitLength() ?? 0.0f;
+  private Vector3 CrosshairPoint() => _camera.GlobalPosition - _camera.GlobalTransform.Basis.Z * CrosshairDistanceMeters;
 
   // Death view (issue #152): the same spring-arm rig from #119, stretched back & up
   // over the death spot so the victim can watch their killer emote on the body.
@@ -71,7 +117,7 @@ public partial class Player
   {
     if (_thirdPersonCamera == null) CreateThirdPersonRig();
     _deathView = true;
-    _thirdPersonArm!.Position = new Vector3 (0.0f, DeathViewUpMeters, 0.0f);
+    _thirdPersonArm!.Position = new Vector3 (0.0f, DeathViewUpMeters, 0.0f); // Centered over the body, not over the shoulder (issue #187).
     _thirdPersonArm.SpringLength = DeathViewBackMeters;
     SetFirstPersonOverlayEnabled (enabled: false); // Own weapons must not ghost over the scene from up here.
     _thirdPersonCamera!.Current = true;
@@ -94,9 +140,9 @@ public partial class Player
   private void ExitDeathView()
   {
     _deathView = false;
-    _thirdPersonArm!.Position = new Vector3 (0.0f, ThirdPersonUpMeters, 0.0f);
+    _thirdPersonArm!.Position = ChaseViewOffset(); // Back over the shoulder (issue #187).
     _thirdPersonArm.SpringLength = ThirdPersonBackMeters;
-    _thirdPersonCamera!.Rotation = new Vector3 (ChaseViewPitch(), 0.0f, 0.0f);
+    _thirdPersonCamera!.Rotation = ChaseViewAim (ThirdPersonBackMeters); // UpdateChaseViewAim re-aims from the live length next frame.
     SetThirdPerson (_thirdPerson);
   }
 }

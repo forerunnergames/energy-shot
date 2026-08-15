@@ -27,18 +27,26 @@ public partial class WeaponSpawner : Node3D
   [Export] public int MaxPaperAirplanes = 1;
   [Export] public float ReconcileIntervalSeconds = 1.0f;
   [Export] public float PickupHoverHeight = 0.9f;
-  // Playtest-only (#72): a laser pickup is kept at this fixed spawn-room spot so the
-  // playtest driver can walk to it deterministically; z = 5 keeps it clear of the
-  // +/-4 random spawn scatter. Respawned by Reconcile if anyone claims it.
-  public static readonly Vector3 PlaytestLaserPosition = new(0.0f, 31.1f, 5.0f);
+  // Playtest-only (#72 & #197): deterministic pickups the driver can walk to, parked
+  // in the spawn room's CORNERS. Respawns scatter over +/-4 in x & z, & a pickup is
+  // claimable from 1.7m measured against the player's center - so the old mid-wall
+  // spots at z = 5 sat ~1m from the nearest possible spawn & a joining peer could
+  // auto-claim one seconds after landing, randomly failing the "spawned unarmed"
+  // (#72) & auto-equip (#128) asserts. A corner is the only place in this 12x12 room
+  // that is genuinely out of reach: 5.5 in BOTH axes is 2.12m from the nearest corner
+  // of the scatter square, comfortably past the claim radius, so only a deliberate
+  // walk gets there - the same reasoning that moved the banana out to the arena.
+  public static readonly Vector3 PlaytestLaserPosition = new(-5.5f, 31.1f, 5.5f);
   // Playtest-only (#98): same idea for the boomerang throw/catch phase.
-  public static readonly Vector3 PlaytestBoomerangPosition = new(3.0f, 31.1f, 5.0f);
+  public static readonly Vector3 PlaytestBoomerangPosition = new(5.5f, 31.1f, 5.5f);
   // Playtest-only (#99): same idea for the slingshot draw/release phase.
-  public static readonly Vector3 PlaytestSlingshotPosition = new(-3.0f, 31.1f, 5.0f);
-  // Playtest-only (#102): same idea for the paper airplane throw/catch phase, on
-  // the opposite wall at z = -5.8: far enough from the +/-4 random spawn scatter
-  // that no unlucky spawn can auto-claim it - only a deliberate walk reaches it,
-  // which matters because the airplane pickup is capped at exactly one (#102).
+  public static readonly Vector3 PlaytestSlingshotPosition = new(-5.5f, 31.1f, -5.5f);
+  // Playtest-only (#102): same idea for the paper airplane throw/catch phase, hard
+  // against the far wall at z = -5.8, which already puts it 1.8m from the nearest
+  // possible spawn - past the claim radius, so no unlucky spawn can auto-claim it
+  // (#197) & only a deliberate walk reaches it. That matters most of all here, since
+  // the airplane pickup is capped at exactly one (#102). It keeps this spot rather
+  // than a corner so the boomerang phase's throw lane stays empty of scoopable items.
   public static readonly Vector3 PlaytestAirplanePosition = new(0.0f, 31.1f, -5.8f);
   // Playtest-only (#169): the victim arms up here before the kill phase, so the death
   // drop has something to drop - RequestDrop's death path had no coverage at all,
@@ -353,10 +361,12 @@ public partial class WeaponSpawner : Node3D
     RpcId (1, MethodName.RequestAmmoLoad, pickupName);
   }
 
-  public void SendAmmoLandRequest (Vector3 position)
+  // isDeathDrop (issue #212): a death releases the nocked item beside the slingshot
+  // instead of exactly where the body stood, so the two are always two pickups.
+  public void SendAmmoLandRequest (Vector3 position, bool isDeathDrop = false)
   {
-    if (Multiplayer.IsServer()) { RequestAmmoLand (position); return; }
-    RpcId (1, MethodName.RequestAmmoLand, position);
+    if (Multiplayer.IsServer()) { RequestAmmoLand (position, isDeathDrop); return; }
+    RpcId (1, MethodName.RequestAmmoLand, position, isDeathDrop);
   }
 
   // A slingshot-equipped player walked onto a world item: despawn it for everyone &
@@ -407,7 +417,7 @@ public partial class WeaponSpawner : Node3D
   // drop (issue #151). Escrow is the server's own record, so a forged request from
   // a peer with nothing nocked simply finds nothing to spawn.
   [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
-  private void RequestAmmoLand (Vector3 position)
+  private void RequestAmmoLand (Vector3 position, bool isDeathDrop)
   {
     if (!Multiplayer.IsServer()) return;
     var loaderId = SenderOrSelf();
@@ -419,7 +429,7 @@ public partial class WeaponSpawner : Node3D
       return;
     }
 
-    foreach (var ammo in landed) LandAmmo (loaderId, ammo, position);
+    foreach (var ammo in landed) LandAmmo (loaderId, ammo, position, isDeathDrop);
   }
 
   private List <LoadedAmmo> TakeAmmoFor (int loaderId)
@@ -429,20 +439,32 @@ public partial class WeaponSpawner : Node3D
     return loaded;
   }
 
-  private void LandAmmo (int loaderId, LoadedAmmo ammo, Vector3 position)
+  // Where a death-released nocked item lands relative to the death spot (issue #212):
+  // its own side step, distinct from every per-weapon offset RequestDrop uses, so the
+  // freed ammo & the slingshot are always two separately visible, separately
+  // claimable pickups - never one pile a single walk-over could swallow whole.
+  private static readonly Vector3 DeathAmmoOffset = Vector3.Left * 1.6f;
+
+  private void LandAmmo (int loaderId, LoadedAmmo ammo, Vector3 position, bool isDeathDrop)
   {
     // Cosmetic ammo (banana chunks) is scenery no cap tracks: it just splatters.
     if (ammo.Type == HeldWeapon.BananaChunk) return;
 
+    // The side step is applied BEFORE grounding (issue #212), never after: grounding
+    // the death spot & then sliding the pickup 1.6m sideways would land it wherever
+    // that ray happened to stop - floating over a ledge, or buried in a step up - so
+    // the ray has to run from the spot the item actually ends up on.
+    var target = isDeathDrop ? position + DeathAmmoOffset : position;
+
     // Nothing beneath it (over the void): skip the spawn like RequestDrop does & let
     // the caps put the item back at a spawn point instead of floating it out of reach.
-    if (!TryFindGround (position, out var spot))
+    if (!TryFindGround (target, out var spot))
     {
-      ServerLog.Event (loaderId, $"ammo land skip: no ground beneath {position}; [{ammo.Type}] returns via the caps");
+      ServerLog.Event (loaderId, $"ammo land skip: no ground beneath {target}; [{ammo.Type}] returns via the caps");
       return;
     }
 
-    ServerLog.Event (loaderId, $"ammo land: {ammo.Type} at {spot}");
+    ServerLog.Event (loaderId, $"ammo land: {ammo.Type} at {spot}{(isDeathDrop ? " (released by its dead loader, issue #212)" : "")}");
     // A slung airplane that missed comes down ARMED (issue #191): it re-arms as the
     // landmine right where it fell & never expires, since it's the only one there is.
     var isAirplane = ammo.Type == HeldWeapon.PaperAirplane;

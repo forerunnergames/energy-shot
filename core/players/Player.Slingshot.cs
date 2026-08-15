@@ -112,12 +112,16 @@ public partial class Player
     ApplySlingshotDrawPose();
   }
 
-  // Dying (or dropping off the world) with something nocked lands it where we stand;
-  // over the void the server finds no ground & the caps bring the item back instead.
+  // Dying with something nocked drops BOTH, separately (issue #212): the slingshot
+  // goes out with the rest of the death drop, & the nocked item is released as its
+  // own world pickup beside it - never folded into the slingshot & never lost. The
+  // item only exists in the server's ammo escrow (#190), so only the server can
+  // release it; it ray-grounds at the death spot like every other drop (#151/#172/
+  // #196). Over the void the server finds no ground & the caps bring the item back.
   private void DropLoadedAmmo()
   {
     if (SlingshotAmmo == HeldWeapon.None) return;
-    if (!IsCosmeticAmmo (SlingshotAmmo)) Spawner.SendAmmoLandRequest (GlobalPosition);
+    if (!IsCosmeticAmmo (SlingshotAmmo)) Spawner.SendAmmoLandRequest (GlobalPosition, isDeathDrop: true);
     SlingshotAmmo = HeldWeapon.None;
   }
 

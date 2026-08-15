@@ -92,14 +92,26 @@ public partial class Hud : Control
   // steal it (issues #107/#178) - & every entry shows its ping (issue #100).
   // Entries are ranked by sorted position; equal scores order by ascending display
   // name (issue #126), matching World.PickCrownHolder's tie ordering (issue #178).
-  // Names are tinted with each player's chosen body color (issue #43).
+  // Names are tinted with each player's chosen body color (issue #43). The crown
+  // hangs in a fixed-width left gutter (issue #189), never in the entry itself.
   private static string LeaderboardEntry (players.Player player, int rank)
   {
     var name = $"[color=#{players.PlayerColors.TextHex (player.ColorIndex)}]{player.DisplayName}[/color]";
     var entry = $"{rank}. {name}  {player.Score}  ({Mathf.Max (0, player.PingMs)}ms)";
     if (player.IsOnStreak) entry = $"[pulse freq=1.5 color=#ffd24d ease=-2.0][wave amp=18.0 freq=4.0][b]{entry}[/b][/wave][/pulse]";
-    return player.IsCrowned ? $"\U0001F451 {entry}" : entry;
+    return $"{CrownGutter (player.IsCrowned)}{entry}";
   }
+
+  // Fixed-width left gutter (issue #189): prepending the crown to the leader's row
+  // alone shoved that one entry right & knocked the rank/name/score/ping columns out
+  // of line with every other row. Now EVERY row carries the glyph - drawn fully
+  // transparent for non-leaders - so the gutter is always exactly one crown wide &
+  // the columns stay put whether or not a crown is showing, wherever it moves to.
+  // The same glyph reserves the space, so the width can never disagree with itself.
+  // Kept outside the streak-pulse wrap so a hot leader's crown doesn't wave with the
+  // text, & outside the name tint so it stays gold (issues #43 & #77).
+  private const string CrownGlyph = "\U0001F451";
+  private static string CrownGutter (bool isCrowned) => isCrowned ? $"{CrownGlyph} " : $"[color=#00000000]{CrownGlyph}[/color] ";
 
   // Score can also drop (fall penalty), so the label reads the replicated value.
   private void UpdateScoreLabel() => _scoreLabel.Text = $"Score: {_world.SelfPlayer?.Score ?? 0}";
