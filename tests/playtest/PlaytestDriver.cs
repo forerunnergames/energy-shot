@@ -404,8 +404,19 @@ public partial class PlaytestDriver : Node
     await ToggleViewUntil (thirdPerson: true);
     Assert (Self.IsThirdPerson, "third-person view toggled on (#119)");
 
+    // Over-the-shoulder framing (#187): the chase camera is offset to the RIGHT of the
+    // head & sits near eye level, then aimed at the crosshair point on the HEAD
+    // camera's ray - so the crosshair stays truthful to the shot line (bolts still
+    // leave the head camera) & our own body hangs to the lower-LEFT instead of
+    // squatting dead center. Aim into the open first & let the spring arm reach full
+    // extension: a wall-clipped arm shortens the rig & is a different measurement.
+    AimAt (Self.GlobalPosition + new Vector3 (0, 1, 10)); // Aim away from everyone; open room behind us.
+    await Task.Delay (400);
+    Assert (Self.ChaseViewCrosshairErrorDegrees < 2.0f, $"chase camera looks straight down the crosshair's line (#187), off by {Self.ChaseViewCrosshairErrorDegrees:0.00} degrees");
+    var chaseBodyOffset = Self.ChaseViewBodyOffset;
+    Assert (chaseBodyOffset.X < -0.2f && chaseBodyOffset.Y < -0.2f, $"own body framed to the lower-LEFT of the chase view (#187), camera-local offset {chaseBodyOffset}");
+
     // Fire-rate cap: spamming can spawn at most 1 bolt (cooldown blocks recharging).
-    AimAt (Self.GlobalPosition + new Vector3 (0, 1, 10)); // Aim away from everyone.
     var boltsBefore = _boltsSpawned;
 
     for (var i = 0; i < 5; ++i)
@@ -479,7 +490,10 @@ public partial class PlaytestDriver : Node
     await Task.Delay (100);
     ReleaseAction ("weapon_4");
     Assert (Self.SelectedWeapon == SelectedWeapon.Boomerang, "boomerang selected in slot 4 (#98)");
-    AimAt (Self.GlobalPosition + new Vector3 (10, 1, 0));
+    // Down the -Z lane, not +X (#197): the pickup moved into the room's +X/+Z corner,
+    // where the east wall is now point-blank; this lane is 11m of empty room with no
+    // pickup near enough for the flight to scoop (the airplane sits 5.5m off it).
+    AimAt (Self.GlobalPosition + new Vector3 (0, 1, -10));
     // The spawn-room round trip can finish faster than a poll, so count spawned
     // projectiles (like bolts) instead of sampling the transient in-flight state.
     var boomerangsBefore = _boomerangsSpawned;
@@ -508,9 +522,10 @@ public partial class PlaytestDriver : Node
     // Step off the pickup spot before the stone phases (#190): the playtest restocks
     // a slingshot right where we're standing, & an equipped-but-empty slingshot now
     // LOADS whatever it walks onto - so standing there would sling slingshots, not
-    // stones. This corner keeps the wall at z=6 point-blank for the #163 phases &
-    // is well clear of every deterministic pickup.
-    Self.Position = new Vector3 (5.0f, 31.0f, 5.0f);
+    // stones. Mid-wall, not the corner (#197): the deterministic pickups moved into
+    // the corners, & this spot still keeps the wall at z=6 point-blank for the #163
+    // phases while sitting 5.5m clear of every one of them.
+    Self.Position = new Vector3 (0.0f, 31.0f, 5.0f);
     await Task.Delay (400);
     await EmptySlingshot();
     Assert (Self.SlingshotAmmo == HeldWeapon.None, "slingshot is empty for the stone phases (#190)");
@@ -722,14 +737,16 @@ public partial class PlaytestDriver : Node
     await WaitUntil (() => Self.Sliding, 10, "slide started for the chain (#149)");
     await Task.Delay (200);
     // Re-press until the slide actually ends: a single injected press can land in a
-    // frame that physics skips under load, & the old 2s budget then expired even
-    // though nothing was wrong with the chaining itself.
+    // frame that physics skips under load, & a single press then expired even though
+    // nothing was wrong with the chaining itself. 1s per retry, not 2 (#148): the
+    // slide is a 3.5s burst now, so all 5 retries have to fit inside it - a slide
+    // that expires on its own would fail the "ended by a jump" evidence below.
     for (var attempt = 0; attempt < 5 && Self.Sliding; ++attempt)
     {
       PressAction ("jump");
       await Task.Delay (100);
       ReleaseAction ("jump");
-      await TryWaitUntil (() => !Self.Sliding, 2);
+      await TryWaitUntil (() => !Self.Sliding, 1);
     }
 
     Assert (!Self.Sliding, "jump ended the slide (#149)");
@@ -756,12 +773,13 @@ public partial class PlaytestDriver : Node
     await Task.Delay (200);
     // Re-press like the chain test does: a swallowed press would otherwise let the
     // slide expire on its own & the phase would pass having never jumped at all.
+    // Same 1s-per-retry budget, for the same shortened-slide reason (#148).
     for (var attempt = 0; attempt < 5 && Self.Sliding; ++attempt)
     {
       PressAction ("jump");
       await Task.Delay (100);
       ReleaseAction ("jump");
-      await TryWaitUntil (() => !Self.Sliding, 2);
+      await TryWaitUntil (() => !Self.Sliding, 1);
     }
 
     Assert (!Self.Sliding, "jump ended the window-expiry slide (#149)");
@@ -778,19 +796,22 @@ public partial class PlaytestDriver : Node
     ReleaseAction ("slide");
     await WaitUntil (() => !Self.Sliding, 10, "post-window slide released");
 
-    // Slide TIMER expiry (#148/#150): the lengthened slide runs its full duration &
-    // ends STANDING in the open - no more forced crouch on expiry. Stationary (no
-    // movement input): the timer & end pose don't need travel, & 7s at slide speed
-    // would cross most of the arena.
-    Assert (Self.SlideDurationSeconds >= 7.0f, $"slide duration lengthened (#148), got {Self.SlideDurationSeconds}s");
+    // Slide TIMER expiry (#148/#150): the slide runs its full duration & ends STANDING
+    // in the open - no more forced crouch on expiry. Stationary (no movement input):
+    // the timer & end pose don't need travel. The duration itself is pinned to the
+    // shortened 3-4s burst band (#148, reversing the earlier lengthening to 7s), which
+    // is the assert that would catch the value drifting back up.
+    Assert (Self.SlideDurationSeconds is >= 3.0f and <= 4.0f, $"slide is a short burst, not a long glide (#148), got {Self.SlideDurationSeconds}s");
     await WaitUntil (() => Self.SlideReadyFraction >= 1.0f, 15, "slide cooldown recovered for the expiry test (#150)");
     PressAction ("slide");
     await WaitUntil (() => Self.Sliding, 10, "slide started for the expiry test (#150)");
     var slideStartMs = Time.GetTicksMsec();
-    await WaitUntil (() => !Self.Sliding, Self.SlideDurationSeconds + 5, "slide timer expired on its own (#148)");
+    await WaitUntil (() => !Self.Sliding, Self.SlideDurationSeconds + 8, "slide timer expired on its own (#148)");
     var slideMs = Time.GetTicksMsec() - slideStartMs;
     ReleaseAction ("slide");
-    Assert (slideMs >= 6000, $"slide lasted the lengthened duration (#148), got {slideMs}ms");
+    // Lower bound only: the timer counts PHYSICS time, which a loaded runner dilates
+    // behind the wall clock this measures, so an upper bound would just be flaky.
+    Assert (slideMs >= (ulong)(Self.SlideDurationSeconds * 1000.0f) - 500, $"slide lasted its full duration (#148), got {slideMs}ms");
     Assert (!Self.Crouching, "expired slide ended standing, not crouched (#150)");
 
     // Back to the spawn room for the boomerang & slingshot pickup phases.
@@ -924,7 +945,24 @@ public partial class PlaytestDriver : Node
     // pickup & to the kill spot follows the fall-penalty phase's precedent below.
     Self.Position = WeaponSpawner.PlaytestBananaPosition; // Down in the empty arena, then straight back up.
     await WaitUntil (() => Self.Holds (HeldWeapon.Banana), 20, "collected the playtest banana before the kill (#169)");
-    Self.Position = KillSpot;
+    // Loaded-slingshot death drops (#212): take the spawn-room slingshot & nock the
+    // deterministic laser in it, so the kill below has to drop BOTH - the slingshot
+    // out of the held mask via RequestDrop, & the nocked laser out of the server's
+    // ammo escrow (#190), which is the half that had nowhere to come from before.
+    // Both playtest spots restock unconditionally in --playtest mode, so borrowing
+    // them here can't starve the shooter's own boomerang/slingshot/ammo phases.
+    Self.Position = WeaponSpawner.PlaytestSlingshotPosition;
+    await WaitUntil (() => Self.Holds (HeldWeapon.Slingshot), 30, "collected the playtest slingshot before the kill (#212)");
+    Assert (Self.SelectedWeapon == SelectedWeapon.Slingshot, "the slingshot pickup auto-equipped, so it can load ammo (#128/#190)");
+    // An equipped, EMPTY slingshot loads a world item instead of collecting it (#190).
+    Self.Position = WeaponSpawner.PlaytestLaserPosition;
+    await WaitUntil (() => Self.SlingshotAmmo == HeldWeapon.Laser, 30, "nocked the playtest laser in the slingshot before the kill (#212)");
+    Self.Position = KillSpot; // Straight off the pickup spot, before its restock can be collected too.
+    await Task.Delay (400); // Settle onto the floor.
+    // Pins the precondition the #212 asserts below rest on: the laser is NOCKED &
+    // none is in hand, so a laser pickup at the death spot can only have come out of
+    // the server's ammo escrow - never out of RequestDrop's held mask.
+    Assert (Self.SlingshotAmmo == HeldWeapon.Laser && !Self.Holds (HeldWeapon.Laser), $"reached the kill spot with the laser nocked & none in hand (#212), nocked {Self.SlingshotAmmo}, held {Self.HeldWeapon}");
     // Death sequence (#152): the kill drops us where we stand for ~DeathSequenceSeconds
     // with the pulled-back death camera live, & only then the usual armored respawn.
     await WaitUntil (() => Self.Fallen, 120, "own death started the lie-down (#152)");
@@ -935,6 +973,7 @@ public partial class PlaytestDriver : Node
     // "Everything" now literally means everything (#190): the uneaten loaf rides the
     // same mask, so an empty mask here proves the bread went with the weapons.
     Assert (Self.HeldWeapon == HeldWeapon.None, $"death dropped every carried item, bread included (#169/#190), still holding {Self.HeldWeapon}");
+    await AssertLoadedSlingshotDroppedBoth();
     await WaitUntil (() => Self.SpawnArmor && Self.Health == Self.MaxHealth, 120, "died & respawned with armor & full health");
     var lieDownMs = Time.GetTicksMsec() - fallenStartMs;
     Assert (lieDownMs >= (ulong)(Self.DeathSequenceSeconds * 1000.0f) - 500, $"lay at the death spot ~{Self.DeathSequenceSeconds}s before respawning (#152), got {lieDownMs}ms");
@@ -987,6 +1026,29 @@ public partial class PlaytestDriver : Node
     // The shooter's forged admin RPC must never have been relayed to us: the
     // server drops admin messages from any sender but peer 1 (#158).
     Assert (_adminMessages.All (message => !message.Contains ("FORGED")), "forged admin RPC never relayed to the victim (#158)");
+  }
+
+  // Loaded-slingshot death drops (issue #212): dying with something nocked has to
+  // leave TWO separate world pickups at the death spot - the slingshot itself, out of
+  // the held mask via RequestDrop, & the nocked item, released out of the server-side
+  // ammo escrow (#190) that is the only place it exists. Neither may be folded into
+  // the other, neither may vanish, & both ray-ground at the death spot per the
+  // #151/#172/#196 conventions. Asserted from the dying peer during its own lie-down:
+  // the drops all resolve at death time, before the body is even on the floor.
+  private async Task AssertLoadedSlingshotDroppedBoth()
+  {
+    Assert (Self.SlingshotAmmo == HeldWeapon.None, $"death emptied the slingshot (#212), still nocking {Self.SlingshotAmmo}");
+    var deathSpot = Self.GlobalPosition;
+    await WaitUntil (() => DroppedNear (HeldWeapon.Slingshot, deathSpot) != null, 15, "the slingshot dropped at the death spot (#212)");
+    await WaitUntil (() => DroppedNear (HeldWeapon.Laser, deathSpot) != null, 15, "the nocked laser dropped as its OWN pickup at the death spot (#212)");
+    var slingshot = DroppedNear (HeldWeapon.Slingshot, deathSpot)!;
+    var ammo = DroppedNear (HeldWeapon.Laser, deathSpot)!;
+    var apart = slingshot.GlobalPosition.DistanceTo (ammo.GlobalPosition);
+    // Separate pickups, not one pile: a single walk-over must never swallow both.
+    Assert (apart > 0.5f, $"the slingshot & its nocked laser landed as two separate pickups (#212), {apart:0.00}m apart");
+    // Grounded AT the death spot, like every other death drop (#151/#172/#196).
+    Assert (Mathf.Abs (ammo.GlobalPosition.Y - deathSpot.Y) < 2.0f, $"the released ammo grounded at the death spot (#196/#212), drop y {ammo.GlobalPosition.Y:0.00} vs death y {deathSpot.Y:0.00}");
+    Assert (Mathf.Abs (slingshot.GlobalPosition.Y - deathSpot.Y) < 2.0f, $"the dropped slingshot grounded at the death spot (#196/#212), drop y {slingshot.GlobalPosition.Y:0.00} vs death y {deathSpot.Y:0.00}");
   }
 
   // Landing & landmine (#102 & #191): the caught airplane is thrown into the floor

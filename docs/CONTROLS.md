@@ -9,7 +9,7 @@ Current as of v0.8.14.
 | W A S D | Move |
 | Mouse | Look / aim |
 | Space | Jump (jumping out of a slide keeps its momentum & skips the cooldown - land into another slide to chain for speed, up to 2x) |
-| Shift | Slide (up to 7s, 5s cooldown; press slide or crouch to cancel early - the timer ends standing when there's headroom) |
+| Shift | Slide (a 3.5s burst, 5s cooldown; press slide or crouch to cancel early - the timer ends standing when there's headroom) |
 | C | Crouch (toggle - press again to stand; switch to hold-to-crouch in the pause dialog, saved between sessions) |
 | V | Toggle first-/third-person view (saved between sessions) |
 
