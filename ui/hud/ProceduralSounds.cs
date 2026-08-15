@@ -28,6 +28,17 @@ public static class ProceduralSounds
     return FromSamples (samples);
   }
 
+  // The interrupted-ritual cue (issue #192): a sour falling two-tone "wah-wahh",
+  // unmistakably different from the soft denied blips - somebody just cost you lunch.
+  public static AudioStreamWav Interrupted()
+  {
+    var samples = new float[(int)(SampleRate * 0.5f)];
+    AddChime (samples, startSeconds: 0.0f, fromHz: 420.0f, toHz: 300.0f, seconds: 0.16f, amplitude: 0.34f);
+    AddChime (samples, startSeconds: 0.17f, fromHz: 300.0f, toHz: 120.0f, seconds: 0.3f, amplitude: 0.34f);
+    AddCrunch (samples, startSeconds: 0.0f, brightness: 0.45f); // The loaf hitting the floor.
+    return FromSamples (samples);
+  }
+
   // A soft "uh-uh" denied cue (issue #160): two low, gentle blips - clearly not an error buzzer.
   public static AudioStreamWav Denied()
   {

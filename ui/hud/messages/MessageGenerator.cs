@@ -60,6 +60,9 @@ public static class MessageGenerator
     if (context.Kind == DamageKind.SlungItem) return MessagePools.SlungItem; // Issue #190.
     if (context.Kind == DamageKind.Slingshot) return MessagePools.Slingshot; // Issue #99.
     if (context.Kind == DamageKind.PaperAirplane) return MessagePools.PaperAirplane; // Issue #102.
+    // Standing stock still for three seconds is the whole story of that death, so it
+    // outranks every stance & carried-weapon flavor below it (issue #192).
+    if (context.VictimEating) return MessagePools.ZappedEating;
     if (context.VictimHeldBananaGun) return MessagePools.HoldingBananaGun;
     if (context.Kind == DamageKind.Laser && context.ThroughBarrier) return MessagePools.ThroughWall; // Pierced a wall/floor first (issue #94).
     if (context.KillerSliding) return MessagePools.SlideShotKiller;

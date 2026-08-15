@@ -11,6 +11,8 @@ public readonly record struct DeathContext (
   bool VictimSliding,
   bool VictimArmed,
   bool VictimHeldBananaGun,
+  // Caught mid-bread-ritual (issue #192): rooted, defenceless, & holding lunch.
+  bool VictimEating,
   int VictimLostStreak,
   bool KillerSliding,
   bool KillerAirborne,

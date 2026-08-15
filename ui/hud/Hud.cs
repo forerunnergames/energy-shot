@@ -35,10 +35,14 @@ public partial class Hud : Control
   private CooldownMeter _slideMeter = null!;
   private CooldownMeter _fullAutoMeter = null!;
   private CooldownMeter _bananaMeter = null!;
+  // Runs in reverse (issue #192): the eating ritual drains it instead of filling it.
+  private CooldownMeter _eatMeter = null!;
   private TextureRect _breadIcon = null!;
-  private AudioStreamPlayer _munchSound = null!;
+  private Label _breadNotice = null!;
+  private ulong _breadNoticeEndMs;
   private AudioStreamPlayer _lockOnSound = null!;
   private AudioStreamPlayer _breadDeniedSound = null!;
+  private AudioStreamPlayer _breadInterruptedSound = null!;
   private ColorRect _deathOverlay = null!;
   private Label _deathCountdown = null!;
   private TargetRing _targetRing = null!;
@@ -48,6 +52,9 @@ public partial class Hud : Control
   private float _splatterSlide;
   private const float SplatterSeconds = 5.0f; // Matches the banana stun window (issue #70).
   private const float SplatterSlidePerSecond = 0.06f;
+  private const float BreadNoticeSeconds = 2.0f; // How long a bread refusal/interruption line lingers (issue #192).
+  private static readonly Color BreadNoticeColor = new(1.0f, 0.85f, 0.5f);
+  private static readonly Color BreadInterruptColor = new(1.0f, 0.4f, 0.35f);
   private int _zapStreak;
   private int _zappedStreak;
   private int _fallStreak;
@@ -134,8 +141,10 @@ public partial class Hud : Control
     _slideMeter = GetNode <CooldownMeter> ("CooldownMeters/Slide");
     _fullAutoMeter = GetNode <CooldownMeter> ("CooldownMeters/FullAuto");
     _bananaMeter = GetNode <CooldownMeter> ("CooldownMeters/Banana");
+    _eatMeter = GetNode <CooldownMeter> ("CooldownMeters/Eat"); // Reverse meter (issue #192).
     _breadIcon = GetNode <TextureRect> ("VBoxContainer/Bread/Icon");
     CreateBreadSounds();
+    CreateBreadNotice();
     _lockOnSound = new AudioStreamPlayer { Stream = ProceduralSounds.LockOn(), MaxPolyphony = 2 }; // Issue #211.
     AddChild (_lockOnSound);
     _world.SelfPlayerPunched += OnSelfPlayerPunched;
@@ -144,6 +153,7 @@ public partial class Hud : Control
     _world.SelfPlayerAirplaneLockAcquired += () => _lockOnSound.Play(); // Issue #211.
     _world.SelfPlayerAteBread += OnSelfPlayerAteBread;
     _world.SelfPlayerBreadDenied += OnSelfPlayerBreadDenied;
+    _world.SelfPlayerBreadInterrupted += OnSelfPlayerBreadInterrupted;
     GetNode <Timer> ("LeaderboardTimer").Timeout += UpdateLeaderboard;
     _quitDialog = GetNode <ConfirmationDialog2> ("QuitDialog");
     _quitDialog.Confirmed += () => EmitSignal (SignalName.GameQuit);
@@ -219,6 +229,7 @@ public partial class Hud : Control
     UpdateSplatter (delta);
     UpdateCooldownMeters();
     UpdateBreadIcon();
+    UpdateBreadNotice();
     UpdateDeathOverlay();
     UpdateTargetRing();
   }
@@ -232,13 +243,46 @@ public partial class Hud : Control
     _targetRing.SetLocked (self?.HasAirplaneLock ?? false); // Thrower's lock-on (issue #205).
   }
 
-  // Bread munch & soft denied cues are code-generated (issue #160): no downloaded assets.
+  // Bread cues are code-generated (issue #160): no downloaded assets. The munching
+  // itself is positional now & lives on the eater (issue #192), so only the refusal
+  // & the interruption are HUD-local.
   private void CreateBreadSounds()
   {
-    _munchSound = new AudioStreamPlayer { Stream = ProceduralSounds.Munch() };
     _breadDeniedSound = new AudioStreamPlayer { Stream = ProceduralSounds.Denied() };
-    AddChild (_munchSound);
+    _breadInterruptedSound = new AudioStreamPlayer { Stream = ProceduralSounds.Interrupted() };
     AddChild (_breadDeniedSound);
+    AddChild (_breadInterruptedSound);
+  }
+
+  // A short line centered just above the cooldown meters (issue #192): why the eat
+  // was refused, or that a hit just cost you the loaf. Built in code like the death
+  // overlay & target ring, to keep Hud scene edits minimal.
+  private void CreateBreadNotice()
+  {
+    _breadNotice = new Label { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Bottom, MouseFilter = MouseFilterEnum.Ignore, Visible = false };
+    _breadNotice.AddThemeFontSizeOverride ("font_size", 22);
+    _breadNotice.AddThemeColorOverride ("font_outline_color", Colors.Black);
+    _breadNotice.AddThemeConstantOverride ("outline_size", 4);
+    _breadNotice.SetAnchorsPreset (LayoutPreset.Center);
+    _breadNotice.OffsetLeft = -240.0f;
+    _breadNotice.OffsetRight = 240.0f;
+    _breadNotice.OffsetTop = 4.0f;
+    _breadNotice.OffsetBottom = 32.0f;
+    AddChild (_breadNotice);
+  }
+
+  private void ShowBreadNotice (string text, Color color)
+  {
+    _breadNotice.Text = text;
+    _breadNotice.Modulate = color;
+    _breadNotice.Visible = true;
+    _breadNoticeEndMs = Time.GetTicksMsec() + (ulong)(BreadNoticeSeconds * 1000.0f);
+  }
+
+  private void UpdateBreadNotice()
+  {
+    if (!_breadNotice.Visible || Time.GetTicksMsec() < _breadNoticeEndMs) return;
+    _breadNotice.Visible = false;
   }
 
   private void ShowDeathOverlay()
@@ -296,6 +340,7 @@ public partial class Hud : Control
     _slideMeter.SetFraction (self.SlideReadyFraction); // The slide meter replaced the punch bar (issue #127).
     _fullAutoMeter.SetFraction (self.FullAutoReadyFraction);
     _bananaMeter.SetFraction (self.BananaReadyFraction);
+    _eatMeter.SetDraining (self.BreadEatRemainingFraction, self.Eating); // Reverse: it drains to empty (issue #192).
   }
 
   // The bread icon dims once the loaf is eaten & brightens when a respawn restocks
@@ -307,17 +352,27 @@ public partial class Hud : Control
     _breadIcon.Modulate = self.HasBread ? Colors.White : new Color (0.4f, 0.4f, 0.4f, 0.35f);
   }
 
-  private void OnSelfPlayerAteBread()
-  {
-    _munchSound.Play();
-    PrintMessage ("You scarf your bread & feel brand new!", MessageScroller.MessageImportance.High);
-  }
+  // The munching itself was heard positionally during the ritual (issue #192); this
+  // is the payoff line for finishing the whole three seconds.
+  private void OnSelfPlayerAteBread() => PrintMessage ("You scarf your bread & feel brand new!", MessageScroller.MessageImportance.High);
 
-  // Soft denied cues (issue #160): a pressed B that can't eat is never silent.
-  private void OnSelfPlayerBreadDenied (bool isOut)
+  // Soft denied cues (issue #160): an eat attempt that can't start is never silent,
+  // & the reason now lands centered above the meter (issue #192).
+  private void OnSelfPlayerBreadDenied (string reason)
   {
     _breadDeniedSound.Play();
-    PrintMessage (isOut ? "No bread left this life" : "Already at full health");
+    ShowBreadNotice (reason, BreadNoticeColor);
+    PrintMessage (reason);
+  }
+
+  // Unmistakable interruption (issue #192): a sour cue, a red line above the meter,
+  // & the reverse meter visibly dying - the loaf is gone & you were not healed.
+  private void OnSelfPlayerBreadInterrupted()
+  {
+    _breadInterruptedSound.Play();
+    _eatMeter.Interrupt();
+    ShowBreadNotice ("Your bread!", BreadInterruptColor);
+    PrintMessage ("That hit cost you your bread!", MessageScroller.MessageImportance.High);
   }
 
   // ~3 hits reach max blur (issue #68): the shader's top LOD is a near-whiteout.
@@ -400,6 +455,7 @@ public partial class Hud : Control
       self?.DiedSliding ?? false,
       self?.DiedArmed ?? false,
       self?.DiedHoldingBananaGun ?? false,
+      self?.DiedEating ?? false, // Zapped out mid-ritual (issue #192).
       self?.LostStreakCount ?? 0,
       killer?.Sliding ?? false,
       killer?.IsLikelyAirborne() ?? false,

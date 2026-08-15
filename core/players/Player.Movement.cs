@@ -15,6 +15,8 @@ public partial class Player
   public bool DiedSliding { get; private set; }
   public bool DiedArmed { get; private set; }
   public bool DiedHoldingBananaGun { get; private set; }
+  // Zapped out mid-ritual (issue #192): its own scenario, & the funniest one.
+  public bool DiedEating { get; private set; }
   public int LostStreakCount { get; private set; }
   // 0..1 for the HUD's slide cooldown bar, like PunchReadyFraction (issue #127).
   // Non-positive cooldown = always ready; clamped so the HUD bar never sees NaN or overshoot.
@@ -22,13 +24,14 @@ public partial class Player
   // Playtest-observable (issue #149): the current slide's speed - base, or higher when chained.
   public float CurrentSlideSpeed => _currentSlideSpeed;
   private bool IsFalling() => !IsOnFloor();
-  // Stun blocks jumping & sliding (issues #70 & #71).
-  private bool IsJumping() => _isInputEnabled && !IsStunned && _jumpTimer.IsStopped() && Input.IsActionJustPressed ("jump") && IsOnFloor();
+  // Stun blocks jumping & sliding (issues #70 & #71); the eating ritual roots you
+  // completely (issue #192) - no walking, jumping, sliding, or crouch changes.
+  private bool IsJumping() => _isInputEnabled && !IsStunned && !Eating && _jumpTimer.IsStopped() && Input.IsActionJustPressed ("jump") && IsOnFloor();
   private void Fall (ref Vector3 velocity, double delta) => velocity += Gravity * (float)delta;
   private bool WantsSlide() => _isInputEnabled && !IsStunned && Input.IsActionPressed ("slide");
   // Edge-triggered start (issue #131): a wedged pressed key state (e.g. a swallowed
   // Shift release on focus loss) can't auto-restart slides after every cooldown.
-  private bool StartsSlide() => _isInputEnabled && !IsStunned && Input.IsActionJustPressed ("slide");
+  private bool StartsSlide() => _isInputEnabled && !IsStunned && !Eating && Input.IsActionJustPressed ("slide");
   // Escape hatch (issue #131): while sliding, a fresh slide press always cancels;
   // crouch cancels in UpdateCrouch & jump chains via SlideJump (issue #149).
   private bool CanceledSlide() => _isInputEnabled && Input.IsActionJustPressed ("slide");
@@ -113,6 +116,7 @@ public partial class Player
   // into geometry above.
   private void UpdateCrouch()
   {
+    if (Eating) return; // The stance you started the ritual in is locked in (issue #192).
     if (Sliding && _crouching) { Crouching = false; ApplyCameraHeight(); return; }
     if (_holdToCrouch) { UpdateHeldCrouch(); return; }
     if (!ToggledCrouch()) return;
@@ -158,6 +162,7 @@ public partial class Player
     // The dance owns the mesh (issue #103): Sliding syncs ALWAYS, so this re-runs
     // every tick on puppets & would fight the dance tween; the dance's stop restores.
     if (Dancing) return;
+    if (Eating) return; // Same for the munch bob (issue #192).
     if (Fallen) return; // Same for the death tip-over tween (issue #152).
     var rotation = Sliding ? new Vector3 (-90.0f, 0.0f, 0.0f) : Vector3.Zero;
     var position = BodyPoseOffset();
@@ -180,6 +185,7 @@ public partial class Player
   {
     if (_mesh == null) return;
     if (Dancing) return; // Same ALWAYS-sync reason as ApplySlidePose (issue #103).
+    if (Eating) return; // Same for the munch bob (issue #192).
     if (Fallen) return; // The death tip-over tween owns the mesh (issue #152).
     var scale = new Vector3 (1.0f, _crouching ? CrouchHeightScale : 1.0f, 1.0f);
     var position = BodyPoseOffset();
@@ -204,6 +210,9 @@ public partial class Player
 
   private void Move (ref Vector3 velocity)
   {
+    // Rooted for the ritual (issue #192): movement input produces no motion at all.
+    // Gravity still applies, so a floor vanishing underneath still drops you.
+    if (Eating) { velocity.X = 0.0f; velocity.Z = 0.0f; return; }
     if (_stickyFlightSecondsLeft > 0.0f) return; // Banana-launched (issue #83): momentum owns the ride.
     if (_slideJumpCarrying) return; // Slide-jump air (issue #149): the slide's momentum owns the ride until touchdown.
     var speed = MoveSpeed();
@@ -253,6 +262,8 @@ public partial class Player
     DiedSliding = Sliding;
     DiedArmed = !IsUnarmed; // Carrying bread isn't being armed (issue #190).
     DiedHoldingBananaGun = Holds (HeldWeapon.Banana);
+    // The lethal hit already interrupted the ritual, so read what it captured (issue #192).
+    DiedEating = _wasEatingWhenHit;
     LostStreakCount = ZapStreakCount;
   }
 
@@ -313,6 +324,9 @@ public partial class Player
     _slideChainWindowLeft = 0.0f;
     Crouching = false;
     Dancing = false; // A new life starts with the pose fully restored on every peer (issue #103).
+    Eating = false; // Same for the eating ritual & its munch bob (issue #192).
+    _eatSecondsLeft = 0.0f;
+    _wasEatingWhenHit = false;
     Fallen = false; // Belt & braces: the lie-down always ends before this runs (issue #152).
     ApplyCameraHeight();
     SetInputEnabled (isEnabled: false);

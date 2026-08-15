@@ -1,6 +1,6 @@
 # Controls
 
-Current as of v0.8.14.
+Current as of v0.8.15.
 
 ## Movement
 
@@ -15,7 +15,7 @@ Current as of v0.8.14.
 
 ## Weapons
 
-Slot keys select what's in your hands. You spawn with fists only; everything else is picked up in the arena (picking one up auto-equips it). Every weapon uses the same primary button: left click acts with whatever slot is selected; right click is unbound (reserved).
+Slot keys select what's in your hands. You spawn with fists **and bread**; every gun is picked up in the arena (picking one up auto-equips it - bread is the one exception, so a loaf never swaps a weapon out of your hands mid-fight). Every slot uses the same primary button: left click acts with whatever slot is selected; right click is unbound (reserved).
 
 | Key | Weapon | How it works |
 |---|---|---|
@@ -25,6 +25,7 @@ Slot keys select what's in your hands. You spawn with fists only; everything els
 | 4 | Boomerang | Left-click to throw. Curves out & returns; steals weapons from anyone it clips & scoops pickups it passes; auto-catches on return |
 | 5 | Slingshot | Hold left-click to draw, release to fling a stone. Longer draw = faster, flatter, harder (never a one-hit). A quick tap just relaxes the band - stones need a minimum draw, & a short cooldown separates shots. **Universal ammo**: see below |
 | 6 | Paper airplane | Left-click to throw. Locks onto whoever's under your crosshair & glides slowly after them; punch an incoming one (fists out) to catch it & throw it back. Only one exists in the whole game, & it is a personal hazard - see below |
+| 7 | Bread | Left-click to eat: a 3-second rooted ritual that heals you to full. One loaf per life - see below |
 
 ### Slingshot universal ammo
 
@@ -35,12 +36,22 @@ With the slingshot **out and empty**, walking onto any world item **loads it** i
 - Wherever the item lands, it becomes an ordinary world pickup again - nothing is ever destroyed by being fired.
 - Holster the slingshot (or fill it) if you'd rather just pick things up.
 
+### Eating bread
+
+Bread is slot 7 and you spawn carrying one loaf per life. **Left-click with it out to eat**, and then commit:
+
+- It takes **3 seconds**, drained on a reverse meter in the middle of your screen.
+- You must be **standing still** to start. Eating while walking, sliding, or in mid-air is refused with an error cue and a line above the meter. You *can* equip the loaf mid-slide or mid-jump - the ritual just waits until the slide ends and you land and stop.
+- While eating you **cannot move at all**: no walking, jumping, sliding, crouching, uncrouching, or switching slots. Looking around is all you get, and whatever stance you started in is locked in.
+- **You can't cancel it. Anyone else can**: *any* hit ends the ritual, and the loaf is **wasted** - no heal, and no second loaf until you respawn.
+- Finish it and you're healed to full.
+- **Everyone can see you doing it**: the loaf goes up to your face, your body munches, crumbs fall, a tag pops up over your name, and the crunching is audible to anyone nearby. Eating in the open is a gamble.
+
 ## Abilities & extras
 
 | Input | Action |
 |---|---|
 | F | Full-auto laser burst (3s of rapid low-power shots, 15s cooldown; needs the laser) |
-| B | Eat bread - full heal, once per life. Get zapped out before you eat it & the loaf drops with everything else (grab someone else's & you're stocked again) |
 | G | Dance. Blocks your weapons while grooving; any movement or taking a hit cancels it |
 | Shoot the ground beneath you | Rocket boost upward, scaling with charge. Unlimited from the ground; while airborne it works once per airtime, re-armed when you land |
 
@@ -69,6 +80,6 @@ There is exactly **one** paper airplane in the arena. It's a slot-6 weapon like 
 
 - White glow = spawn armor (5s of invulnerability after spawning; firing or punching cancels it).
 - Getting zapped out drops your body at the death spot for ~5s - the camera pulls back so you can watch the aftermath - then you auto-respawn with spawn armor.
-- Getting zapped out also drops **everything** you were carrying - weapons, your uneaten bread, and anything nocked in your slingshot - right where you fell. Dropped items expire after a few seconds.
+- Getting zapped out also drops **everything** you were carrying - weapons, your uneaten bread, and anything nocked in your slingshot - right where you fell. Dropped items expire after a few seconds. (A loaf ruined by an interrupted eat is gone, not dropped.)
 - Kills heal you 50 HP. Falling off the world costs a point - your score can go negative.
 - Difficulty picks your health pool (Beginner 400 / Intermediate 300 / Expert 200), and lower-tier players hit higher-tier players harder.

@@ -41,9 +41,12 @@ public partial class Player : CharacterBody3D
 
   [Signal] public delegate void HealthChangedEventHandler (int value);
   [Signal] public delegate void BreadEatenEventHandler (string playerName);
-  // Soft feedback for a bread press that can't eat (issue #160): isOut = the loaf is
-  // gone this life; otherwise the player is already at full health.
-  [Signal] public delegate void BreadDeniedEventHandler (bool isOut);
+  // Soft feedback for an eat attempt that can't start (issue #160), now carrying the
+  // reason itself (issue #192): full health, or not standing still.
+  [Signal] public delegate void BreadDeniedEventHandler (string reason);
+  // A hit ended the ritual & wasted the loaf (issue #192): the HUD makes it
+  // unmistakable - a sound, a message, & the reverse meter visibly dying.
+  [Signal] public delegate void BreadInterruptedEventHandler();
   [Signal] public delegate void PunchedEventHandler();
   [Signal] public delegate void ScoredEventHandler (string playerName, string shotPlayerName);
   [Signal] public delegate void RespawnedShotEventHandler (string playerName, string shotByPlayerName);
@@ -250,8 +253,11 @@ public partial class Player : CharacterBody3D
   [Export] public float HealthTagNameTagMaxSpacing = 3.0f;
   [Export] public float NameTagBaseHeight = 2.3f;
   public int NetworkId => Name.ToString().ToInt();
-  // Whether the one-per-life loaf is still uneaten, for the HUD bread icon (issue #160).
-  public bool HasBread => _bread.IsAvailable;
+  // Whether the one-per-life loaf is still in hand: the HUD bread icon (issue #160) &
+  // the slot-7 selection rules (issue #209). Reads the REPLICATED mask, not the local
+  // Bread item, so puppets render other players' loaves correctly too - SetBreadHeld
+  // keeps the two in lockstep on the owning peer (issue #190).
+  public bool HasBread => Holds (HeldWeapon.Bread);
   public float LastZapEnergy { get; private set; }
   // Whether the last zap this player took came through a pierced barrier (issue #94).
   public bool LastZapThroughBarrier { get; private set; }
@@ -341,6 +347,7 @@ public partial class Player : CharacterBody3D
     CreateBoomerangHeld(); // Code-built held model, no scene asset (issue #98).
     CreateSlingshotHeld(); // Same, for the slot-5 slingshot (issue #99).
     CreateAirplaneHeld(); // Same, for the slot-6 paper airplane (issue #102).
+    CreateBreadHeld(); // Same, for the slot-7 loaf (issue #209).
     UpdateWeaponVisibility();
     // Spawn-state sync runs before _Ready, when the slingshot node was still null,
     // so re-apply or a late joiner never sees an already-nocked item (issue #190).
@@ -436,7 +443,7 @@ public partial class Player : CharacterBody3D
     UpdateAirplaneLock(); // Resolve the lock BEFORE the throw reads it (issues #205 & #211).
     UpdateAirplane(); // Homing glider throws (issue #102).
     UpdateAirplaneCatchWindow(); // An open swing keeps grabbing briefly (issue #102).
-    UpdateBread();
+    UpdateBread (delta); // The slot-7 loaf & its 3s eating ritual (issues #209 & #192).
     UpdateFullAuto (delta);
     UpdatePunch (delta);
     UpdateDance (delta); // After the fire/punch updates, so a canceling press can't also attack (issue #103).
