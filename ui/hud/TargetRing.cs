@@ -74,7 +74,13 @@ public partial class TargetRing : Control
   public override void _Process (double delta)
   {
     if (!Visible) return;
-    if (_threat <= 0.0f) return; // A steady lock ring needs no per-frame work.
+
+    // A steady lock ring doesn't animate, but it still has to redraw (issue #217):
+    // a single draw taken before this control had been laid out produced a radius of
+    // zero, & with nothing asking again the lock ring stayed invisible for the rest
+    // of the match. Cheap - one arc.
+    if (_threat <= 0.0f) { QueueRedraw(); return; }
+
     UpdateBlink ((float)delta);
     QueueRedraw();
   }
@@ -93,7 +99,9 @@ public partial class TargetRing : Control
 
   public override void _Draw()
   {
-    var size = Size;
+    // The viewport, not our own rect (issue #217): a code-added Control can be drawn
+    // before its layout resolves, & a zero size silently drew nothing.
+    var size = GetViewportRect().Size;
     var radius = Mathf.Min (size.X, size.Y) * RadiusScreenFraction;
 
     if (_threat <= 0.0f)

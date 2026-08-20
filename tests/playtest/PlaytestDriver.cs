@@ -1159,6 +1159,7 @@ public partial class PlaytestDriver : Node
     // same mask, so an empty mask here proves the bread went with the weapons.
     Assert (Self.HeldWeapon == HeldWeapon.None, $"death dropped every carried item, bread included (#169/#190), still holding {Self.HeldWeapon}");
     await AssertLoadedSlingshotDroppedBoth();
+    await AssertDeadBodyIsRootedInPlace();
     await WaitUntil (() => Self.SpawnArmor && Self.Health == Self.MaxHealth, 120, "died & respawned with armor & full health");
     var lieDownMs = Time.GetTicksMsec() - fallenStartMs;
     Assert (lieDownMs >= (ulong)(Self.DeathSequenceSeconds * 1000.0f) - 500, $"lay at the death spot ~{Self.DeathSequenceSeconds}s before respawning (#152), got {lieDownMs}ms");
@@ -1250,6 +1251,21 @@ public partial class PlaytestDriver : Node
   // Runs at the bread mark (the spawn-room corner with the wall at z=6 point-blank):
   // a fresh life starts at full health, & the don't-waste-the-loaf rule (#160) refuses
   // an eat there, so a few knuckles vs. wall (#122) open the ritual up.
+  // The walking-corpse regression (#216): the lie-down disables input, but Move()
+  // used to read the keys directly & stroll the body away from the death spot.
+  // Holding forward for a second of the lie-down must not move us at all.
+  private async Task AssertDeadBodyIsRootedInPlace()
+  {
+    if (!Self.Fallen) return; // The lie-down already ended: nothing left to prove this run.
+    var deathSpot = Self.Position;
+    PressAction ("move_forward");
+    await Task.Delay (1000);
+    ReleaseAction ("move_forward");
+    var drift = (Self.Position - deathSpot) with { Y = 0.0f };
+    Assert (Self.Fallen, "still lying down after the rooted-movement window (#216)");
+    Assert (drift.Length() < 0.1f, $"dead body stayed rooted despite held movement input (#216), drifted {drift.Length():F2}m");
+  }
+
   private async Task RunBreadInterruptedPhase()
   {
     Assert (Self.Holds (HeldWeapon.Bread), "this life restocked the loaf (#62/#190)");

@@ -25,6 +25,7 @@ Full reference: [docs/CONTROLS.md](docs/CONTROLS.md) (movement, all 7 weapon slo
 | W A S D / Mouse / Space | Move, look, jump |
 | Left mouse | Use selected weapon — punch with fists, hold to charge laser / draw slingshot (fires whatever the slingshot is loaded with) |
 | Right mouse | Unbound (reserved) |
+| Mouse wheel (up = prev, down = next) / Q / E | Cycle carried weapons |
 | 1-7 | Fists, laser, banana, boomerang, slingshot, paper airplane, bread |
 | Shift / C / V | Slide, crouch, first-/third-person |
 | F / G | Full-auto burst, dance |
