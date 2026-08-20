@@ -26,9 +26,9 @@ public partial class Player
   private bool IsFalling() => !IsOnFloor();
   // Stun blocks jumping & sliding (issues #70 & #71); the eating ritual roots you
   // completely (issue #192) - no walking, jumping, sliding, or crouch changes.
-  private bool IsJumping() => _isInputEnabled && !IsStunned && !Eating && _jumpTimer.IsStopped() && Input.IsActionJustPressed ("jump") && IsOnFloor();
+  private bool IsJumping() => _isInputEnabled && !IsStunned && !Eating && !Fallen && _jumpTimer.IsStopped() && Input.IsActionJustPressed ("jump") && IsOnFloor();
   private void Fall (ref Vector3 velocity, double delta) => velocity += Gravity * (float)delta;
-  private bool WantsSlide() => _isInputEnabled && !IsStunned && Input.IsActionPressed ("slide");
+  private bool WantsSlide() => _isInputEnabled && !IsStunned && !Fallen && Input.IsActionPressed ("slide");
   // Edge-triggered start (issue #131): a wedged pressed key state (e.g. a swallowed
   // Shift release on focus loss) can't auto-restart slides after every cooldown.
   private bool StartsSlide() => _isInputEnabled && !IsStunned && !Eating && Input.IsActionJustPressed ("slide");
@@ -210,6 +210,10 @@ public partial class Player
 
   private void Move (ref Vector3 velocity)
   {
+    // A body lying at the death spot doesn't walk (issue #216): the lie-down tips the
+    // mesh over & takes the camera, but movement input still drove the body around,
+    // so corpses could stroll off for five seconds. Gravity still applies.
+    if (Fallen) { velocity.X = 0.0f; velocity.Z = 0.0f; return; }
     // Rooted for the ritual (issue #192): movement input produces no motion at all.
     // Gravity still applies, so a floor vanishing underneath still drops you.
     if (Eating) { velocity.X = 0.0f; velocity.Z = 0.0f; return; }

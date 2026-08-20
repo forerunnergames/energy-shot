@@ -161,6 +161,34 @@ public partial class Player
     if (Input.IsActionJustPressed ("weapon_5") && HasSlingshot) SelectedWeapon = SelectedWeapon.Slingshot; // Slot 5 (issue #99).
     if (Input.IsActionJustPressed ("weapon_6") && HasPaperAirplane) SelectedWeapon = SelectedWeapon.PaperAirplane; // Slot 6 (issue #102).
     if (Input.IsActionJustPressed ("weapon_7") && HasBread) SelectedWeapon = SelectedWeapon.Bread; // Slot 7 (issue #209).
+    // Cycling (issue #186): mouse wheel for mouse players, Q & E for trackpads -
+    // reaching for 7 mid-fight to eat is not a real option.
+    if (Input.IsActionJustPressed ("cycle_weapon_next")) CycleSelectedWeapon (1);
+    if (Input.IsActionJustPressed ("cycle_weapon_previous")) CycleSelectedWeapon (-1);
+  }
+
+  // Steps through what you're actually CARRYING, in slot order, wrapping around -
+  // empty slots are skipped, so cycling never lands on a weapon you don't have.
+  private void CycleSelectedWeapon (int step)
+  {
+    var carried = SelectableSlots();
+    if (carried.Count < 2) return; // Fists alone: nothing to cycle to.
+    var current = carried.IndexOf (_selectedWeapon);
+    var next = current < 0 ? 0 : ((current + step) % carried.Count + carried.Count) % carried.Count;
+    SelectedWeapon = carried[next];
+  }
+
+  // Fists are always available; everything else only while it's in your hands.
+  private List <SelectedWeapon> SelectableSlots()
+  {
+    var slots = new List <SelectedWeapon> { SelectedWeapon.Fists };
+    if (HasLaser) slots.Add (SelectedWeapon.Laser);
+    if (HasBanana) slots.Add (SelectedWeapon.Banana);
+    if (HasBoomerang) slots.Add (SelectedWeapon.Boomerang);
+    if (HasSlingshot) slots.Add (SelectedWeapon.Slingshot);
+    if (HasPaperAirplane) slots.Add (SelectedWeapon.PaperAirplane);
+    if (HasBread) slots.Add (SelectedWeapon.Bread);
+    return slots;
   }
 
   // A dropped or lost gun can't stay selected: fall back to fists (issue #82).
