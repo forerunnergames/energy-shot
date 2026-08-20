@@ -167,15 +167,30 @@ public partial class Player
     if (Input.IsActionJustPressed ("cycle_weapon_previous")) CycleSelectedWeapon (-1);
   }
 
+  // Trackpad two-finger scrolling arrives as a FLOOD of fine-grained wheel ticks -
+  // uncooled, one swipe machine-guns through every slot (issue #186). One step per
+  // interval keeps a deliberate notch-scroll feeling 1:1.
+  [Export] public float WeaponCycleCooldownSeconds = 0.2f;
+  private ulong _nextCycleAllowedMs;
+
   // Steps through what you're actually CARRYING, in slot order, wrapping around -
   // empty slots are skipped, so cycling never lands on a weapon you don't have.
   private void CycleSelectedWeapon (int step)
   {
+    if (Time.GetTicksMsec() < _nextCycleAllowedMs) return;
     var carried = SelectableSlots();
     if (carried.Count < 2) return; // Fists alone: nothing to cycle to.
-    var current = carried.IndexOf (_selectedWeapon);
-    var next = current < 0 ? 0 : ((current + step) % carried.Count + carried.Count) % carried.Count;
-    SelectedWeapon = carried[next];
+    _nextCycleAllowedMs = Time.GetTicksMsec() + (ulong)(WeaponCycleCooldownSeconds * 1000.0f);
+    SelectedWeapon = NextCycleSlot (carried, _selectedWeapon, step);
+  }
+
+  // Pure wrap math, public static so the unit tests can hit the boundaries directly
+  // (CodeRabbit on #219): forward & reverse wrap, & a current slot not in the list.
+  public static SelectedWeapon NextCycleSlot (List <SelectedWeapon> carried, SelectedWeapon current, int step)
+  {
+    var index = carried.IndexOf (current);
+    var next = index < 0 ? 0 : ((index + step) % carried.Count + carried.Count) % carried.Count;
+    return carried[next];
   }
 
   // Fists are always available; everything else only while it's in your hands.

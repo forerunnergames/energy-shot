@@ -12,7 +12,7 @@ Current as of v0.8.15.
 | Shift | Slide (a 3.5s burst, 5s cooldown; press slide or crouch to cancel early - the timer ends standing when there's headroom) |
 | C | Crouch (toggle - press again to stand; switch to hold-to-crouch in the pause dialog, saved between sessions) |
 | V | Toggle first-/third-person view (saved between sessions) |
-| Mouse wheel, or Q / E | Cycle through what you're carrying (skips slots you don't have) |
+| Mouse wheel (up = previous, down = next), or Q / E | Cycle through what you're carrying (skips slots you don't have) |
 
 ## Weapons
 

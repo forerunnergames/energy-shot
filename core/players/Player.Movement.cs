@@ -31,14 +31,14 @@ public partial class Player
   private bool WantsSlide() => _isInputEnabled && !IsStunned && !Fallen && Input.IsActionPressed ("slide");
   // Edge-triggered start (issue #131): a wedged pressed key state (e.g. a swallowed
   // Shift release on focus loss) can't auto-restart slides after every cooldown.
-  private bool StartsSlide() => _isInputEnabled && !IsStunned && !Eating && Input.IsActionJustPressed ("slide");
+  private bool StartsSlide() => _isInputEnabled && !IsStunned && !Eating && !Fallen && Input.IsActionJustPressed ("slide");
   // Escape hatch (issue #131): while sliding, a fresh slide press always cancels;
   // crouch cancels in UpdateCrouch & jump chains via SlideJump (issue #149).
   private bool CanceledSlide() => _isInputEnabled && Input.IsActionJustPressed ("slide");
   // Mirrors IsJumping plus the room-to-stand check (issue #149): the same press that
   // makes Jump() fire this frame also ends the slide with its momentum & no cooldown.
-  private bool StartsSlideJump() => _isInputEnabled && !IsStunned && _jumpTimer.IsStopped() && Input.IsActionJustPressed ("jump") && IsOnFloor() && !IsOverheadBlocked();
-  private bool ToggledCrouch() => _isInputEnabled && Input.IsActionJustPressed ("crouch");
+  private bool StartsSlideJump() => _isInputEnabled && !IsStunned && !Eating && !Fallen && _jumpTimer.IsStopped() && Input.IsActionJustPressed ("jump") && IsOnFloor() && !IsOverheadBlocked();
+  private bool ToggledCrouch() => _isInputEnabled && !Fallen && Input.IsActionJustPressed ("crouch");
   private float MoveSpeed() => (Sliding ? _currentSlideSpeed : _crouching ? Speed * CrouchSpeedMultiplier : Speed) * StunSpeedMultiplier();
 
   // Press to slide, hold to sustain: double speed & a horizontal pose, capped at
@@ -210,10 +210,11 @@ public partial class Player
 
   private void Move (ref Vector3 velocity)
   {
-    // A body lying at the death spot doesn't walk (issue #216): the lie-down tips the
-    // mesh over & takes the camera, but movement input still drove the body around,
-    // so corpses could stroll off for five seconds. Gravity still applies.
-    if (Fallen) { velocity.X = 0.0f; velocity.Z = 0.0f; return; }
+    // The root cause of walking corpses (issue #216): every action predicate honors
+    // the input lock, but Move never did - so "input disabled" stopped everything
+    // EXCEPT walking, through the death lie-down & the respawn lock alike. The
+    // explicit Fallen check stays as defense for any Fallen-with-input-enabled path.
+    if (!_isInputEnabled || Fallen) { velocity.X = 0.0f; velocity.Z = 0.0f; return; }
     // Rooted for the ritual (issue #192): movement input produces no motion at all.
     // Gravity still applies, so a floor vanishing underneath still drops you.
     if (Eating) { velocity.X = 0.0f; velocity.Z = 0.0f; return; }
