@@ -192,7 +192,7 @@ public partial class PlaytestDriver : Node
     // that follows - the shooter's ammo & airplane phases & the victim's catch and
     // landmine phases - & the sum of their per-step budgets already exceeds 180s. A
     // slow run that stays inside every inner budget must not fail out here.
-    await WaitUntil (() => _world.GetPlayers().Count() == 1, 900, "clients disconnected"); // Spans the end-of-run coverage phases too (the watchdog is 600s).
+    await WaitUntil (() => _world.GetPlayers().Count() == 1, 570, "clients disconnected"); // Spans the end-of-run coverage phases too, & stays under the 600s watchdog so a stall fails by name (CodeRabbit on #258).
     // The version line goes only to joining clients, never broadcast (#158), so the
     // host must never have seen one.
     Assert (_adminMessages.All (message => !message.Contains ("Running")), "version line was not broadcast to the host (#158)");
@@ -1344,8 +1344,9 @@ public partial class PlaytestDriver : Node
   }
 
   // Punch theft (#193): stand with the loaf out; a landed punch (20%/swing) takes it.
-  // The shooter already carries its own loaf, so the steal falls back to the fly-out
-  // drop: our bread leaves our hands & lands beside us as a tossed pickup.
+  // The shooter ate its own loaf long ago, so this is the DIRECT steal: our bread
+  // goes straight into the puncher's hands (the fly-out fallback is covered by the
+  // drop phase's tossed pickup & the drop-on-X phase).
   private async Task BeTheTheftTarget()
   {
     // Punches cost 20 each & the theft is a 20% roll per landed punch, so a run of bad
@@ -1365,6 +1366,7 @@ public partial class PlaytestDriver : Node
   private async Task RunPunchTheftPhase (Player victim)
   {
     await WaitUntil (() => victim.SelectedWeapon == SelectedWeapon.Bread && !victim.SpawnArmor && FlatDistance (victim.GlobalPosition, VictimParkSpot) < 2.0f, 120, "victim parked with its loaf out for the theft phase (#193)");
+    var hadBread = Self.HasBread; // Ate it in the bread phase: expect the direct steal. Still holding one: expect the fly-out.
 
     var deadline = Time.GetTicksMsec() + 150_000;
 
@@ -1386,8 +1388,8 @@ public partial class PlaytestDriver : Node
     }
 
     Assert (!victim.Holds (HeldWeapon.Bread), "a punch took the victim's equipped loaf (#193)");
-    Assert (Self.HasBread, "we still carry our own loaf, so the theft became a fly-out drop (#193)");
-    await WaitUntil (() => DroppedNear (HeldWeapon.Bread, victim.GlobalPosition) is { TossFrom: var toss } && toss != Vector3.Zero, 30, "the knocked-loose loaf flew out as a tossed pickup, not a drop at the feet (#193)");
+    if (hadBread) await WaitUntil (() => DroppedNear (HeldWeapon.Bread, victim.GlobalPosition) is { TossFrom: var toss } && toss != Vector3.Zero, 30, "already holding a loaf, the theft became a fly-out: a tossed pickup beside the victim (#193)");
+    else await WaitUntil (() => Self.HasBread, 30, "the stolen loaf went straight into our hands - the direct steal (#193)");
     Self.Position = ShooterParkSpot;
     await Task.Delay (300);
   }
@@ -1418,7 +1420,9 @@ public partial class PlaytestDriver : Node
       await Task.Delay (400);
     }
 
-    await WaitUntil (() => victim.Health == before - Player.HeadshotDamage, 30, $"a dome hit cost the victim exactly {Player.HeadshotDamage} (#179)");
+    await WaitUntil (() => victim.Health < before, 30, "the bolt landed on the victim (#179)");
+    // Fail fast on a body hit (CodeRabbit on #258): the first hit must be the dome's flat 300.
+    Assert (victim.Health == before - Player.HeadshotDamage, $"a dome hit cost the victim exactly {Player.HeadshotDamage} (#179): {before} -> {victim.Health}");
     Self.Position = ShooterParkSpot;
     await Task.Delay (300);
   }
@@ -1463,7 +1467,7 @@ public partial class PlaytestDriver : Node
     ReleaseAction ("cycle_weapon_next");
     await WaitUntil (() => Self.ZoomStep == 1, 10, "the wheel stepped the scope in instead of cycling weapons (#236)");
     Assert (Self.SelectedWeapon == SelectedWeapon.Blowgun, "weapon cycling stayed suspended while scoped (#236)");
-    Assert (Self.ReticleDrift != Vector2.Zero, "the reticle drifts while scoped - aiming is never free (#236)");
+    await WaitUntil (() => Self.ReticleDrift != Vector2.Zero, 5, "the reticle drifts while scoped - aiming is never free (#236)"); // Polled: the wander can cross zero on any one frame.
     PressAction ("scope");
     await Task.Delay (60);
     ReleaseAction ("scope");
@@ -1498,6 +1502,7 @@ public partial class PlaytestDriver : Node
     await Task.Delay (60);
     ReleaseAction ("shoot");
     await WaitUntil (() => DroppedNear (HeldWeapon.PoisonDart, floorSpot) is { Armed: true }, 30, "a dart that hit the floor landed as an ARMED ground dart (#236/#248)");
+    AimAt (ShooterParkSpot + new Vector3 (0.0f, 1.0f, 4.0f)); // Toss the gun AWAY from the dart, so it can't land inside the dart's claim reach (CodeRabbit on #258).
     PressAction ("drop"); // Lose the blowgun so the dart is a hazard to us, not ammo (also covers #242 for slot 8).
     await Task.Delay (60);
     ReleaseAction ("drop");

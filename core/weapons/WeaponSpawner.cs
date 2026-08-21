@@ -272,7 +272,7 @@ public partial class WeaponSpawner : Node3D
     // Same cap guard for the banana (CodeRabbit on #180): respawning it here while
     // someone already carries one would put two in a level capped at one.
     if (Count (HeldWeapon.Banana, pickups, players) < MaxBananas) EnsurePlaytestPickup (HeldWeapon.Banana, PlaytestBananaPosition, pickups); // Issue #169.
-    EnsurePlaytestPickup (HeldWeapon.Blowgun, PlaytestBlowgunPosition, pickups); // Issue #236.
+    if (Count (HeldWeapon.Blowgun, pickups, players) < MaxBlowguns) EnsurePlaytestPickup (HeldWeapon.Blowgun, PlaytestBlowgunPosition, pickups); // Cap-guarded like the banana (CodeRabbit on #258).
     EnsurePlaytestPickup (HeldWeapon.PoisonDart, PlaytestDartPosition, pickups); // A floating (unarmed) dart: ammo for a blowgun holder (issue #236).
   }
 
