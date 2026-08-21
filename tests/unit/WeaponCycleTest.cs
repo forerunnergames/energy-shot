@@ -12,26 +12,27 @@ namespace com.forerunnergames.energyshot;
 [TestSuite]
 public class WeaponCycleTest
 {
-  // Laser & bread held, banana/boomerang/slingshot/airplane slots empty.
+  // Bread & laser held (key order: 0 bread, 1 fists, 2 laser); the other slots empty.
   private static List <SelectedWeapon> Carried() =>
-    new() { SelectedWeapon.Fists, SelectedWeapon.Laser, SelectedWeapon.Bread };
+    new() { SelectedWeapon.Bread, SelectedWeapon.Fists, SelectedWeapon.Laser };
 
   [TestCase]
   public void ForwardStepsInSlotOrderSkippingEmptySlots()
   {
-    // Laser -> Bread skips the four empty slots between them.
+    // Laser -> Bread wraps past the six empty gun slots (issue #223: the loaf leads the wheel).
     AssertObject (Player.NextCycleSlot (Carried(), SelectedWeapon.Laser, 1)).IsEqual (SelectedWeapon.Bread);
   }
 
   [TestCase]
-  public void ForwardWrapsFromLastSlotToFists()
+  public void ForwardFromBreadLandsOnFists()
   {
     AssertObject (Player.NextCycleSlot (Carried(), SelectedWeapon.Bread, 1)).IsEqual (SelectedWeapon.Fists);
   }
 
   [TestCase]
-  public void ReverseWrapsFromFistsToLastSlot()
+  public void ReverseFromFistsLandsOnBread()
   {
+    // One notch back from fists is the loaf (issue #223).
     AssertObject (Player.NextCycleSlot (Carried(), SelectedWeapon.Fists, -1)).IsEqual (SelectedWeapon.Bread);
   }
 
@@ -47,13 +48,13 @@ public class WeaponCycleTest
   {
     var all = new List <SelectedWeapon>
     {
-      SelectedWeapon.Fists, SelectedWeapon.Laser, SelectedWeapon.Banana, SelectedWeapon.Boomerang,
-      SelectedWeapon.Slingshot, SelectedWeapon.PaperAirplane, SelectedWeapon.Blowgun, SelectedWeapon.Bread
+      SelectedWeapon.Bread, SelectedWeapon.Fists, SelectedWeapon.Laser, SelectedWeapon.Banana, SelectedWeapon.Boomerang,
+      SelectedWeapon.Slingshot, SelectedWeapon.PaperAirplane, SelectedWeapon.Blowgun
     };
-    var current = SelectedWeapon.Fists;
+    var current = SelectedWeapon.Bread;
     var visited = new List <SelectedWeapon>();
     for (var i = 0; i < all.Count; ++i) { current = Player.NextCycleSlot (all, current, 1); visited.Add (current); }
-    AssertObject (current).IsEqual (SelectedWeapon.Fists); // Full lap wraps home.
+    AssertObject (current).IsEqual (SelectedWeapon.Bread); // Full lap wraps home.
     AssertInt (visited.Count).IsEqual (8); // Blowgun joined the wheel (issue #194).
   }
 }

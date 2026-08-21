@@ -776,9 +776,9 @@ public partial class PlaytestDriver : Node
 
   private async Task SelectBreadSlot()
   {
-    PressAction ("weapon_7");
+    PressAction ("weapon_0");
     await Task.Delay (100);
-    ReleaseAction ("weapon_7");
+    ReleaseAction ("weapon_0");
     Assert (Self.SelectedWeapon == SelectedWeapon.Bread, "bread is selectable in its own slot (#209)");
   }
 

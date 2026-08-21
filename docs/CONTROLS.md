@@ -16,7 +16,7 @@ Current as of v0.8.15.
 
 ## Weapons
 
-Slot keys select what's in your hands. You spawn with fists **and bread** (B is a second key for bread - it is too important to fumble for); every gun is picked up in the arena (picking one up auto-equips it - bread is the one exception, so a loaf never swaps a weapon out of your hands mid-fight). Every slot uses the same primary button: left click acts with whatever slot is selected; right click scopes the blowgun (slot 8) & does nothing elsewhere.
+Slot keys select what's in your hands. You spawn with fists **and bread** (bread lives on 0 - or B - just left of fists, so one notch back on the wheel is always the loaf); every gun is picked up in the arena (picking one up auto-equips it - bread is the one exception, so a loaf never swaps a weapon out of your hands mid-fight). Every slot uses the same primary button: left click acts with whatever slot is selected; right click scopes the blowgun (slot 8) & does nothing elsewhere.
 
 | Key | Weapon | How it works |
 |---|---|---|
@@ -26,7 +26,7 @@ Slot keys select what's in your hands. You spawn with fists **and bread** (B is 
 | 4 | Boomerang | Left-click to throw. Curves out & returns; steals weapons from anyone it clips & scoops pickups it passes; auto-catches on return |
 | 5 | Slingshot | Hold left-click to draw, release to fling a stone. Longer draw = faster, flatter, harder (never a one-hit). A quick tap just relaxes the band - stones need a minimum draw, & a short cooldown separates shots. **Universal ammo**: see below |
 | 6 | Paper airplane | Left-click to throw. Locks onto whoever's under your crosshair & glides slowly after them; punch an incoming one (fists out) to catch it & throw it back. Only one exists in the whole game, & it is a personal hazard - see below |
-| 7 or B | Bread | Left-click to eat: a 3-second rooted ritual that heals you to full. One loaf per life - see below |
+| 0 or B | Bread | Left-click to eat: a 3-second rooted ritual that heals you to full. One loaf per life - see below |
 | 8 | Blowgun | The stealth weapon - with a scope, because of course it has a scope. Left-click puffs a poison dart, right-click (hold) zooms. The shot is nearly silent: only players within a few feet of you hear it, & everyone else only hears a dart that flies close by them. Darts do no impact damage - they stick in & poison: every 5 seconds the victim loses 10% health PER embedded dart, & their health bar turns green. Bread heals as normal but does NOT remove darts. On a zap-out the darts fall beside the body for 5 seconds - slingshot players can load one as ammo (a slung dart poisons identically) |
 
 ### Slingshot universal ammo
@@ -41,7 +41,7 @@ With the slingshot **out and empty**, walking onto any world item **loads it** i
 
 ### Eating bread
 
-Bread is slot 7 and you spawn carrying one loaf per life. **Left-click with it out to eat**, and then commit:
+Bread is on key 0 (or B) and you spawn carrying one loaf per life. **Left-click with it out to eat**, and then commit:
 
 - It takes **3 seconds**, drained on a reverse meter in the middle of your screen.
 - You must be **standing still** to start. Eating while walking, sliding, or in mid-air is refused with an error cue and a line above the meter. You *can* equip the loaf mid-slide or mid-jump - the ritual just waits until the slide ends and you land and stop.

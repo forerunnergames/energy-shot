@@ -7,7 +7,7 @@ namespace com.forerunnergames.energyshot.players;
 // Weapon lifecycle & selection (issues #72 & #82): players spawn with fists only &
 // arm up from world pickups; death drops everything held at the death spot. Slot 1 =
 // fists (always available), slot 2 = laser, slot 3 = banana, slot 4 = boomerang (#98),
-// slot 5 = slingshot (#99), slot 6 = paper airplane (#102), slot 7 = bread (#209);
+// slot 5 = slingshot (#99), slot 6 = paper airplane (#102), key 0 (or B) = bread (#209, #223);
 // everything but fists is selectable only while held. The server-side WeaponSpawner
 // owns pickup spawning & the weapon caps.
 public partial class Player
@@ -87,7 +87,7 @@ public partial class Player
   private bool HasSlingshot => Holds (HeldWeapon.Slingshot);
   private bool HasPaperAirplane => Holds (HeldWeapon.PaperAirplane);
   private bool IsFistsSelected => _selectedWeapon == SelectedWeapon.Fists;
-  private bool IsBreadSelected => _selectedWeapon == SelectedWeapon.Bread; // Slot 7 (issue #209).
+  private bool IsBreadSelected => _selectedWeapon == SelectedWeapon.Bread; // Key 0 / B (issues #209 & #223).
   private bool IsLaserSelected => _selectedWeapon == SelectedWeapon.Laser;
   private bool IsBananaSelected => _selectedWeapon == SelectedWeapon.Banana;
   private bool IsBoomerangSelected => _selectedWeapon == SelectedWeapon.Boomerang;
@@ -123,7 +123,7 @@ public partial class Player
 
     _bread.TryEat();
     HeldWeapon &= ~HeldWeapon.Bread;
-    DeselectUnheldWeapon(); // An eaten, wasted, or dropped loaf can't stay in slot 7 (issue #209).
+    DeselectUnheldWeapon(); // An eaten, wasted, or dropped loaf can't stay selected (issue #209).
   }
 
   // Losing the stolen weapon ends the revenge window (CodeRabbit on #96): a fresh
@@ -139,7 +139,7 @@ public partial class Player
   private void UpdateWeaponVisibility()
   {
     if (_bananaLauncher == null || _boomerangHeld == null || _slingshotHeld == null || _airplaneHeld == null || _breadHeld == null || _blowgunHeld == null) return;
-    _breadHeld.Visible = IsBreadSelected && HasBread; // Slot 7 (issue #209): everyone sees the loaf in hand.
+    _breadHeld.Visible = IsBreadSelected && HasBread; // Key 0 / B (issues #209 & #223): everyone sees the loaf in hand.
     _energyWeapon.Visible = IsLaserSelected && HasLaser;
     _bananaLauncher.Visible = IsBananaSelected && HasBanana;
     _boomerangHeld.Visible = IsBoomerangSelected && HasBoomerang && !IsBoomerangOut; // Empty hand while it's out flying (issue #98).
@@ -161,7 +161,7 @@ public partial class Player
     if (Input.IsActionJustPressed ("weapon_4") && HasBoomerang) SelectedWeapon = SelectedWeapon.Boomerang; // Slot 4 (issue #98).
     if (Input.IsActionJustPressed ("weapon_5") && HasSlingshot) SelectedWeapon = SelectedWeapon.Slingshot; // Slot 5 (issue #99).
     if (Input.IsActionJustPressed ("weapon_6") && HasPaperAirplane) SelectedWeapon = SelectedWeapon.PaperAirplane; // Slot 6 (issue #102).
-    if (Input.IsActionJustPressed ("weapon_7") && HasBread) SelectedWeapon = SelectedWeapon.Bread; // Slot 7 (issue #209).
+    if (Input.IsActionJustPressed ("weapon_0") && HasBread) SelectedWeapon = SelectedWeapon.Bread; // Key 0 (or B): the loaf sits just left of fists (issues #209 & #223).
     if (Input.IsActionJustPressed ("weapon_8") && HasBlowgun) SelectedWeapon = SelectedWeapon.Blowgun; // Slot 8 (issue #194).
     // Cycling (issue #186): mouse wheel for mouse players, Q & E for trackpads -
     // reaching for 7 mid-fight to eat is not a real option.
@@ -191,21 +191,25 @@ public partial class Player
   public static SelectedWeapon NextCycleSlot (List <SelectedWeapon> carried, SelectedWeapon current, int step)
   {
     var index = carried.IndexOf (current);
-    var next = index < 0 ? 0 : ((index + step) % carried.Count + carried.Count) % carried.Count;
-    return carried[next];
+    if (index < 0) return SelectedWeapon.Fists; // The slot just left our hands mid-cycle: fists, never the loaf (issue #223).
+    return carried[((index + step) % carried.Count + carried.Count) % carried.Count];
   }
 
-  // Fists are always available; everything else only while it's in your hands.
+  // Fists are always available; everything else only while it's in your hands. Order
+  // = key order: 0 bread, 1 fists, 2-8 the guns.
   private List <SelectedWeapon> SelectableSlots()
   {
-    var slots = new List <SelectedWeapon> { SelectedWeapon.Fists };
+    // Bread leads the wheel (issue #223): it sits on key 0, just left of fists, so one
+    // notch back from fists is the loaf & the wrap from the last gun lands on it too.
+    var slots = new List <SelectedWeapon>();
+    if (HasBread) slots.Add (SelectedWeapon.Bread);
+    slots.Add (SelectedWeapon.Fists);
     if (HasLaser) slots.Add (SelectedWeapon.Laser);
     if (HasBanana) slots.Add (SelectedWeapon.Banana);
     if (HasBoomerang) slots.Add (SelectedWeapon.Boomerang);
     if (HasSlingshot) slots.Add (SelectedWeapon.Slingshot);
     if (HasPaperAirplane) slots.Add (SelectedWeapon.PaperAirplane);
-    if (HasBlowgun) slots.Add (SelectedWeapon.Blowgun); // Slot 8 rides with the guns (issue #194)...
-    if (HasBread) slots.Add (SelectedWeapon.Bread); // ...& the loaf stays the last stop on the wheel.
+    if (HasBlowgun) slots.Add (SelectedWeapon.Blowgun); // Slot 8 rides with the guns (issue #194).
     return slots;
   }
 
@@ -354,7 +358,7 @@ public partial class Player
     ApplyOverlayMaterials (_boomerangHeld);
     ApplyOverlayMaterials (_slingshotHeld); // Slot 5 (issue #99).
     ApplyOverlayMaterials (_airplaneHeld); // Slot 6 (issue #102).
-    ApplyOverlayMaterials (_breadHeld); // Slot 7 (issue #209).
+    ApplyOverlayMaterials (_breadHeld); // Key 0 / B (issues #209 & #223).
     ApplyOverlayMaterials (_blowgunHeld); // Slot 8 (issue #194).
   }
 
