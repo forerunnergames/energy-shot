@@ -79,7 +79,7 @@ sleep 3
 SHOOTER=$!
 
 # Watchdog: kill everything if the scenario hangs.
-( sleep 300; kill $HOST $VICTIM $SHOOTER 2>/dev/null ) &
+( sleep 600; kill $HOST $VICTIM $SHOOTER 2>/dev/null ) &   # 600s: the end-of-run coverage phases (2026-08-21 features) added ~2 min
 WATCHDOG=$!
 
 FAIL=0

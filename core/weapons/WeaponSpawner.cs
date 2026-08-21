@@ -66,6 +66,10 @@ public partial class WeaponSpawner : Node3D
   // it seconds after spawning), & a stray banana in someone's hands would make the
   // death-drop phase's claim assert meaningless.
   public static readonly Vector3 PlaytestBananaPosition = new(0.0f, 0.9f, -40.0f);
+  // The blowgun takes the last free corner & a floating dart sits beside it (issue
+  // #236): darts are harmless to anyone without the blowgun, so no auto-claim risk.
+  public static readonly Vector3 PlaytestBlowgunPosition = new(5.5f, 31.1f, -5.5f);
+  public static readonly Vector3 PlaytestDartPosition = new(3.0f, 31.1f, -5.5f);
   // The landmine phase (#191) needs no fixed spot of its own: the driver arms one by
   // throwing the airplane into the floor, & it comes down armed wherever it lands.
   private const float OccupiedRadius = 1.0f;
@@ -268,6 +272,8 @@ public partial class WeaponSpawner : Node3D
     // Same cap guard for the banana (CodeRabbit on #180): respawning it here while
     // someone already carries one would put two in a level capped at one.
     if (Count (HeldWeapon.Banana, pickups, players) < MaxBananas) EnsurePlaytestPickup (HeldWeapon.Banana, PlaytestBananaPosition, pickups); // Issue #169.
+    EnsurePlaytestPickup (HeldWeapon.Blowgun, PlaytestBlowgunPosition, pickups); // Issue #236.
+    EnsurePlaytestPickup (HeldWeapon.PoisonDart, PlaytestDartPosition, pickups); // A floating (unarmed) dart: ammo for a blowgun holder (issue #236).
   }
 
   private void EnsurePlaytestPickup (HeldWeapon type, Vector3 position, List <WeaponPickup> pickups)
