@@ -168,16 +168,16 @@ mouse_filter = 2
 script = ExtResource("1_cldmtr")
 
 [node name="Label" type="Label" parent="CooldownMeters/Shot"]
-custom_minimum_size = Vector2(52, 0)
+custom_minimum_size = Vector2(104, 0)
 layout_mode = 2
 theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
 theme_override_constants/outline_size = 3
-theme_override_font_sizes/font_size = 13
+theme_override_font_sizes/font_size = 26
 text = "Shot"
 horizontal_alignment = 2
 
 [node name="Bar" type="ProgressBar" parent="CooldownMeters/Shot"]
-custom_minimum_size = Vector2(96, 6)
+custom_minimum_size = Vector2(192, 12)
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 4
@@ -194,16 +194,16 @@ mouse_filter = 2
 script = ExtResource("1_cldmtr")
 
 [node name="Label" type="Label" parent="CooldownMeters/Slide"]
-custom_minimum_size = Vector2(52, 0)
+custom_minimum_size = Vector2(104, 0)
 layout_mode = 2
 theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
 theme_override_constants/outline_size = 3
-theme_override_font_sizes/font_size = 13
+theme_override_font_sizes/font_size = 26
 text = "Slide"
 horizontal_alignment = 2
 
 [node name="Bar" type="ProgressBar" parent="CooldownMeters/Slide"]
-custom_minimum_size = Vector2(96, 6)
+custom_minimum_size = Vector2(192, 12)
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 4
@@ -220,16 +220,16 @@ mouse_filter = 2
 script = ExtResource("1_cldmtr")
 
 [node name="Label" type="Label" parent="CooldownMeters/FullAuto"]
-custom_minimum_size = Vector2(52, 0)
+custom_minimum_size = Vector2(104, 0)
 layout_mode = 2
 theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
 theme_override_constants/outline_size = 3
-theme_override_font_sizes/font_size = 13
+theme_override_font_sizes/font_size = 26
 text = "Auto"
 horizontal_alignment = 2
 
 [node name="Bar" type="ProgressBar" parent="CooldownMeters/FullAuto"]
-custom_minimum_size = Vector2(96, 6)
+custom_minimum_size = Vector2(192, 12)
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 4
@@ -246,16 +246,16 @@ mouse_filter = 2
 script = ExtResource("1_cldmtr")
 
 [node name="Label" type="Label" parent="CooldownMeters/Banana"]
-custom_minimum_size = Vector2(52, 0)
+custom_minimum_size = Vector2(104, 0)
 layout_mode = 2
 theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
 theme_override_constants/outline_size = 3
-theme_override_font_sizes/font_size = 13
+theme_override_font_sizes/font_size = 26
 text = "Banana"
 horizontal_alignment = 2
 
 [node name="Bar" type="ProgressBar" parent="CooldownMeters/Banana"]
-custom_minimum_size = Vector2(96, 6)
+custom_minimum_size = Vector2(192, 12)
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 4
@@ -272,16 +272,16 @@ mouse_filter = 2
 script = ExtResource("1_cldmtr")
 
 [node name="Label" type="Label" parent="CooldownMeters/Eat"]
-custom_minimum_size = Vector2(52, 0)
+custom_minimum_size = Vector2(104, 0)
 layout_mode = 2
 theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
 theme_override_constants/outline_size = 3
-theme_override_font_sizes/font_size = 13
+theme_override_font_sizes/font_size = 26
 text = "Eating"
 horizontal_alignment = 2
 
 [node name="Bar" type="ProgressBar" parent="CooldownMeters/Eat"]
-custom_minimum_size = Vector2(96, 6)
+custom_minimum_size = Vector2(192, 12)
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 4
