@@ -24,7 +24,11 @@ public partial class Player
     }
   }
 
+  [Signal] public delegate void PoisonTickedEventHandler(); // Own-HUD pulse (issue #261).
   [Export] public float PoisonTickSeconds = 5.0f;
+  // Drunk walk (issue #261): the move direction wobbles side to side, more per dart.
+  [Export] public float PoisonWobbleRadiansPerDart = 0.25f;
+  [Export] public float PoisonWobbleHz = 0.9f;
   [Export] public float PoisonTickFractionPerDart = 0.1f;
   public static readonly Color PoisonGreen = new(0.35f, 0.72f, 0.2f);
   private int _poisonDarts;
@@ -91,6 +95,7 @@ public partial class Player
   private void ApplyPoisonTick()
   {
     LastDamageKind = DamageKind.Poison; // Message context (issue #84).
+    EmitSignal (SignalName.PoisonTicked); // The green vignette pulses in step (issue #261).
     foreach (var (id, name) in _dartOwners.ToArray())
     {
       if (Fallen) return; // An earlier dart in this same tick already zapped us out.
@@ -115,6 +120,14 @@ public partial class Player
     _dartOwners.Clear();
     PoisonDarts = 0;
   }
+
+  // Drunk walk (issue #261): rotate the input direction by a slow sine, scaled by the
+  // dart count, so a poisoned player weaves instead of walking straight.
+  private Vector3 Wobble (Vector3 inputDirection) => IsPoisoned ? inputDirection.Rotated (Vector3.Up, WobbleAngle (Time.GetTicksMsec() / 1000.0f, PoisonDarts, PoisonWobbleRadiansPerDart, PoisonWobbleHz)) : inputDirection;
+
+  // Pure & unit-tested: a sine sway whose amplitude grows with the dart count (capped
+  // at four darts' worth, so a pincushion can still steer a little).
+  public static float WobbleAngle (float seconds, int darts, float radiansPerDart, float hz) => Mathf.Sin (seconds * Mathf.Tau * hz) * radiansPerDart * Mathf.Min (darts, 4);
 
   // Idempotent per state (ALWAYS-mode sync re-fires this constantly, issue #131):
   // keep exactly PoisonDarts stick visuals on the body & tint the overhead bar.

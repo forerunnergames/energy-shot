@@ -30,6 +30,7 @@ public partial class World : Node3D
   [Signal] public delegate void SelfPlayerBreadInterruptedEventHandler();
   [Signal] public delegate void RemoteMessageReceivedEventHandler (string message);
   [Signal] public delegate void AdminMessageReceivedEventHandler (string message);
+  [Signal] public delegate void SelfPlayerPoisonTickedEventHandler(); // Issue #261.
   [Signal] public delegate void RoundClockUpdatedEventHandler (int secondsLeft, int zapLimit, int mode, string hillHolder);
   [Signal] public delegate void RoundEndedEventHandler (string scoreboardBbcode);
   [Signal] public delegate void RoundStartedEventHandler();
@@ -521,6 +522,7 @@ public partial class World : Node3D
     selfPlayer.BreadEaten += _ => EmitSignal (SignalName.SelfPlayerAteBread); // Bread feedback (issue #160).
     selfPlayer.BreadDenied += reason => EmitSignal (SignalName.SelfPlayerBreadDenied, reason);
     selfPlayer.BreadInterrupted += () => EmitSignal (SignalName.SelfPlayerBreadInterrupted); // A hit ended the ritual (issue #192).
+    selfPlayer.PoisonTicked += () => EmitSignal (SignalName.SelfPlayerPoisonTicked); // Issue #261.
     selfPlayer.Scored += (playerName, shotPlayerName) => EmitSignal (SignalName.PlayerScored, ++_score, playerName, shotPlayerName);
     GD.Print ($"{_selfPlayer.NetworkId}: Registered my player {_selfPlayer.DisplayName}");
     EmitSignal (SignalName.NewGameStarted, _selfPlayer.DisplayName, _selfPlayer.MaxHealth);
