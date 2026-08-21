@@ -54,9 +54,20 @@ public partial class WeaponPickup : Area3D
   // only - the server reads it when awarding the pickup; empty for spawn-point pickups.
   public string PreviousOwner { get; set; } = string.Empty;
   [Export] public float ExpirySeconds = 5.0f;
+
+  // Where a punched-loose item left the victim's hands (issue #193); zero = a normal
+  // drop. Replicated at spawn so every peer plays the same fly-out arc.
+  [Export] public Vector3 TossFrom { get; set; }
   // Grace period so a dropper doesn't instantly re-collect their own drop.
   private const float ClaimDelaySeconds = 0.75f;
+  // The tiny cooldown on a fresh punched-loose drop (issue #193): long enough that
+  // the victim can't stand still & instantly re-grab what just flew out of them.
+  private const float PunchedClaimDelaySeconds = 1.5f;
   private const float RetryCooldownSeconds = 1.0f;
+  private float ClaimDelay => TossFrom == Vector3.Zero ? ClaimDelaySeconds : PunchedClaimDelaySeconds;
+  private const float TossSeconds = 0.4f;
+  private const float TossArcHeight = 0.8f;
+  private float _tossSecondsLeft;
   private static readonly Color BananaYellow = new(0.92f, 0.78f, 0.12f);
   private HeldWeapon _weapon = HeldWeapon.Laser;
   private Node3D _visual = null!;
@@ -101,6 +112,7 @@ public partial class WeaponPickup : Area3D
     _visual.AddChild (_dartVisual);
     _spawner = GetNode <WeaponSpawner> ("/root/World/WeaponSpawner");
     _expiryLeft = ExpirySeconds;
+    if (TossFrom != Vector3.Zero) _tossSecondsLeft = TossSeconds; // Fly-out arc (issue #193).
     UpdateVisuals();
     UpdateArmedLight(); // Spawn-state sync ran before this, when the node refs were null.
   }
@@ -119,6 +131,8 @@ public partial class WeaponPickup : Area3D
   {
     _ageSeconds += (float)delta;
 
+    if (_tossSecondsLeft > 0.0f) { UpdateToss (delta); return; }
+
     // An armed mine LIES on the ground (issue #204): it spawns at the standard
     // pickup hover like every other pickup, which left the airplane bobbing in
     // mid-air instead of sitting where it came down, waiting to be stepped on.
@@ -133,6 +147,18 @@ public partial class WeaponPickup : Area3D
     _visual.Position = Vector3.Up * (BobHeight * Mathf.Sin (Mathf.Tau * BobsPerSecond * _ageSeconds));
     // An armed airplane winks at everyone while it waits (issue #191).
     if (_armedLight != null) _armedLight.Visible = Mathf.PosMod (_ageSeconds * ArmedBlinksPerSecond, 1.0f) < 0.5f;
+  }
+
+  // Punched-loose fly-out (issue #193): a short hand-animated arc from the victim's
+  // hands down to the resting spot, with a tumble spin. Local cosmetic on every peer;
+  // claims & expiry live on the root, which sits at the spot the whole time.
+  private void UpdateToss (double delta)
+  {
+    _tossSecondsLeft = Mathf.Max (0.0f, _tossSecondsLeft - (float)delta);
+    var progress = 1.0f - _tossSecondsLeft / TossSeconds;
+    var start = TossFrom - GlobalPosition; // The root never rotates, so this is local space.
+    _visual.Position = start.Lerp (Vector3.Zero, progress) + Vector3.Up * (TossArcHeight * 4.0f * progress * (1.0f - progress));
+    _visual.RotateY (Mathf.Tau * 2.0f * (float)delta);
   }
 
   public override void _PhysicsProcess (double delta)
@@ -155,7 +181,7 @@ public partial class WeaponPickup : Area3D
   private void UpdateClaim (double delta)
   {
     _retryCooldownLeft = Mathf.Max (0.0f, _retryCooldownLeft - (float)delta);
-    if (_ageSeconds < ClaimDelaySeconds || _retryCooldownLeft > 0.0f) return;
+    if (_ageSeconds < ClaimDelay || _retryCooldownLeft > 0.0f) return;
     var collector = FindLocalCollector();
     if (collector == null) return;
     _retryCooldownLeft = RetryCooldownSeconds;

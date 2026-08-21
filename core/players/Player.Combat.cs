@@ -290,24 +290,17 @@ public partial class Player
     LastDamageKind = DamageKind.Punch; // Message context (issue #84).
     // No punch sfx here (issue #82): the victim hears the damage sound via ApplyDamage.
     ApplyPunchStun(); // Stacking slow; the blur stacks HUD-side via Punched (issues #68 & #71).
-    TryDropWeaponFromPunch();
+    TryLoseWeaponToPunch (Multiplayer.GetRemoteSenderId());
     EmitSignal (SignalName.Punched);
     ApplyDamage (PunchEnergy, punchedByPlayerName, PunchKnockbackScale);
   }
 
-  // 20% chance a connect knocks the victim's weapon loose (issue #71). The pickup/drop
-  // system lands in another branch; until DropHeldWeapon() exists, this just logs.
-  private void TryDropWeaponFromPunch()
+  // 20% chance a connect costs the victim their item (issue #71); with #193 that's
+  // a theft: the equipped item transfers straight to the puncher, server-validated.
+  private void TryLoseWeaponToPunch (int puncherId)
   {
     if (_rng.Randf() >= PunchDropChance) return;
-
-    if (!HasMethod ("DropHeldWeapon"))
-    {
-      GD.Print ($"{DisplayName}: That punch nearly knocked my weapon loose!");
-      return;
-    }
-
-    Call ("DropHeldWeapon");
+    LoseWeaponToPunch (puncherId);
   }
 
   private void ApplyDamage (float energy, string attackerName, float knockbackScale, bool isSurvivableAtFullHealth = false, bool throughBarrier = false)

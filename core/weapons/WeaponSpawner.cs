@@ -156,6 +156,13 @@ public partial class WeaponSpawner : Node3D
   }
 
   // Client -> server entry point; when this peer already is the server, skip the RPC.
+  // Punch theft entry point (issue #193); when this peer already is the server, skip the RPC.
+  public void SendPunchTheftRequest (int puncherId, Vector3 position, HeldWeapon lost, bool steal)
+  {
+    if (Multiplayer.IsServer()) { RequestPunchTheft (puncherId, position, (int)lost, steal); return; }
+    RpcId (1, MethodName.RequestPunchTheft, puncherId, position, (int)lost, steal);
+  }
+
   public void SendDropRequest (Vector3 position, HeldWeapon dropped)
   {
     if (Multiplayer.IsServer())
@@ -247,7 +254,7 @@ public partial class WeaponSpawner : Node3D
     return point;
   }
 
-  private void Spawn (HeldWeapon type, Vector3 position, bool expires, string previousOwner = "", bool armed = false)
+  private void Spawn (HeldWeapon type, Vector3 position, bool expires, string previousOwner = "", bool armed = false, Vector3 tossFrom = default)
   {
     var pickup = _pickupScene.Instantiate <WeaponPickup>();
     pickup.Name = $"WeaponPickup{++_nextPickupId}";
@@ -256,6 +263,7 @@ public partial class WeaponSpawner : Node3D
     pickup.Expires = expires;
     pickup.PreviousOwner = previousOwner; // For theft-revenge messages (issue #84).
     pickup.Armed = armed; // An airplane that came down from flight is a live landmine (issue #191).
+    pickup.TossFrom = tossFrom; // Punched-loose fly-out start (issue #193); zero = normal drop.
     GetParent().AddChild (pickup); // The MultiplayerSpawner replicates the spawn to every peer.
     ServerLog.Event ($"weapon spawn: {type} pickup [{pickup.Name}] at {position}{(expires ? " (expiring drop)" : "")}{(armed ? " (armed)" : "")}");
   }
@@ -763,6 +771,87 @@ public partial class WeaponSpawner : Node3D
     var victimName = victim!.DisplayName; // Non-null: the mask intersection above proved the sender exists.
     _escrow.Add (new BoomerangCargo (throwerId, surrendered, victimName));
     ServerLog.Event (victimId, $"boomerang steal: {surrendered} taken from [{victimName}] for peer {throwerId}");
+  }
+
+  // A punch knocked the victim's equipped item loose (issue #193). The victim reports
+  // its own loss (#145/#167 convention: validated against its replicated state, one
+  // flag only). A steal transfers it straight into the puncher's hands through the
+  // ConfirmPickup path (auto-equip #128, theft-revenge #84); a type the puncher
+  // already holds (or is about to be granted), a vanished puncher, or a plain
+  // knocked-loose carried weapon flies out to the ground near the victim instead.
+  [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
+  private void RequestPunchTheft (int puncherId, Vector3 position, int type, bool steal)
+  {
+    if (!Multiplayer.IsServer()) return;
+    var victimId = SenderOrSelf();
+    var victim = Players().FirstOrDefault (player => player.NetworkId == victimId);
+    var lost = FirstStealableFlag ((HeldWeapon)type & (victim?.HeldOrRecentlyHeld ?? HeldWeapon.None));
+
+    if (lost == HeldWeapon.None)
+    {
+      ServerLog.Event (victimId, $"punch theft deny: mask [{(HeldWeapon)type}] not held by sender");
+      return;
+    }
+
+    var victimName = victim!.DisplayName; // Non-null: the mask intersection above proved the sender exists.
+    var puncher = Players().FirstOrDefault (player => player.NetworkId == puncherId);
+    var occupied = puncher != null && (puncher.Holds (lost) || _pendingGrants.Any (grant => grant.CollectorId == puncherId && grant.Type == lost));
+
+    if (!steal || puncher == null || occupied)
+    {
+      ServerLog.Event (victimId, $"punch theft: {lost} knocked from [{victimName}] to the ground{(occupied ? " (puncher already holds one)" : "")}");
+      SpawnPunchedLoose (lost, position, puncher, victimName);
+      return;
+    }
+
+    ServerLog.Event (victimId, $"punch theft: {lost} taken from [{victimName}] by peer {puncherId}");
+
+    if (puncherId == Multiplayer.GetUniqueId())
+    {
+      GrantToSelf ((int)lost, victimName); // Synchronous: the server's own HeldWeapon shows it immediately.
+      return;
+    }
+
+    TrackPendingGrant (puncherId, lost); // Bridge until the puncher's HeldWeapon replicates back (issue #154).
+    RpcId (puncherId, MethodName.ConfirmPickup, (int)lost, victimName);
+  }
+
+  // Punched-loose items fly out of the hands (issue #193): away from the puncher, a
+  // couple of meters, ray-grounded like any drop (#151). The pickup carries its toss
+  // origin so every peer plays the same arc, & fresh punched-loose drops use a longer
+  // claim delay so the victim can't stand still & instantly re-grab what just left.
+  private void SpawnPunchedLoose (HeldWeapon type, Vector3 from, Player? puncher, string previousOwner)
+  {
+    var away = puncher == null ? RandomHorizontal() : Horizontal (from - puncher.GlobalPosition);
+    var target = from + away * (float)GD.RandRange (1.5, 2.5);
+
+    if (!TryFindGround (target, out var spot))
+    {
+      ServerLog.Event ($"punched-loose skip: no ground beneath {target}; [{type}] returns via the caps");
+      return;
+    }
+
+    Spawn (type, spot, expires: true, previousOwner, armed: false, tossFrom: from + Vector3.Up * 1.2f);
+  }
+
+  private static Vector3 Horizontal (Vector3 direction)
+  {
+    var flat = new Vector3 (direction.X, 0.0f, direction.Z);
+    return flat.LengthSquared() < 0.01f ? RandomHorizontal() : flat.Normalized();
+  }
+
+  private static Vector3 RandomHorizontal()
+  {
+    var angle = (float)GD.RandRange (0.0, Mathf.Tau);
+    return new Vector3 (Mathf.Cos (angle), 0.0f, Mathf.Sin (angle));
+  }
+
+  // Punch theft covers every hand-holdable (issue #193): the guns, the airplane, &
+  // the equipped loaf (#192) - unlike a boomerang, a fist can take your lunch.
+  public static HeldWeapon FirstStealableFlag (HeldWeapon mask)
+  {
+    foreach (var flag in new[] { HeldWeapon.Laser, HeldWeapon.Banana, HeldWeapon.Boomerang, HeldWeapon.Slingshot, HeldWeapon.PaperAirplane, HeldWeapon.Bread }) { if ((mask & flag) != 0) return flag; }
+    return HeldWeapon.None;
   }
 
   // Escrow & pickups carry exactly one weapon each: reduce a validated mask to its
