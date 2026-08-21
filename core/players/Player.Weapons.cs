@@ -284,6 +284,25 @@ public partial class Player
     GD.Print ($"{DisplayName}: That punch took my {type}!");
   }
 
+  // Drop what's in your hands on purpose (issue #242), Minecraft-style: X tosses the
+  // equipped item out the way you're looking, as a normal expiring pickup anyone can
+  // grab. Fists have nothing to drop; an out-flying boomerang or airplane isn't in hand.
+  private bool WantsToDrop() => _isInputEnabled && !Fallen && !Eating && Input.IsActionJustPressed ("drop");
+
+  private void UpdateDrop()
+  {
+    if (!WantsToDrop()) return;
+    var type = PickEquippedStealable();
+    if (type == HeldWeapon.None) return;
+    // Request BEFORE clearing, same as DropHeldWeapon (CodeRabbit on #145).
+    Spawner.SendDropTossRequest (GlobalPosition, type, -_camera.GlobalTransform.Basis.Z);
+    if (type == HeldWeapon.Bread) SetBreadHeld (isHeld: false);
+    else HeldWeapon &= ~type;
+    ForgetTheft (type);
+    DeselectUnheldWeapon();
+    GD.Print ($"{DisplayName}: I dropped my {type}.");
+  }
+
   // The thing actually in hand: slot -> flag, equipped bread included (issue #192).
   // A boomerang or airplane out flying isn't in the hand (issues #98 & #102), & fists
   // are nothing to steal.

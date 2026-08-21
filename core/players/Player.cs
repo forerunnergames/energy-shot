@@ -443,6 +443,7 @@ public partial class Player : CharacterBody3D
     UpdateXrayReveal();
     UpdateViewToggle(); // Third-person toggle on V (issue #119).
     UpdateWeaponSelection();
+    UpdateDrop(); // X drops what's in your hands (issue #242).
     CancelStaleLaserCharge(); // Leaving the laser slot cancels the charge (issue #156).
     UpdateBananaLauncher();
     UpdateBoomerang();
