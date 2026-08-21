@@ -117,6 +117,34 @@ value = 12.0
 rounded = true
 alignment = 1
 
+[node name="RoundMinutesLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 50
+text = "Round Minutes (0 = no limit)"
+horizontal_alignment = 1
+
+[node name="RoundMinutes" type="SpinBox" parent="PanelContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 90
+max_value = 60.0
+value = 5.0
+rounded = true
+alignment = 1
+
+[node name="ZapLimitLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 50
+text = "First To (zaps, 0 = no limit)"
+horizontal_alignment = 1
+
+[node name="ZapLimit" type="SpinBox" parent="PanelContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 90
+max_value = 200.0
+value = 20.0
+rounded = true
+alignment = 1
+
 [node name="PasswordLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 50

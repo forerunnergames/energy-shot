@@ -254,6 +254,7 @@ public partial class Player
   private async void RespawnShot (string shotByPlayerName)
   {
     CaptureDeathSnapshot();
+    ++ZapOuts; // Round stats (issue #153).
     DropAllHeldWeapons(); // Death drops everything carried at the death spot (issue #72).
     ScatterEmbeddedDarts(); // Embedded darts fall beside the body as 5s pickups (issue #194).
     EmitSignal (SignalName.RespawnedShot, DisplayName, shotByPlayerName); // Message shows during the wait (issue #152).
@@ -300,6 +301,7 @@ public partial class Player
   {
     if (Fallen) return; // A dead body drifting past the boundary mid-lie-down already has a respawn scheduled (issue #152).
     --Score; // Falling off the world costs a point.
+    ++Falls; // Round stats (issue #153): self-inflicted, separately counted.
     ClearHeldWeapons(); // A drop below the world would be unreachable; the weapons respawn at spawn points instead (issue #72).
     Respawn();
     EmitSignal (SignalName.RespawnedFell, DisplayName);
@@ -310,6 +312,7 @@ public partial class Player
   private async void Respawn()
   {
     ZapStreakCount = 0; // Any respawn ends the streak.
+    ForgetDamager(); // A fresh life owes nobody an assist (issue #153).
     Health = MaxHealth;
     // Announce it (issue #201): the HUD's health bar & the red death-vignette both
     // follow this signal, so a silent reset left the vignette glowing for the rest
