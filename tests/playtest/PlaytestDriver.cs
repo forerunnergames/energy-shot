@@ -192,7 +192,11 @@ public partial class PlaytestDriver : Node
     // that follows - the shooter's ammo & airplane phases & the victim's catch and
     // landmine phases - & the sum of their per-step budgets already exceeds 180s. A
     // slow run that stays inside every inner budget must not fail out here.
-    await WaitUntil (() => _world.GetPlayers().Count() == 1, 570, "clients disconnected"); // Spans the end-of-run coverage phases too, & stays under the 600s watchdog so a stall fails by name (CodeRabbit on #258).
+    // One absolute deadline shared with the shell watchdog (CodeRabbit on #258): the
+    // watchdog kills at 600s from process launch, so the tail budget is whatever is
+    // left of 570 engine-seconds - a stall still fails by name, never by SIGKILL.
+    var tailBudgetSeconds = Mathf.Max (30, 570 - (int)(Time.GetTicksMsec() / 1000));
+    await WaitUntil (() => _world.GetPlayers().Count() == 1, tailBudgetSeconds, "clients disconnected");
     // The version line goes only to joining clients, never broadcast (#158), so the
     // host must never have seen one.
     Assert (_adminMessages.All (message => !message.Contains ("Running")), "version line was not broadcast to the host (#158)");

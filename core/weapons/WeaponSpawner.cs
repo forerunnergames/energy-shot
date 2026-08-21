@@ -242,6 +242,11 @@ public partial class WeaponSpawner : Node3D
   // precedence when contested); a shared candidate list keeps them from stacking.
   private void SpawnSpecialsIfMissing (List <WeaponPickup> pickups, List <Player> players, List <Vector3> freePoints)
   {
+    // In playtest mode the deterministic fixtures (EnsurePlaytestPickups) are the ONLY
+    // spawn path for every special - a random spawn here would go unseen by the stale
+    // pickups snapshot, slip past the fixture cap checks, & mint doubles of capped
+    // items or leave a fixture spot empty (CodeRabbit on #258, extending #180).
+    if (_isPlaytest) return;
     var candidates = new List <Vector3> (freePoints);
     if (IsFree (_bananaPoint, pickups)) candidates.Add (_bananaPoint);
     if (candidates.Count > 0 && Count (HeldWeapon.Banana, pickups, players) < MaxBananas) Spawn (HeldWeapon.Banana, TakeRandom (candidates), expires: false);
@@ -255,7 +260,7 @@ public partial class WeaponSpawner : Node3D
     // In playtest mode the deterministic spawn-room pickup (EnsurePlaytestPickups) is
     // the airplane's ONLY spawn path, or the two paths together could mint a second
     // one (CodeRabbit on #180).
-    if (!_isPlaytest && candidates.Count > 0 && Count (HeldWeapon.PaperAirplane, pickups, players) < MaxPaperAirplanes) Spawn (HeldWeapon.PaperAirplane, TakeRandom (candidates), expires: false);
+    if (candidates.Count > 0 && Count (HeldWeapon.PaperAirplane, pickups, players) < MaxPaperAirplanes) Spawn (HeldWeapon.PaperAirplane, TakeRandom (candidates), expires: false);
   }
 
   // Playtest-only (#72 & #98): keeps deterministic pickups available in the spawn
