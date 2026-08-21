@@ -26,7 +26,8 @@ public partial class Player
   private const float MinRopeImpactSpeed = 1.0f;
   private Vector3 _preMoveVelocity;
 
-  private bool IsRope (GodotObject? collider) => collider is CsgBox3D box && box.GetParent() == _spawnRoom && box.Name.ToString().StartsWith ("Wall");
+  // The invisible backstops (issue #276) bounce exactly like the ropes they guard.
+  private bool IsRope (GodotObject? collider) => collider is Node3D node && node is CsgBox3D or StaticBody3D && node.GetParent() == _spawnRoom && node.Name.ToString().StartsWith ("Wall");
 
   // Ropes (issue #174): reflect the velocity we arrived with (MoveAndSlide already
   // scrubbed the into-wall part from Velocity), scale by restitution, add a shove
