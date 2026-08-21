@@ -821,17 +821,50 @@ public partial class WeaponSpawner : Node3D
   // origin so every peer plays the same arc, & fresh punched-loose drops use a longer
   // claim delay so the victim can't stand still & instantly re-grab what just left.
   private void SpawnPunchedLoose (HeldWeapon type, Vector3 from, Player? puncher, string previousOwner)
+    => SpawnTossed (type, from, puncher == null ? RandomHorizontal() : Horizontal (from - puncher.GlobalPosition), previousOwner);
+
+  // Any item leaving a player's hands on the fly (punched loose, #193; dropped on
+  // purpose, #242) lands 1.5-2.5m along 'away', ray-grounded, with the fly-out arc.
+  private void SpawnTossed (HeldWeapon type, Vector3 from, Vector3 away, string previousOwner)
   {
-    var away = puncher == null ? RandomHorizontal() : Horizontal (from - puncher.GlobalPosition);
     var target = from + away * (float)GD.RandRange (1.5, 2.5);
 
     if (!TryFindGround (target, out var spot))
     {
-      ServerLog.Event ($"punched-loose skip: no ground beneath {target}; [{type}] returns via the caps");
+      ServerLog.Event ($"toss skip: no ground beneath {target}; [{type}] returns via the caps");
       return;
     }
 
     Spawn (type, spot, expires: true, previousOwner, armed: false, tossFrom: from + Vector3.Up * 1.2f);
+  }
+
+  // Dropping on purpose (issue #242): Minecraft-style, the item in your hands flies
+  // out the way you're looking. Client -> server entry point, then the same
+  // validated single-flag path the punch theft uses.
+  public void SendDropTossRequest (HeldWeapon dropped, Vector3 direction)
+  {
+    if (Multiplayer.IsServer()) { RequestDropToss ((int)dropped, direction); return; }
+    RpcId (1, MethodName.RequestDropToss, (int)dropped, direction);
+  }
+
+  // The toss starts from the server's own view of where the dropper stands (CodeRabbit
+  // on #243) - a client supplies only what it wants to drop & which way it's looking.
+  [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
+  private void RequestDropToss (int type, Vector3 direction)
+  {
+    if (!Multiplayer.IsServer()) return;
+    var dropperId = SenderOrSelf();
+    var dropper = Players().FirstOrDefault (player => player.NetworkId == dropperId);
+    var dropped = FirstStealableFlag ((HeldWeapon)type & (dropper?.HeldOrRecentlyHeld ?? HeldWeapon.None));
+
+    if (dropped == HeldWeapon.None)
+    {
+      ServerLog.Event (dropperId, $"drop toss deny: mask [{(HeldWeapon)type}] not held by sender");
+      return;
+    }
+
+    ServerLog.Event (dropperId, $"drop toss: {dropped} thrown down by [{dropper!.DisplayName}]");
+    SpawnTossed (dropped, dropper.GlobalPosition, Horizontal (direction), dropper.DisplayName);
   }
 
   private static Vector3 Horizontal (Vector3 direction)
