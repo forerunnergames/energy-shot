@@ -1403,7 +1403,7 @@ public partial class PlaytestDriver : Node
   private async Task RunHeadshotPhase (Player victim)
   {
     await WaitUntil (() => victim.Health == victim.MaxHealth && !victim.SpawnArmor && FlatDistance (victim.GlobalPosition, VictimParkSpot) < 2.0f, 120, "victim parked at full health for the headshot phase (#179)");
-    Assert (Self.HasLaser, "still carrying the laser for the headshot phase (#179)");
+    Assert (Self.Holds (HeldWeapon.Laser), "still carrying the laser for the headshot phase (#179)");
     PressAction ("weapon_2");
     await Task.Delay (100);
     ReleaseAction ("weapon_2");
@@ -1526,13 +1526,13 @@ public partial class PlaytestDriver : Node
     PressAction ("weapon_2");
     await Task.Delay (100);
     ReleaseAction ("weapon_2");
-    Assert (Self.SelectedWeapon == SelectedWeapon.Laser && Self.HasLaser, "laser in hand for the drop phase (#242)");
+    Assert (Self.SelectedWeapon == SelectedWeapon.Laser && Self.Holds (HeldWeapon.Laser), "laser in hand for the drop phase (#242)");
     var ahead = ShooterParkSpot + new Vector3 (0.0f, 0.0f, -2.0f);
     AimAt (ahead + Vector3.Up);
     PressAction ("drop");
     await Task.Delay (60);
     ReleaseAction ("drop");
-    await WaitUntil (() => !Self.HasLaser, 10, "X dropped the laser (#242)");
+    await WaitUntil (() => !Self.Holds (HeldWeapon.Laser), 10, "X dropped the laser (#242)");
     Assert (Self.SelectedWeapon == SelectedWeapon.Fists, "dropping the equipped laser fell back to fists (#82/#242)");
     await WaitUntil (() => DroppedNear (HeldWeapon.Laser, ahead) is { TossFrom: var toss } && toss != Vector3.Zero, 30, "the dropped laser landed ahead of us as a tossed pickup (#242)");
   }
