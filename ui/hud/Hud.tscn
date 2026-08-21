@@ -13,6 +13,7 @@
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_vgntt"]
 shader = ExtResource("4_vgntt")
 shader_parameter/intensity = 0.0
+shader_parameter/poison = 0.0
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_blur"]
 shader = ExtResource("5_blur")
