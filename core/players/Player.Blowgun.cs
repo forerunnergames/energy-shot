@@ -10,8 +10,8 @@ namespace com.forerunnergames.energyshot.players;
 // the further in you are & only settles for about a second between heartbeats - you
 // time the shot. Left click puffs a poison dart toward the reticle (no impact damage,
 // the poison is the weapon). Ammo: the gun starts EMPTY & fires from a replicated
-// dart count refilled by walking over darts while holding it (the dart economy). No
-// recoil. The shooter hears the shot locally; bystanders only within a few feet.
+// dart count refilled by walking over darts while holding it (the dart economy); out
+// of darts it swings as a club (Player.Blunt, issue #249). No recoil. The shooter hears the shot locally; bystanders only within a few feet.
 public partial class Player
 {
   [Export] public float BlowgunDartSpeed = 42.0f;
@@ -32,7 +32,6 @@ public partial class Player
   private AudioStreamPlayer3D _blowgunShotSound = null!;
   private AudioStreamPlayer _blowgunOwnShotSound = null!;
   private AudioStreamPlayer _heartbeatSound = null!;
-  private AudioStreamPlayer _emptyClickSound = null!;
   private float _blowgunCooldownLeft;
   private float _unscopedFovDegrees;
   private bool _isScoped;
@@ -64,8 +63,6 @@ public partial class Player
     AddChild (_blowgunOwnShotSound);
     _heartbeatSound = new AudioStreamPlayer { Stream = ProceduralSounds.Heartbeat(), VolumeDb = -4.0f };
     AddChild (_heartbeatSound);
-    _emptyClickSound = new AudioStreamPlayer { Stream = ProceduralSounds.Denied(), VolumeDb = -6.0f };
-    AddChild (_emptyClickSound);
   }
 
   // Gated like every action predicate: input, stance, stun, & ritual states all block.
@@ -76,7 +73,7 @@ public partial class Player
     _blowgunCooldownLeft = Mathf.Max (0.0f, _blowgunCooldownLeft - (float)delta);
     UpdateScope ((float)delta);
     if (!CanFireBlowgun() || !Input.IsActionJustPressed ("shoot")) return;
-    if (BlowgunDarts <= 0) { _emptyClickSound.Play(); return; } // Empty: a denied click, no shot (issue #236).
+    if (BlowgunDarts <= 0) { _blowgunCooldownLeft = ClubCooldownSeconds; SwingClub (_blowgunHeld); return; } // Empty: it's a club (issue #249).
     FireBlowgunDart();
   }
 
