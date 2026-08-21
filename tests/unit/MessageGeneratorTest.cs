@@ -12,16 +12,16 @@ public class MessageGeneratorTest
   private static DeathContext Laser (float energy = 0.5f) => new() { Kind = DamageKind.Laser, Energy = energy };
 
   [TestCase]
-  public void ExactlyOneHundredThirtyFourUniqueMessageTemplates()
+  public void ExactlyOneHundredThirtyEightUniqueMessageTemplates()
   {
     // 100 from the content wave (issue #84) + 3 through-wall zaps (issue #94)
     // + 4 boomerang zap-outs (issue #98) + 4 slingshot zap-outs (issue #99)
     // + 6 paper airplane zap-outs & 3 airplane catches (issues #102 & #191)
     // + 4 slung-item zap-outs (issue #190) + 4 landmines (issue #191)
-    // + 6 zapped-mid-bread-ritual (issue #192).
+    // + 6 zapped-mid-bread-ritual (issue #192) + 4 poison zap-outs (issue #194).
     var templates = MessagePools.All.SelectMany (pool => pool).ToList();
-    AssertInt (templates.Count).IsEqual (134);
-    AssertInt (templates.Distinct().Count()).IsEqual (134);
+    AssertInt (templates.Count).IsEqual (138);
+    AssertInt (templates.Distinct().Count()).IsEqual (138);
   }
 
   [TestCase]
@@ -34,10 +34,13 @@ public class MessageGeneratorTest
   }
 
   [TestCase]
+  public void PoisonPoolSelectedByDamageKind() => AssertObject (MessageGenerator.SelectZappedPool (new DeathContext { Kind = DamageKind.Poison })).IsSame (MessagePools.Poison);
+
+  [TestCase]
   public void EveryPoolIsInTheRegistry()
   {
-    // 30 scenario pools registered, none empty.
-    AssertInt (MessagePools.All.Count).IsEqual (30);
+    // 31 scenario pools registered, none empty.
+    AssertInt (MessagePools.All.Count).IsEqual (31);
     foreach (var pool in MessagePools.All) AssertBool (pool.Count > 0).IsTrue();
   }
 

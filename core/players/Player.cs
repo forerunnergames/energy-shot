@@ -350,6 +350,7 @@ public partial class Player : CharacterBody3D
     CreateSlingshotHeld(); // Same, for the slot-5 slingshot (issue #99).
     CreateAirplaneHeld(); // Same, for the slot-6 paper airplane (issue #102).
     CreateBreadHeld(); // Same, for the slot-7 loaf (issue #209).
+    CreateBlowgunHeld(); // Slot 8 (issue #194).
     UpdateWeaponVisibility();
     // Spawn-state sync runs before _Ready, when the slingshot node was still null,
     // so re-apply or a late joiner never sees an already-nocked item (issue #190).
@@ -447,6 +448,7 @@ public partial class Player : CharacterBody3D
     UpdateAirplaneCatchWindow(); // An open swing keeps grabbing briefly (issue #102).
     UpdateBread (delta); // The slot-7 loaf & its 3s eating ritual (issues #209 & #192).
     UpdateFullAuto (delta);
+    UpdateBlowgun (delta); // Slot 8: dart firing & the scope (issue #194).
     UpdatePunch (delta);
     UpdateDance (delta); // After the fire/punch updates, so a canceling press can't also attack (issue #103).
     UpdateHandBob (delta);

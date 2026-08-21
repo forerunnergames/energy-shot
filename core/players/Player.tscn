@@ -126,6 +126,9 @@ properties/22/replication_mode = 1
 properties/23/path = NodePath(".:Eating")
 properties/23/spawn = true
 properties/23/replication_mode = 1
+properties/24/path = NodePath(".:PoisonDarts")
+properties/24/spawn = true
+properties/24/replication_mode = 1
 
 [node name="Player" type="CharacterBody3D"]
 collision_layer = 2

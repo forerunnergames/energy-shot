@@ -54,7 +54,7 @@ public partial class Player
     // PaperAirplane rides the grace too (issue #102): its landing & catch handoff
     // depend on it. So does bread (issue #190): the death drop clears the loaf right
     // after sending the drop RPC, so without the grace the server denies it.
-    foreach (var flag in new[] { HeldWeapon.Laser, HeldWeapon.Banana, HeldWeapon.Boomerang, HeldWeapon.Slingshot, HeldWeapon.PaperAirplane, HeldWeapon.Bread }) { if ((removed & flag) != 0) _recentlyHeldUntilMs[flag] = until; }
+    foreach (var flag in new[] { HeldWeapon.Laser, HeldWeapon.Banana, HeldWeapon.Boomerang, HeldWeapon.Slingshot, HeldWeapon.PaperAirplane, HeldWeapon.Bread, HeldWeapon.Blowgun }) { if ((removed & flag) != 0) _recentlyHeldUntilMs[flag] = until; }
   }
 
   // Which slot is out (issue #82). Replicated so every peer renders the right model
@@ -138,13 +138,14 @@ public partial class Player
   // Runs on every peer via the replicated HeldWeapon & SelectedWeapon properties.
   private void UpdateWeaponVisibility()
   {
-    if (_bananaLauncher == null || _boomerangHeld == null || _slingshotHeld == null || _airplaneHeld == null || _breadHeld == null) return;
+    if (_bananaLauncher == null || _boomerangHeld == null || _slingshotHeld == null || _airplaneHeld == null || _breadHeld == null || _blowgunHeld == null) return;
     _breadHeld.Visible = IsBreadSelected && HasBread; // Slot 7 (issue #209): everyone sees the loaf in hand.
     _energyWeapon.Visible = IsLaserSelected && HasLaser;
     _bananaLauncher.Visible = IsBananaSelected && HasBanana;
     _boomerangHeld.Visible = IsBoomerangSelected && HasBoomerang && !IsBoomerangOut; // Empty hand while it's out flying (issue #98).
     _slingshotHeld.Visible = IsSlingshotSelected && HasSlingshot; // Slot 5 (issue #99).
     _airplaneHeld.Visible = IsPaperAirplaneSelected && HasPaperAirplane && !IsAirplaneOut; // Slot 6, empty hand mid-glide (issue #102).
+    _blowgunHeld.Visible = IsBlowgunSelected && HasBlowgun; // Slot 8 (issue #194).
     UpdateHandsVisibility(); // Hands render only while fists are selected (issue #82).
   }
 
@@ -161,6 +162,7 @@ public partial class Player
     if (Input.IsActionJustPressed ("weapon_5") && HasSlingshot) SelectedWeapon = SelectedWeapon.Slingshot; // Slot 5 (issue #99).
     if (Input.IsActionJustPressed ("weapon_6") && HasPaperAirplane) SelectedWeapon = SelectedWeapon.PaperAirplane; // Slot 6 (issue #102).
     if (Input.IsActionJustPressed ("weapon_7") && HasBread) SelectedWeapon = SelectedWeapon.Bread; // Slot 7 (issue #209).
+    if (Input.IsActionJustPressed ("weapon_8") && HasBlowgun) SelectedWeapon = SelectedWeapon.Blowgun; // Slot 8 (issue #194).
     // Cycling (issue #186): mouse wheel for mouse players, Q & E for trackpads -
     // reaching for 7 mid-fight to eat is not a real option.
     if (Input.IsActionJustPressed ("cycle_weapon_next")) CycleSelectedWeapon (1);
@@ -202,7 +204,8 @@ public partial class Player
     if (HasBoomerang) slots.Add (SelectedWeapon.Boomerang);
     if (HasSlingshot) slots.Add (SelectedWeapon.Slingshot);
     if (HasPaperAirplane) slots.Add (SelectedWeapon.PaperAirplane);
-    if (HasBread) slots.Add (SelectedWeapon.Bread);
+    if (HasBlowgun) slots.Add (SelectedWeapon.Blowgun); // Slot 8 rides with the guns (issue #194)...
+    if (HasBread) slots.Add (SelectedWeapon.Bread); // ...& the loaf stays the last stop on the wheel.
     return slots;
   }
 
@@ -215,6 +218,7 @@ public partial class Player
     if (IsBoomerangSelected && !HasBoomerang) SelectedWeapon = SelectedWeapon.Fists;
     if (IsSlingshotSelected && !HasSlingshot) SelectedWeapon = SelectedWeapon.Fists;
     if (IsPaperAirplaneSelected && !HasPaperAirplane) SelectedWeapon = SelectedWeapon.Fists;
+    if (IsBlowgunSelected && !HasBlowgun) SelectedWeapon = SelectedWeapon.Fists; // Slot 8 (issue #194).
   }
 
   // Called back (via the WeaponSpawner's ConfirmPickup RPC) after the server despawns
@@ -234,7 +238,7 @@ public partial class Player
 
     HeldWeapon |= type;
     // Every pickup auto-equips (issue #128), boomerang (#98), slingshot (#99), & paper airplane (#102) included.
-    SelectedWeapon = type switch { HeldWeapon.Banana => SelectedWeapon.Banana, HeldWeapon.Boomerang => SelectedWeapon.Boomerang, HeldWeapon.Slingshot => SelectedWeapon.Slingshot, HeldWeapon.PaperAirplane => SelectedWeapon.PaperAirplane, _ => SelectedWeapon.Laser };
+    SelectedWeapon = type switch { HeldWeapon.Banana => SelectedWeapon.Banana, HeldWeapon.Boomerang => SelectedWeapon.Boomerang, HeldWeapon.Slingshot => SelectedWeapon.Slingshot, HeldWeapon.PaperAirplane => SelectedWeapon.PaperAirplane, HeldWeapon.Blowgun => SelectedWeapon.Blowgun, _ => SelectedWeapon.Laser };
     RememberTheft (type, previousOwner);
     _weaponPickupSound.Play(); // Satisfying pickup chime, owner-local only (issue #123).
     GD.Print ($"{DisplayName}: I picked up a {type}!");
@@ -280,9 +284,9 @@ public partial class Player
   // boomerangs take weapons, not lunch - only dying drops the loaf.
   private HeldWeapon PickDroppableWeapon()
   {
-    var preferred = _selectedWeapon switch { SelectedWeapon.Banana => HeldWeapon.Banana, SelectedWeapon.Boomerang => HeldWeapon.Boomerang, SelectedWeapon.Slingshot => HeldWeapon.Slingshot, SelectedWeapon.PaperAirplane => HeldWeapon.PaperAirplane, _ => HeldWeapon.Laser };
+    var preferred = _selectedWeapon switch { SelectedWeapon.Banana => HeldWeapon.Banana, SelectedWeapon.Boomerang => HeldWeapon.Boomerang, SelectedWeapon.Slingshot => HeldWeapon.Slingshot, SelectedWeapon.PaperAirplane => HeldWeapon.PaperAirplane, SelectedWeapon.Blowgun => HeldWeapon.Blowgun, _ => HeldWeapon.Laser };
 
-    foreach (var type in new[] { preferred, HeldWeapon.Laser, HeldWeapon.Banana, HeldWeapon.Boomerang, HeldWeapon.Slingshot, HeldWeapon.PaperAirplane })
+    foreach (var type in new[] { preferred, HeldWeapon.Laser, HeldWeapon.Banana, HeldWeapon.Boomerang, HeldWeapon.Slingshot, HeldWeapon.PaperAirplane, HeldWeapon.Blowgun })
     {
       if (!Holds (type)) continue;
       if (type == HeldWeapon.Boomerang && IsBoomerangInFlight) continue;
@@ -320,6 +324,7 @@ public partial class Player
     ApplyOverlayMaterials (_slingshotHeld); // Slot 5 (issue #99).
     ApplyOverlayMaterials (_airplaneHeld); // Slot 6 (issue #102).
     ApplyOverlayMaterials (_breadHeld); // Slot 7 (issue #209).
+    ApplyOverlayMaterials (_blowgunHeld); // Slot 8 (issue #194).
   }
 
   private void ApplyOverlayMaterials (Node node)

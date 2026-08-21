@@ -11,5 +11,6 @@ public enum SelectedWeapon
   Boomerang = 3,
   Slingshot = 4,
   PaperAirplane = 5,
-  Bread = 6
+  Bread = 6,
+  Blowgun = 7 // The scoped stealth weapon (issue #194), key 8.
 }

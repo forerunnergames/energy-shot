@@ -1,0 +1,143 @@
+using System.Collections.Generic;
+using Godot;
+using com.forerunnergames.energyshot.weapons;
+
+namespace com.forerunnergames.energyshot.players;
+
+// Poison darts (issue #194): blowgun & slung darts embed in the victim & accumulate
+// visibly; every tick, EACH embedded dart costs 10% of max health. Bread can't cure
+// the poison - it only refills health as usual, so you can out-eat one dart, not a
+// cluster. Victim-authoritative like every damage path; the dart count replicates so
+// all peers render the pincushion & the sickly-green bars. Attribution is victim-side.
+public partial class Player
+{
+  // Replicated ALWAYS like Burning (issue #131): the idempotent setter re-renders
+  // the embedded darts & the overhead bar tint on every peer, & self-heals.
+  [Export]
+  public int PoisonDarts
+  {
+    get => _poisonDarts;
+    set
+    {
+      _poisonDarts = value;
+      ApplyPoisonVisuals();
+    }
+  }
+
+  [Export] public float PoisonTickSeconds = 5.0f;
+  [Export] public float PoisonTickFractionPerDart = 0.1f;
+  public static readonly Color PoisonGreen = new(0.35f, 0.72f, 0.2f);
+  private int _poisonDarts;
+  // Victim-side attribution, oldest dart first: each tick applies one damage packet
+  // per dart through the standard sink, so handicap & scoring stay per-attacker.
+  private readonly List <(int Id, string Name)> _dartOwners = new();
+  private readonly List <Node3D> _dartVisuals = new();
+  // Bumped on every respawn so a tick loop from a previous life stops - the burn
+  // generation pattern (issue #191).
+  private int _poisonGeneration;
+  private bool _poisonTicking;
+
+  public bool IsPoisoned => PoisonDarts > 0;
+
+  // A dart found us (issue #194). The impact itself does no damage - it plants the
+  // next tick's problem. Runs only on the victim's own authority.
+  [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
+  private void ReceiveDartHit (string shotByPlayerName)
+  {
+    if (!IsMultiplayerAuthority()) return;
+    if (SpawnArmor) return; // Armor shrugs darts off like everything else (issue #48).
+    if (Fallen) return; // A body mid-death-sequence is scenery (issue #152).
+    _dartOwners.Add ((Multiplayer.GetRemoteSenderId(), shotByPlayerName));
+    PoisonDarts = _dartOwners.Count;
+    _damageSound.Play(); // The sting is the victim's only impact feedback.
+    GD.Print ($"{DisplayName}: {shotByPlayerName}'s dart stuck in me! ({PoisonDarts} embedded)");
+    StartPoisonTicksIfIdle();
+  }
+
+  private async void StartPoisonTicksIfIdle()
+  {
+    if (_poisonTicking) return;
+    _poisonTicking = true;
+    var generation = _poisonGeneration;
+
+    while (IsPoisoned)
+    {
+      await ToSignal (GetTree().CreateTimer (PoisonTickSeconds), SceneTreeTimer.SignalName.Timeout);
+      if (!IsInstanceValid (this) || !IsInsideTree()) return;
+      if (generation != _poisonGeneration || Fallen) break;
+      ApplyPoisonTick();
+    }
+
+    _poisonTicking = false;
+  }
+
+  // One tick: every embedded dart costs its own 10% of max health through the
+  // standard damage sink, oldest first, each attributed to whoever blew it.
+  private void ApplyPoisonTick()
+  {
+    LastDamageKind = DamageKind.Poison; // Message context (issue #84).
+    foreach (var (id, name) in _dartOwners.ToArray())
+    {
+      if (Fallen) return; // An earlier dart in this same tick already zapped us out.
+      ApplyDamageFrom (id, MaxHealth * PoisonTickFractionPerDart / 100.0f, name, knockbackScale: 0.0f);
+    }
+  }
+
+  // Death shakes the darts out (issue #194): they fall beside the body as 5s-expiry
+  // pickups a slingshot can load. Request BEFORE clearing (the #145 convention): the
+  // server validates the count against this player's replicated PoisonDarts.
+  private void ScatterEmbeddedDarts()
+  {
+    if (!IsPoisoned) return;
+    Spawner.SendDartScatterRequest (GlobalPosition, PoisonDarts);
+    ClearPoison();
+  }
+
+  // Fresh lives are clean (& the setter path makes this idempotent, issue #131).
+  private void ClearPoison()
+  {
+    ++_poisonGeneration;
+    _dartOwners.Clear();
+    PoisonDarts = 0;
+  }
+
+  // Idempotent per state (ALWAYS-mode sync re-fires this constantly, issue #131):
+  // keep exactly PoisonDarts stick visuals on the body & tint the overhead bar.
+  private void ApplyPoisonVisuals()
+  {
+    if (!IsInsideTree()) return;
+    UpdateDartSticks();
+    UpdateOverheadBarPoisonTint();
+  }
+
+  private void UpdateDartSticks()
+  {
+    while (_dartVisuals.Count > _poisonDarts)
+    {
+      _dartVisuals[^1].QueueFree();
+      _dartVisuals.RemoveAt (_dartVisuals.Count - 1);
+    }
+
+    while (_dartVisuals.Count < _poisonDarts)
+    {
+      var stick = BlowgunDart.CreateDartVisual();
+      // Deterministic ring around the torso by index, so every peer renders the
+      // same pincushion without replicating positions.
+      var angle = Mathf.Tau * 0.318f * _dartVisuals.Count; // Golden-angle-ish spread.
+      var direction = new Vector3 (Mathf.Cos (angle), 0.0f, Mathf.Sin (angle));
+      stick.Position = direction * 0.34f + Vector3.Up * (1.05f + 0.12f * (_dartVisuals.Count % 3));
+      // Rotation set directly (LookAt needs the node in the tree): the dart's shaft
+      // points outward along its ring direction, tuft toward the body.
+      stick.Rotation = new Vector3 (0.0f, Mathf.Atan2 (direction.X, direction.Z), 0.0f);
+      AddChild (stick);
+      _dartVisuals.Add (stick);
+    }
+  }
+
+  private void UpdateOverheadBarPoisonTint()
+  {
+    if (_healthBar == null) return;
+    if (_healthBar.GetThemeStylebox ("fill") is not StyleBoxFlat fill) return;
+    fill.BgColor = IsPoisoned ? PoisonGreen : new Color (0.756863f, 0.0f, 0.0f);
+  }
+}
