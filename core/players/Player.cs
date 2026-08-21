@@ -466,6 +466,7 @@ public partial class Player : CharacterBody3D
     if (IsJumping()) Jump (ref velocity);
     Move (ref velocity);
     Velocity = velocity;
+    _preMoveVelocity = velocity; // What we arrived with, for the ring ropes (issue #174).
     if (!MoveAndSlide()) return;
     HandleCollisions();
   }

@@ -78,6 +78,10 @@ There is exactly **one** paper airplane in the arena. It's a slot-6 weapon like 
 - **With a slingshot equipped** you load an armed one as ammo instead of setting it off. A slung airplane flies fast and dead straight (no homing): hit a player and they ignite and pop exactly as a thrown hit would; hit anything else and it just falls and is a landmine again. Reload it as often as you like.
 - A fresh airplane is folded somewhere in the arena every time the old one goes off - and a fresh one is a normal pickup, not a mine.
 
+## The boxing ring
+
+The spawn box is a boxing ring: its walls are rubber ropes. Run, slide, or get punched into one and you bounce back the way you came with a shove - knock someone into the ropes and they come right back to you. Land on top of another player's head and you spring high into the air. Spawn armor & the room's protection work exactly as before.
+
 ## Good to know
 
 - White glow = spawn armor (5s of invulnerability after spawning; firing or punching cancels it).
