@@ -1559,13 +1559,20 @@ public partial class PlaytestDriver : Node
   // spawns; retries absorb CI physics-time dilation eating into the cooldown & draw.
   private async Task <SlingshotStone> SlingAStone (int drawMs, string description)
   {
+    // Wait on OBSERVED draw, never wall time (issue #272): draw accumulates in
+    // physics ticks, & a starved CI runner fits under 0.2s of engine time into a
+    // 900ms wall-clock hold - the release lands sub-minimum & silently fires
+    // nothing, every retry alike. Reading the player's own draw clock instead
+    // makes the hold immune to frame starvation.
+    var targetDrawSeconds = Mathf.Min (drawMs / 1000.0f, Self.SlingshotMaxDrawSeconds);
+
     for (var attempt = 0; attempt < 5; ++attempt)
     {
       _lastStone = null;
       PressAction ("shoot");
-      await Task.Delay (drawMs);
+      await TryWaitUntil (() => Self.SlingshotDrawSeconds >= targetDrawSeconds, 15);
       ReleaseAction ("shoot");
-      await TryWaitUntil (() => _lastStone != null, 2);
+      await TryWaitUntil (() => _lastStone != null, 3);
       if (_lastStone != null) return _lastStone;
     }
 
