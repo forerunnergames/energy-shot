@@ -1,3 +1,4 @@
+using com.forerunnergames.energyshot.players;
 using Godot;
 
 namespace com.forerunnergames.energyshot.weapons;
@@ -27,7 +28,7 @@ public partial class LaserBolt : Node3D
   // bolt drooping onto the ground at the end of its arc leaves nothing, while
   // deliberately shooting at the ground still scorches it.
   [Export] public float BurnMarkMinImpactSpeedFraction = 0.5f;
-  [Signal] public delegate void HitPlayerEventHandler (CharacterBody3D player, float energy, bool throughBarrier);
+  [Signal] public delegate void HitPlayerEventHandler (CharacterBody3D player, float energy, bool throughBarrier, bool isHeadshot);
   // Baseline bright red at every charge level (issue #92); charge only makes it hotter.
   private static readonly Color LowEnergyColor = new(3.0f, 0.12f, 0.1f);
   private static readonly Color HighEnergyColor = new(6.0f, 0.3f, 0.15f);
@@ -44,14 +45,17 @@ public partial class LaserBolt : Node3D
   // sweepStart is the shooter's camera position: the bolt spawns at the muzzle, but
   // the first sweep covers camera->muzzle too, so a wall closer than the muzzle
   // offset can't be skipped (issue #112).
-  public void Launch (Vector3 origin, Vector3 sweepStart, Vector3 direction, float energy, bool isLive, CharacterBody3D shooter)
+  // A null shooter (issue #208: a slung laser's spree) excludes nobody - the gun is
+  // out of control & owes no one safety.
+  public void Launch (Vector3 origin, Vector3 sweepStart, Vector3 direction, float energy, bool isLive, CharacterBody3D? shooter)
   {
     GlobalPosition = origin;
     _sweepStart = sweepStart;
     _velocity = direction.Normalized() * Speed;
     _energy = energy;
     _isLive = isLive;
-    _exclusions = new Godot.Collections.Array <Rid> { shooter.GetRid() };
+    _exclusions = shooter == null ? new Godot.Collections.Array <Rid>() : new Godot.Collections.Array <Rid> { shooter.GetRid() };
+    if (shooter is Player own) _exclusions.Add (own.HeadRid); // Your own dome is not a target (issue #179).
     Orient();
     ApplyEnergyVisuals();
   }
@@ -80,6 +84,7 @@ public partial class LaserBolt : Node3D
       // Point-blank bolts can spawn inside the target's collider; without this the
       // sweep never registers & the bolt sails through (see issue #52).
       query.HitFromInside = true;
+      query.CollideWithAreas = true; // Heads are Area3D hitboxes (issue #179).
       var hit = GetWorld3D().DirectSpaceState.IntersectRay (query);
       if (hit.Count == 0) break;
       if (!ResolveHit (hit)) return;
@@ -94,9 +99,19 @@ public partial class LaserBolt : Node3D
   // pierced collider so the sweep doesn't re-hit it (see issue #50).
   private bool ResolveHit (Godot.Collections.Dictionary hit)
   {
-    if (hit["collider"].AsGodotObject() is CharacterBody3D player)
+    var collider = hit["collider"].AsGodotObject();
+
+    // The dome first (issue #179): a head hit is a body hit with a flag.
+    if (collider is HeadHitbox head)
     {
-      if (_isLive) EmitSignal (SignalName.HitPlayer, player, _energy, _piercedBarrier);
+      if (_isLive) EmitSignal (SignalName.HitPlayer, head.Player, _energy, _piercedBarrier, true);
+      QueueFree();
+      return false;
+    }
+
+    if (collider is CharacterBody3D player)
+    {
+      if (_isLive) EmitSignal (SignalName.HitPlayer, player, _energy, _piercedBarrier, false);
       QueueFree();
       return false;
     }

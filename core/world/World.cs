@@ -83,6 +83,7 @@ public partial class World : Node3D
 
   public override void _Ready()
   {
+    DressTheRing(); // The spawn box is a boxing ring (issue #174).
     _onServerDisconnectedCallable = Callable.From (OnServerDisconnected);
     _playerScene = ResourceLoader.Load <PackedScene> ("res://core/players/Player.tscn");
     _networkManager = GetNode <NetworkManager> ("NetworkManager");
@@ -112,6 +113,14 @@ public partial class World : Node3D
     StartAdminMessagePolling();
     _serverVersion = ReadServerVersion();
     StartCrownTicker();
+  }
+
+  // Boxing-ring ropes (issue #174): the spawn box's walls read as red ropes. Bounce
+  // physics lives in Player.BoxingRing; this is the look, shared by every peer.
+  private void DressTheRing()
+  {
+    var rope = new StandardMaterial3D { AlbedoColor = new Color (0.85f, 0.1f, 0.12f), Roughness = 0.4f };
+    foreach (var wall in GetNode <Node3D> ("SpawnRoom").GetChildren().OfType <CsgBox3D>().Where (box => box.Name.ToString().StartsWith ("Wall"))) wall.Material = rope;
   }
 
   // Admin announcements (issue #158): only active with --admin-message-file; no

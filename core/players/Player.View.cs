@@ -52,6 +52,7 @@ public partial class Player
     // The #124 draw-over-walls weapon overlay is a first-person trick only: in third
     // person the own weapons & hands render normally, like every other peer sees them.
     SetFirstPersonOverlayEnabled (!enabled);
+    UpdateHeadVisibility(); // Issue #179.
     (enabled ? _thirdPersonCamera! : _camera).Current = true;
   }
 
