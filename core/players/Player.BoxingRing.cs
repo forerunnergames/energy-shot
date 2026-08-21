@@ -20,6 +20,9 @@ public partial class Player
   // scaled by how fast you came down, & even a standing hop still bounces.
   [Export] public float RopeTopBounceMin = 14.0f;
   [Export] public float RopeTopBouncePerFallSpeed = 1.1f;
+  // Each bounce climbs 10% higher than the last, but only up to here (issue #262):
+  // from the floor it takes about ten in a row to reach the cap, then no higher.
+  [Export] public float RopeTopBounceMax = 34.0f;
   private const float MinRopeImpactSpeed = 1.0f;
   private Vector3 _preMoveVelocity;
 
@@ -45,7 +48,7 @@ public partial class Player
   private bool TryRopeTopBounce()
   {
     var fallSpeed = Mathf.Max (0.0f, -_preMoveVelocity.Y);
-    Velocity = new Vector3 (Velocity.X, Mathf.Max (RopeTopBounceMin, fallSpeed * RopeTopBouncePerFallSpeed), Velocity.Z);
+    Velocity = new Vector3 (Velocity.X, Mathf.Clamp (fallSpeed * RopeTopBouncePerFallSpeed, RopeTopBounceMin, RopeTopBounceMax), Velocity.Z);
     _jumpSound.Play();
     return true;
   }

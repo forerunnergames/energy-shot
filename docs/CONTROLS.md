@@ -83,7 +83,7 @@ There is exactly **one** paper airplane in the arena. It's a slot-6 weapon like 
 
 ## The boxing ring
 
-The spawn box is a boxing ring: its walls are rubber ropes. Run, slide, or get punched into one and you bounce back the way you came with a big shove - the harder you hit, the harder it flings you; jump into the ropes and you can be thrown clean across the ring. Stand or jump on top of a rope and it trampolines you up. Land on top of another player's head and you spring high into the air. Spawn armor & the room's protection work exactly as before.
+The spawn box is a boxing ring: its walls are rubber ropes. Run, slide, or get punched into one and you bounce back the way you came with a big shove - the harder you hit, the harder it flings you; jump into the ropes and you can be thrown clean across the ring. Stand or jump on top of a rope and it trampolines you up - each bounce a little higher, up to a cap you reach after about ten in a row. Land on top of another player's head and you spring high into the air. Spawn armor & the room's protection work exactly as before.
 
 ## Headshots
 
@@ -92,6 +92,10 @@ Every player has a floating sensor dome above the body. A laser bolt or a slings
 ## Darts
 
 Ten darts exist in the level, no more, no less. A **floating, spinning** dart is a spawned pickup: harmless, and only a player holding the blowgun can collect it (walk over it). A dart **lying flat** on the ground has landed - off a zapped-out victim, or a miss that hit a wall - and it's a hazard: step on it without the blowgun and it poisons you as if it hit you; with the blowgun in hand you pick it up as ammo. Slingshot players can load either kind and fire it; a slung dart poisons the same. Drop or lose the blowgun and its darts go back into the level. Darts that fall off the stage respawn.
+
+## Fall damage
+
+Dropping more than about 10 m hurts: 5 health per extra metre, never an instant zap-out. The respawn drop-in from the spawn room is free while your spawn armor is up; stay up there dithering and the 30 m trip costs you.
 
 ## Good to know
 
