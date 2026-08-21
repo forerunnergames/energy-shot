@@ -25,6 +25,9 @@ public class HillTest
   }
 
   [TestCase]
+  public void HillSitsOnTheBananaPlatform() => AssertFloat (Hill.Spot.Y).IsGreater (20.0f); // Issue #239: a hard-to-reach platform, not open floor.
+
+  [TestCase]
   public void ScoreboardColumnNamesTheMode()
   {
     AssertString (Match.ScoreColumnLabel (GameMode.Zaps)).IsEqual ("Zaps");
