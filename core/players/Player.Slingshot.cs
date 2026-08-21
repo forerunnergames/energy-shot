@@ -217,12 +217,12 @@ public partial class Player
     GetParent().AddChild (stone);
     stone.Launch (origin, sweepStart, direction, speed, gravity, energy, isLive, this);
     if (!isLive) return;
-    if (ammo == HeldWeapon.PaperAirplane) stone.HitPlayer += (victim, _) => OnSlungAirplaneHitPlayer (stone, victim);
-    else if (ammo == HeldWeapon.PoisonDart) stone.HitPlayer += (victim, _) => OnSlungDartHitPlayer (stone, victim); // Issue #194.
-    else stone.HitPlayer += (victim, hitEnergy) => OnStoneHitPlayer (victim, hitEnergy, ammo);
+    if (ammo == HeldWeapon.PaperAirplane) stone.HitPlayer += (victim, _, _) => OnSlungAirplaneHitPlayer (stone, victim);
+    else if (ammo == HeldWeapon.PoisonDart) stone.HitPlayer += (victim, _, _) => OnSlungDartHitPlayer (stone, victim); // Issue #194.
+    else stone.HitPlayer += (victim, hitEnergy, isHeadshot) => OnStoneHitPlayer (victim, hitEnergy, ammo, isHeadshot);
     // The berserk slung laser (issue #208) reports like full-auto fire from us; the
     // thrower stays immune to their own spray only because a self-zap would score.
-    if (ammo == HeldWeapon.Laser) stone.SpreeHit += (body, hitEnergy, throughBarrier) => OnLaserHitPlayer (body, hitEnergy, throughBarrier, isFullAuto: true);
+    if (ammo == HeldWeapon.Laser) stone.SpreeHit += (body, hitEnergy, throughBarrier) => OnLaserHitPlayer (body, hitEnergy, throughBarrier, isFullAuto: true, isHeadshot: false);
     if (ammo == HeldWeapon.None || IsCosmeticAmmo (ammo)) return;
     // Only the newest flight owns this player's server-side ammo escrow, so an older
     // stone still arcing somewhere can never land somebody else's item (issue #190).
@@ -278,18 +278,18 @@ public partial class Player
   // (victim-authoritative, same as ReceiveHit & ReceiveBoomerangHit). Slung world
   // items sting exactly like the stone baseline (issue #190) - only the flavor & the
   // death message change.
-  private void OnStoneHitPlayer (Player victim, float energy, HeldWeapon ammo)
+  private void OnStoneHitPlayer (Player victim, float energy, HeldWeapon ammo, bool isHeadshot)
   {
     if (victim.NetworkId == NetworkId) return;
     var what = ammo == HeldWeapon.None ? "stone" : ammo.ToString().ToLower();
-    GD.Print ($"{DisplayName}: My {what} thwacked {victim.DisplayName}!");
-    _hitmarkerSound.Play();
-    ReportToServer ($"slingshot: {DisplayName} thwacked {victim.DisplayName} with a slung {what} (energy {energy:0.00})");
-    victim.RpcId (victim.NetworkId, MethodName.ReceiveSlingshotHit, energy, DisplayName, (int)ammo);
+    GD.Print ($"{DisplayName}: My {what} thwacked {victim.DisplayName}{(isHeadshot ? " on the dome" : "")}!");
+    PlayHitmarker (isHeadshot); // Issue #179.
+    ReportToServer ($"slingshot: {DisplayName} thwacked {victim.DisplayName} with a slung {what} (energy {energy:0.00}{(isHeadshot ? ", headshot" : "")})");
+    victim.RpcId (victim.NetworkId, MethodName.ReceiveSlingshotHit, energy, DisplayName, (int)ammo, isHeadshot);
   }
 
   [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
-  private void ReceiveSlingshotHit (float energy, string slungByPlayerName, int ammo)
+  private void ReceiveSlingshotHit (float energy, string slungByPlayerName, int ammo, bool isHeadshot)
   {
     if (!IsMultiplayerAuthority()) return;
     if (SpawnArmor) return;
@@ -300,6 +300,6 @@ public partial class Player
     // Bulk (issue #208): a big slung item hits & shoves harder, capped just under the
     // full-charge threshold so the slingshot keeps its never-a-one-hit promise.
     var bulk = SlingshotStone.BulkFactor ((HeldWeapon)ammo);
-    ApplyDamage (Mathf.Min (energy * bulk, SlungBulkEnergyCap), slungByPlayerName, SlingshotKnockbackScale * bulk);
+    ApplyDamage (Mathf.Min (energy * bulk, SlungBulkEnergyCap), slungByPlayerName, SlingshotKnockbackScale * bulk, isHeadshot: isHeadshot);
   }
 }
