@@ -44,14 +44,16 @@ public partial class LaserBolt : Node3D
   // sweepStart is the shooter's camera position: the bolt spawns at the muzzle, but
   // the first sweep covers camera->muzzle too, so a wall closer than the muzzle
   // offset can't be skipped (issue #112).
-  public void Launch (Vector3 origin, Vector3 sweepStart, Vector3 direction, float energy, bool isLive, CharacterBody3D shooter)
+  // A null shooter (issue #208: a slung laser's spree) excludes nobody - the gun is
+  // out of control & owes no one safety.
+  public void Launch (Vector3 origin, Vector3 sweepStart, Vector3 direction, float energy, bool isLive, CharacterBody3D? shooter)
   {
     GlobalPosition = origin;
     _sweepStart = sweepStart;
     _velocity = direction.Normalized() * Speed;
     _energy = energy;
     _isLive = isLive;
-    _exclusions = new Godot.Collections.Array <Rid> { shooter.GetRid() };
+    _exclusions = shooter == null ? new Godot.Collections.Array <Rid>() : new Godot.Collections.Array <Rid> { shooter.GetRid() };
     Orient();
     ApplyEnergyVisuals();
   }

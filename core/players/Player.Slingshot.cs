@@ -44,6 +44,7 @@ public partial class Player
   [Export] public float SlingshotMinEnergy = 0.15f;
   [Export] public float SlingshotMaxEnergy = 0.6f;
   [Export] public float SlingshotKnockbackScale = 0.6f;
+  public const float SlungBulkEnergyCap = 0.9f; // Just under the one-shot threshold (issue #208).
   // Arc flattening (issue #163): stone gravity eases off as the draw rises, so
   // full-draw stones fly flat long shots while taps stay lobbed.
   [Export] public float SlingshotMinDrawGravity = 24.0f;
@@ -219,6 +220,9 @@ public partial class Player
     if (ammo == HeldWeapon.PaperAirplane) stone.HitPlayer += (victim, _) => OnSlungAirplaneHitPlayer (stone, victim);
     else if (ammo == HeldWeapon.PoisonDart) stone.HitPlayer += (victim, _) => OnSlungDartHitPlayer (stone, victim); // Issue #194.
     else stone.HitPlayer += (victim, hitEnergy) => OnStoneHitPlayer (victim, hitEnergy, ammo);
+    // The berserk slung laser (issue #208) reports like full-auto fire from us; the
+    // thrower stays immune to their own spray only because a self-zap would score.
+    if (ammo == HeldWeapon.Laser) stone.SpreeHit += (body, hitEnergy, throughBarrier) => OnLaserHitPlayer (body, hitEnergy, throughBarrier, isFullAuto: true);
     if (ammo == HeldWeapon.None || IsCosmeticAmmo (ammo)) return;
     // Only the newest flight owns this player's server-side ammo escrow, so an older
     // stone still arcing somewhere can never land somebody else's item (issue #190).
@@ -293,6 +297,9 @@ public partial class Player
     GD.Print ($"{DisplayName}: I was thwacked by {slungByPlayerName}'s slingshot!");
     // Getting zapped out by a slung LOAF deserves its own line (issue #190).
     LastDamageKind = (HeldWeapon)ammo == HeldWeapon.None ? DamageKind.Slingshot : DamageKind.SlungItem; // Message context (issue #84).
-    ApplyDamage (energy, slungByPlayerName, SlingshotKnockbackScale);
+    // Bulk (issue #208): a big slung item hits & shoves harder, capped just under the
+    // full-charge threshold so the slingshot keeps its never-a-one-hit promise.
+    var bulk = SlingshotStone.BulkFactor ((HeldWeapon)ammo);
+    ApplyDamage (Mathf.Min (energy * bulk, SlungBulkEnergyCap), slungByPlayerName, SlingshotKnockbackScale * bulk);
   }
 }
