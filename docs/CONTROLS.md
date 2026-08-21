@@ -62,7 +62,8 @@ Bread is on key 0 (or B) and you spawn carrying one loaf per life. **Left-click 
 
 | Input | Action |
 |---|---|
-| Tab | Toggle message history (PageUp / PageDown to scroll; it never blocks your aim) |
+| Tab | Toggle message history (PageUp / PageDown to scroll; it never blocks your aim). Chat lines are archived here too, in the sender's color |
+| T | Open the chat line (bottom-left). Enter sends, Esc cancels; your character holds still while you type & the mouse stays captured. Lines show for ~9 s in the sender's color, max 120 characters, 2 per second |
 | . (period) | Thumbs-up the current music track |
 | , (comma) | Thumbs-down (enough downvotes skips the track) |
 | Esc | Pause / quit dialog |

@@ -24,6 +24,7 @@ public partial class Hud : Control
   private StyleBoxFlat? _poisonFill; // Green fill swapped in while poisoned (issue #194).
   private bool _poisonTintShown;
   private MessageScroller _messageScroller = null!;
+  private ChatBox _chatBox = null!; // Player chat (issue #188).
   private ConfirmationDialog2 _quitDialog = null!;
   private Label _scoreLabel = null!;
   private RichTextLabel _leaderboardEntries = null!;
@@ -173,6 +174,8 @@ public partial class Hud : Control
     _world.RoundEnded += OnRoundEnded;
     _world.RoundStarted += OnRoundStarted;
     CreateRoundUi();
+    _world.ChatReceived += OnChatReceived; // Issue #188.
+    CreateChatBox();
     _world.PlayerScored += OnPlayerScored;
     _world.PlayerRespawnedShot += OnPlayerRespawnedShot;
     _world.PlayerRespawnedFell += OnPlayerRespawnedFell;
@@ -267,8 +270,37 @@ public partial class Hud : Control
 
   public override void _UnhandledInput (InputEvent @event)
   {
+    if (_chatBox.IsOpen) return; // The chat line owns the keyboard (issue #188): Esc cancels it, not the game.
+    if (@event.IsActionPressed ("chat") && Visible && !_quitDialog.Visible) { _chatBox.Open(); return; }
     if (!Input.IsActionJustPressed ("quit")) return;
     ToggleQuitDialog();
+  }
+
+  // Code-built (issue #188): bottom-left, grows upward, sits beside nothing else.
+  // Opening it disables player input for the duration - deliberate capture, the
+  // opposite of the #118 history bug - & never touches the mouse mode.
+  private void CreateChatBox()
+  {
+    _chatBox = new ChatBox();
+    AddChild (_chatBox);
+    _chatBox.SetAnchorsAndOffsetsPreset (LayoutPreset.BottomLeft);
+    _chatBox.GrowVertical = GrowDirection.Begin;
+    _chatBox.OffsetLeft = 16.0f;
+    _chatBox.OffsetBottom = -16.0f;
+    _chatBox.Opened += () => _world.SelfPlayer?.SetInputEnabled (isEnabled: false);
+    _chatBox.Closed += () => _world.SelfPlayer?.SetInputEnabled (isEnabled: true);
+    _chatBox.ChatSubmitted += _world.SendChat;
+  }
+
+  // The sender's identity & color come from the server-relayed peer id (issue #188),
+  // tinted exactly like leaderboard names (issue #43). The Tab history archives the
+  // same line in the same color.
+  private void OnChatReceived (int senderId, string senderName, string text)
+  {
+    var colorIndex = _world.GetPlayers().FirstOrDefault (player => player.NetworkId == senderId)?.ColorIndex ?? 0;
+    var hex = players.PlayerColors.TextHex (colorIndex);
+    _chatBox.AddLine (senderName, hex, text);
+    _messageScroller.AddToHistoryOnly ($"{ChatBox.EscapeBbcode (senderName)}: {ChatBox.EscapeBbcode (text)}", Color.FromHtml (hex));
   }
 
   public override void _Process (double delta)

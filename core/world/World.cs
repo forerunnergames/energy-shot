@@ -32,6 +32,7 @@ public partial class World : Node3D
   [Signal] public delegate void RoundClockUpdatedEventHandler (int secondsLeft, int zapLimit);
   [Signal] public delegate void RoundEndedEventHandler (string scoreboardBbcode);
   [Signal] public delegate void RoundStartedEventHandler();
+  [Signal] public delegate void ChatReceivedEventHandler (int senderId, string senderName, string text);
   [Signal] public delegate void KickedFromServerEventHandler (string reason);
   [Signal] public delegate void ServerShutDownEventHandler();
   private const int DefaultServerPort = 55556;
@@ -137,6 +138,59 @@ public partial class World : Node3D
     if (!IsActiveServer()) return;
     ServerLog.Event ($"admin announcement: {message}");
     _networkManager.NotifyAdminMessage (message);
+  }
+
+  // Player chat (issue #188): the server relays every line, deriving the sender from
+  // the RPC itself - never from client-supplied text - & logs it. A length cap & a
+  // light per-peer rate limit (2/s) keep it from becoming a spam channel.
+  public const int MaxChatChars = 120;
+  private const ulong ChatMinIntervalMs = 500;
+  private readonly System.Collections.Generic.Dictionary <long, ulong> _lastChatMs = new();
+
+  public void SendChat (string text)
+  {
+    if (Multiplayer.IsServer()) { RequestChat (text); return; }
+    RpcId (1, MethodName.RequestChat, text);
+  }
+
+  // Flattens to one line & caps the length. Every control character & Unicode line
+  // or paragraph separator (CodeRabbit on #224: U+0085, U+2028, U+2029 would split
+  // the display & the server log) becomes a space. Pure & unit-tested.
+  public static string SanitizeChat (string text)
+  {
+    var single = new string (text.Select (c => char.IsControl (c) || c is '\u0085' or '\u2028' or '\u2029' ? ' ' : c).ToArray()).Trim();
+    return single.Length <= MaxChatChars ? single : single[..MaxChatChars];
+  }
+
+  [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
+  private void RequestChat (string text)
+  {
+    if (!IsActiveServer()) return;
+    var senderId = Multiplayer.GetRemoteSenderId();
+    if (senderId == 0) senderId = Multiplayer.GetUniqueId(); // The host typing locally.
+    var sender = FindPlayer (senderId);
+    if (sender == null) return;
+    var clean = SanitizeChat (text);
+    if (clean.Length == 0) return;
+    var now = Time.GetTicksMsec();
+
+    if (_lastChatMs.TryGetValue (senderId, out var last) && now - last < ChatMinIntervalMs)
+    {
+      ServerLog.Event (senderId, "chat drop: rate limit");
+      return;
+    }
+
+    _lastChatMs[senderId] = now;
+    ServerLog.Event (senderId, $"chat: [{sender.DisplayName}] {clean}");
+    Rpc (MethodName.ReceiveChat, senderId, sender.DisplayName, clean);
+  }
+
+  // Only peer 1 may put words in anyone's mouth - the admin-message rule (issue #158).
+  [Rpc (MultiplayerApi.RpcMode.AnyPeer, CallLocal = true)]
+  private void ReceiveChat (int senderId, string senderName, string text)
+  {
+    if (Multiplayer.GetRemoteSenderId() != 1) return;
+    EmitSignal (SignalName.ChatReceived, senderId, senderName, text);
   }
 
   // Release announcement (issue #158): --version-file <path> names the running
@@ -404,6 +458,7 @@ public partial class World : Node3D
 
   private void OnClientDisconnectedFromServer (long id)
   {
+    _lastChatMs.Remove (id); // Chat rate-limit state leaves with the peer (CodeRabbit on #224).
     RemovePlayer (id);
     _versionLinePeerIds.Remove ((int)id); // A rejoin counts as a fresh join (PR #166 review).
     ServerLog.Event (id, "disconnected");
