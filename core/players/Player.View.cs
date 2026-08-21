@@ -63,7 +63,7 @@ public partial class Player
   // slide camera heights, camera kick, & aim pitch for free.
   private void CreateThirdPersonRig()
   {
-    _thirdPersonArm = new SpringArm3D { Position = ChaseViewOffset(), SpringLength = ThirdPersonBackMeters, CollisionMask = 1, Margin = 0.3f };
+    _thirdPersonArm = new SpringArm3D { Position = ChaseViewOffset(), SpringLength = ThirdPersonBackMeters, CollisionMask = 1, Margin = 0.6f }; // Wider margin (issue #234): the near plane never grazes a surface.
     _thirdPersonArm.AddExcludedObject (GetRid());
     _camera.AddChild (_thirdPersonArm);
     _thirdPersonCamera = new Camera3D { Rotation = ChaseViewAim (ThirdPersonBackMeters) };
