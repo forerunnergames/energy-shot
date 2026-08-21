@@ -1571,9 +1571,12 @@ public partial class PlaytestDriver : Node
       _lastStone = null;
       PressAction ("shoot");
       await TryWaitUntil (() => Self.SlingshotDrawSeconds >= targetDrawSeconds, 15);
+      // Diagnosis for issue #272: which link breaks - the press, the draw, or the fire.
+      GD.Print ($"SlingAStone attempt {attempt}: pressed={Input.IsActionPressed ("shoot")} draw={Self.SlingshotDrawSeconds:0.00}/{targetDrawSeconds:0.00} selected={Self.SelectedWeapon} ammo={Self.SlingshotAmmo}");
       ReleaseAction ("shoot");
       await TryWaitUntil (() => _lastStone != null, 3);
       if (_lastStone != null) return _lastStone;
+      GD.Print ($"SlingAStone attempt {attempt}: released, no stone; draw now {Self.SlingshotDrawSeconds:0.00}");
     }
 
     throw new Exception ($"no stone spawned: {description}");
