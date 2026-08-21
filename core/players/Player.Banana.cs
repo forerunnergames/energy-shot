@@ -79,6 +79,7 @@ public partial class Player
     if (!isLive) return;
     banana.Exploded += OnBananaExploded;
     banana.StuckToPlayer += OnBananaStuck;
+    banana.CaughtBySlingshot += OnBananaCaught; // A drawn slingshot can catch it (issue #251).
   }
 
   private void OnBananaExploded (Vector3 blastOrigin)
