@@ -50,6 +50,19 @@ public static class Settings
     set => Set ("max_players", value);
   }
 
+  // Host-chosen round limits (issue #153): 0 disables that axis.
+  public static int RoundMinutes
+  {
+    get => Mathf.Clamp (GetInt ("round_minutes", core.world.Match.DefaultRoundMinutes), 0, core.world.Match.MaxRoundMinutes);
+    set => Set ("round_minutes", value);
+  }
+
+  public static int ZapLimit
+  {
+    get => Mathf.Clamp (GetInt ("zap_limit", core.world.Match.DefaultZapLimit), 0, core.world.Match.MaxZapLimit);
+    set => Set ("zap_limit", value);
+  }
+
   // Game passwords (issue #90), remembered like the other dialog fields.
   public static string HostPassword
   {

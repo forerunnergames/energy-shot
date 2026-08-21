@@ -287,6 +287,35 @@ public static class MessagePools
     "return to sender: {z} gave {v}'s weapon back the fun way"
   };
 
+  // End-of-round superlatives (issue #153): {v} = the honoree. Sarcastic, never gory.
+  public static readonly List <string> TitleMostZaps = new()
+  {
+    "Top Zapper: {v}. Somebody give them a juice box",
+    "Most Zaps: {v} - touch grass, champ",
+    "{v} zapped the most people & will not stop talking about it"
+  };
+
+  public static readonly List <string> TitleMostZapOuts = new()
+  {
+    "Most Dishonorable: {v}, zapped out more than anyone & still smiling",
+    "Human Target Practice: {v}",
+    "{v} got zapped out the most. Thanks for your service"
+  };
+
+  public static readonly List <string> TitleMostAssists = new()
+  {
+    "Best Supporting Actor: {v}",
+    "Most Assists: {v} did the work, somebody else got the credit",
+    "{v} softened them up all round. Generous"
+  };
+
+  public static readonly List <string> TitleMostFalls = new()
+  {
+    "Gravity's Favorite: {v}",
+    "Most Falls: {v} keeps discovering the edge",
+    "{v} fell off the world the most. The world is flat, apparently"
+  };
+
   // Registry so the unit test can verify all templates stay unique (issue #84).
   public static readonly IReadOnlyList <List <string>> All = new List <List <string>>
   {
@@ -294,6 +323,6 @@ public static class MessagePools
     BananaBlast, BananaDirect, HoldingBananaGun, ComboSplatterPunch, JumpShot, SlideShotKiller,
     SlideShotVictim, ZapStreakTier3, ZapStreakTier5, ZapStreakTier7, StreakEnded, StreakLost,
     ZappedStreak, Boomerang, Slingshot, SlungItem, PaperAirplane, Landmine, Poison, AirplaneCatch, TheftRevenge,
-    ZappedEating
+    ZappedEating, TitleMostZaps, TitleMostZapOuts, TitleMostAssists, TitleMostFalls
   };
 }

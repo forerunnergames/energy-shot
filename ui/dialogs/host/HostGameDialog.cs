@@ -14,6 +14,8 @@ public partial class HostGameDialog : Control
   private OptionButton _difficulty = null!;
   private OptionButton _playerColor = null!;
   private SpinBox _maxPlayers = null!;
+  private SpinBox _roundMinutes = null!; // Issue #153.
+  private SpinBox _zapLimit = null!;
   private LineEdit _password = null!;
   private LineEdit _serverAddress = null!;
   private Label _middleText = null!;
@@ -39,6 +41,8 @@ public partial class HostGameDialog : Control
     _playerColor.GetPopup().AddThemeFontSizeOverride ("font_size", 90);
     PlayerColors.Populate (_playerColor); // Selectable body color (issue #43).
     _maxPlayers = GetNode <SpinBox> ("PanelContainer/MarginContainer/VBoxContainer/MaxPlayers");
+    _roundMinutes = GetNode <SpinBox> ("PanelContainer/MarginContainer/VBoxContainer/RoundMinutes");
+    _zapLimit = GetNode <SpinBox> ("PanelContainer/MarginContainer/VBoxContainer/ZapLimit");
     _password = GetNode <LineEdit> ("PanelContainer/MarginContainer/VBoxContainer/Password");
     _serverAddress = GetNode <LineEdit> ("PanelContainer/MarginContainer/VBoxContainer/ServerAddress");
     _middleText = GetNode <Label> ("PanelContainer/MarginContainer/VBoxContainer/MiddleText");
@@ -63,6 +67,8 @@ public partial class HostGameDialog : Control
     _difficulty.Selected = Settings.Difficulty;
     _playerColor.Selected = PlayerColors.NormalizeIndex (Settings.PlayerColor);
     _maxPlayers.Value = Settings.MaxPlayers;
+    _roundMinutes.Value = Settings.RoundMinutes;
+    _zapLimit.Value = Settings.ZapLimit;
     UpdateHostGameButtonState();
     Show();
     // UPnP discovery can take seconds; run it off the main thread so the UI stays responsive (see issue #25).
@@ -111,6 +117,8 @@ public partial class HostGameDialog : Control
     Settings.Difficulty = _difficulty.Selected;
     Settings.PlayerColor = _playerColor.Selected;
     Settings.MaxPlayers = (int)_maxPlayers.Value;
+    Settings.RoundMinutes = (int)_roundMinutes.Value; // Read back by World.OnHostGameSuccess (issue #153).
+    Settings.ZapLimit = (int)_zapLimit.Value;
     Settings.HostPassword = _password.Text;
     Hide();
     EmitSignal (SignalName.HostGameSuccess, _playerName.Text, _difficulty.Selected, (int)_maxPlayers.Value, _password.Text, _playerColor.Selected);
