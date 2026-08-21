@@ -43,6 +43,11 @@ public partial class Player
 
   public bool IsPoisoned => PoisonDarts > 0;
 
+  // Poison inverts the movement controls (issue #277, thepro; Aaron: from the first
+  // dart): forward walks you back, left walks you right, stacked on the drunk-walk
+  // wobble. Look & aim stay honest - inverting the mouse would be nausea, not comedy.
+  public static Vector2 PoisonSteer (Vector2 input, int darts) => darts > 0 ? -input : input;
+
   // A dart found us (issue #194). The impact itself does no damage - it plants the
   // next tick's problem. Runs only on the victim's own authority.
   [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
