@@ -83,7 +83,7 @@ There is exactly **one** paper airplane in the arena. It's a slot-6 weapon like 
 
 ## The boxing ring
 
-The spawn box is a boxing ring: its walls are rubber ropes. Run, slide, or get punched into one and you bounce back the way you came with a shove - knock someone into the ropes and they come right back to you. Land on top of another player's head and you spring high into the air. Spawn armor & the room's protection work exactly as before.
+The spawn box is a boxing ring: its walls are rubber ropes. Run, slide, or get punched into one and you bounce back the way you came with a big shove - the harder you hit, the harder it flings you; jump into the ropes and you can be thrown clean across the ring. Stand or jump on top of a rope and it trampolines you up. Land on top of another player's head and you spring high into the air. Spawn armor & the room's protection work exactly as before.
 
 ## Headshots
 
