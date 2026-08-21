@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using com.forerunnergames.energyshot.players;
 using com.forerunnergames.energyshot.ui;
-using com.forerunnergames.energyshot.ui.hud.messages;
+using com.forerunnergames.energyshot.ui.hud;
 using com.forerunnergames.energyshot.utilities;
 using Godot;
 

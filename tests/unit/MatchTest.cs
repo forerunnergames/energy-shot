@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 using com.forerunnergames.energyshot.core.world;
-using com.forerunnergames.energyshot.ui.hud.messages;
+using com.forerunnergames.energyshot.ui.hud;
 using GdUnit4;
 using static GdUnit4.Assertions;
 

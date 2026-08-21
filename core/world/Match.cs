@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
-using com.forerunnergames.energyshot.ui.hud.messages;
+using com.forerunnergames.energyshot.ui.hud;
 
 namespace com.forerunnergames.energyshot.core.world;
 
