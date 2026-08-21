@@ -8,10 +8,18 @@ namespace com.forerunnergames.energyshot.players;
 // The room's spawn-protection job (spawn armor, layout) is untouched.
 public partial class Player
 {
-  [Export] public float RopeRestitution = 0.9f;
-  [Export] public float RopeShove = 6.0f;
-  [Export] public float RopeBounceSeconds = 0.35f;
+  // Much bouncier (issue #240, Caleb): jumping into the ropes should fling you hard
+  // enough to nearly knock you out of the ring - restitution over 1 & a shove that
+  // scales with how fast you hit them.
+  [Export] public float RopeRestitution = 1.3f;
+  [Export] public float RopeShove = 9.0f;
+  [Export] public float RopeShovePerImpactSpeed = 0.6f;
+  [Export] public float RopeBounceSeconds = 0.45f;
   [Export] public float HeadBounceVelocity = 26.0f;
+  // The rope tops are trampolines too (issue #240): landing on one springs you up,
+  // scaled by how fast you came down, & even a standing hop still bounces.
+  [Export] public float RopeTopBounceMin = 14.0f;
+  [Export] public float RopeTopBouncePerFallSpeed = 1.1f;
   private const float MinRopeImpactSpeed = 1.0f;
   private Vector3 _preMoveVelocity;
 
@@ -25,11 +33,20 @@ public partial class Player
   {
     if (!IsRope (collision.GetCollider())) return false;
     var normal = collision.GetNormal();
-    if (Mathf.Abs (normal.Y) > 0.5f) return false; // The top edge isn't a rope.
-    if (-_preMoveVelocity.Dot (normal) < MinRopeImpactSpeed) return false; // Leaning on it, not hitting it.
-    var bounced = _preMoveVelocity.Bounce (normal) * RopeRestitution + normal * RopeShove;
+    if (normal.Y > 0.5f) return TryRopeTopBounce();
+    var impact = -_preMoveVelocity.Dot (normal);
+    if (impact < MinRopeImpactSpeed) return false; // Leaning on it, not hitting it.
+    var bounced = _preMoveVelocity.Bounce (normal) * RopeRestitution + normal * (RopeShove + impact * RopeShovePerImpactSpeed);
     Velocity = new Vector3 (bounced.X, Velocity.Y, bounced.Z);
     _stickyFlightSecondsLeft = Mathf.Max (_stickyFlightSecondsLeft, RopeBounceSeconds);
+    return true;
+  }
+
+  private bool TryRopeTopBounce()
+  {
+    var fallSpeed = Mathf.Max (0.0f, -_preMoveVelocity.Y);
+    Velocity = new Vector3 (Velocity.X, Mathf.Max (RopeTopBounceMin, fallSpeed * RopeTopBouncePerFallSpeed), Velocity.Z);
+    _jumpSound.Play();
     return true;
   }
 
