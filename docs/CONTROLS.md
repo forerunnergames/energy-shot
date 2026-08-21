@@ -99,3 +99,5 @@ Every player has a floating sensor dome above the body. A laser bolt or a slings
 ## Rounds
 
 A round ends after **5 minutes or when somebody reaches 20 zaps**, whichever comes first (the clock sits top-center while at least two players are in). Then everyone freezes for 10 seconds on the scoreboard - zaps, zap-outs, assists (you damaged them within 10 s of someone else's zap), falls - with sarcastic superlatives, and a fresh round starts: scores zeroed, everybody respawned. Hosts set both limits in the Host Game dialog (0 = no limit); the dedicated server takes `--round-minutes N` and `--zap-limit N`.
+
+**King of the Hill** (Host Game dialog "Game Mode", or `--mode koth` on the server): a glowing gold ring on the arena floor, with a beam you can see from the spawn room. Whoever stands in it **alone** earns a point every second; two or more inside is a contest and nobody scores. The clock shows who holds it. Same round limits (first to 20 points or 5 minutes), same scoreboard and superlatives - zaps still count for the Top Zapper title, but points come from the hill.

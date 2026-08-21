@@ -29,7 +29,7 @@ public partial class World : Node3D
   [Signal] public delegate void SelfPlayerBreadInterruptedEventHandler();
   [Signal] public delegate void RemoteMessageReceivedEventHandler (string message);
   [Signal] public delegate void AdminMessageReceivedEventHandler (string message);
-  [Signal] public delegate void RoundClockUpdatedEventHandler (int secondsLeft, int zapLimit);
+  [Signal] public delegate void RoundClockUpdatedEventHandler (int secondsLeft, int zapLimit, int mode, string hillHolder);
   [Signal] public delegate void RoundEndedEventHandler (string scoreboardBbcode);
   [Signal] public delegate void RoundStartedEventHandler();
   [Signal] public delegate void ChatReceivedEventHandler (int senderId, string senderName, string text);
@@ -326,7 +326,9 @@ public partial class World : Node3D
     // axis. Playtest runs assert exact scores & crowns across ~3 minutes, so a round
     // end mid-run would break them: the harness flag turns rounds off.
     var isPlaytest = OS.GetCmdlineUserArgs().Contains ("--playtest");
-    ConfigureRound (isPlaytest ? 0 : Mathf.Clamp (ParseArgInt ("--round-minutes", Match.DefaultRoundMinutes), 0, Match.MaxRoundMinutes) * 60, isPlaytest ? 0 : Mathf.Clamp (ParseArgInt ("--zap-limit", Match.DefaultZapLimit), 0, Match.MaxZapLimit));
+    // --mode koth picks King of the Hill (issue #44); anything else is classic zaps.
+    var mode = !isPlaytest && ParseArgValue ("--mode").ToLowerInvariant() == "koth" ? GameMode.KingOfTheHill : GameMode.Zaps;
+    ConfigureRound (isPlaytest ? 0 : Mathf.Clamp (ParseArgInt ("--round-minutes", Match.DefaultRoundMinutes), 0, Match.MaxRoundMinutes) * 60, isPlaytest ? 0 : Mathf.Clamp (ParseArgInt ("--zap-limit", Match.DefaultZapLimit), 0, Match.MaxZapLimit), mode);
     var peer = new ENetMultiplayerPeer();
     var error = peer.CreateServer (port);
 
@@ -428,7 +430,7 @@ public partial class World : Node3D
   {
     _maxPlayers = Mathf.Clamp (maxPlayers, 2, MaxPlayers);
     _serverPassword = password;
-    ConfigureRound (Settings.RoundMinutes * 60, Settings.ZapLimit); // Issue #153.
+    ConfigureRound (Settings.RoundMinutes * 60, Settings.ZapLimit, (GameMode)Settings.GameMode); // Issues #153 & #44.
     Multiplayer.PeerConnected += OnClientConnectedToServer;
     Multiplayer.PeerDisconnected += OnClientDisconnectedFromServer;
     AddPlayer (Multiplayer.GetUniqueId(), playerName, Player.MaxHealthFor (difficulty), colorIndex);
@@ -559,12 +561,37 @@ public partial class World : Node3D
   private bool _intermission;
   private string _lastBoard = string.Empty; // Replayed to anyone who joins mid-intermission (CodeRabbit on #226).
 
-  private void ConfigureRound (int roundSeconds, int zapLimit)
+  private GameMode _mode = GameMode.Zaps;
+  private Hill? _hill;
+
+  private void ConfigureRound (int roundSeconds, int zapLimit, GameMode mode)
   {
     _roundSeconds = roundSeconds;
     _zapLimit = zapLimit;
+    _mode = mode;
     _roundElapsed = 0.0f;
-    ServerLog.Event ($"rounds: {(roundSeconds > 0 ? $"{roundSeconds / 60} min" : "no time limit")}, {(zapLimit > 0 ? $"first to {zapLimit}" : "no zap limit")}");
+    EnsureHill();
+    ServerLog.Event ($"rounds: {mode}, {(roundSeconds > 0 ? $"{roundSeconds / 60} min" : "no time limit")}, {(zapLimit > 0 ? $"first to {zapLimit}" : "no point limit")}");
+  }
+
+  // The hill ring exists only in King of the Hill (issue #44); clients learn the mode
+  // from the round clock broadcast & build theirs on the first tick.
+  private void EnsureHill()
+  {
+    if (_mode != GameMode.KingOfTheHill || _hill != null) return;
+    _hill = Hill.Create();
+    AddChild (_hill);
+  }
+
+  // Sole occupant of the hill earns a point per tick (issue #44); a contest pays nobody.
+  private string AwardHillPoint (List <Player> players)
+  {
+    var inside = players.Where (player => !player.Fallen && Hill.Contains (player.GlobalPosition)).ToList();
+    if (inside.Count != 1) return inside.Count == 0 ? string.Empty : "contested";
+    var king = inside[0];
+    if (king.NetworkId == Multiplayer.GetUniqueId()) king.NotifyHillPoint();
+    else king.RpcId (king.NetworkId, Player.MethodName.NotifyHillPoint);
+    return king.DisplayName;
   }
 
   private bool RoundsEnabled => _roundSeconds > 0 || _zapLimit > 0;
@@ -575,8 +602,9 @@ public partial class World : Node3D
     var players = GetPlayers().ToList();
     if (players.Count < 2) return;
     _roundElapsed += 1.0f;
+    var holder = _mode == GameMode.KingOfTheHill ? AwardHillPoint (players) : string.Empty;
     var secondsLeft = _roundSeconds > 0 ? Mathf.Max (0, _roundSeconds - (int)_roundElapsed) : -1;
-    Rpc (MethodName.ReceiveRoundClock, secondsLeft, _zapLimit);
+    Rpc (MethodName.ReceiveRoundClock, secondsLeft, _zapLimit, (int)_mode, holder);
     if (!Match.IsOver (_roundElapsed, _roundSeconds, players.Max (player => player.Score), _zapLimit)) return;
     EndRound (players);
   }
@@ -586,7 +614,7 @@ public partial class World : Node3D
     _intermission = true;
     var ordered = players.OrderByDescending (player => player.Score).ThenBy (player => player.DisplayName).ToList();
     var stats = ordered.Select (player => new RoundStats (player.DisplayName, PlayerColors.TextHex (player.ColorIndex), player.Score, player.ZapOuts, player.Assists, player.Falls)).ToList();
-    var board = Match.BuildScoreboard (stats, Match.AwardTitles (stats), MessageGenerator.RoundTitle);
+    var board = Match.BuildScoreboard (stats, Match.AwardTitles (stats), MessageGenerator.RoundTitle, _mode);
     ServerLog.Event ($"round over: {string.Join (", ", stats.Select (s => $"{s.Name} {s.Zaps}/{s.ZapOuts}/{s.Assists}/{s.Falls}"))}");
     _lastBoard = board;
     Rpc (MethodName.ReceiveRoundEnded, board);
@@ -611,10 +639,12 @@ public partial class World : Node3D
 
   // Only peer 1 runs the match - the admin-message rule (issue #158).
   [Rpc (MultiplayerApi.RpcMode.AnyPeer, CallLocal = true)]
-  private void ReceiveRoundClock (int secondsLeft, int zapLimit)
+  private void ReceiveRoundClock (int secondsLeft, int zapLimit, int mode, string hillHolder)
   {
     if (Multiplayer.GetRemoteSenderId() != 1) return;
-    EmitSignal (SignalName.RoundClockUpdated, secondsLeft, zapLimit);
+    _mode = (GameMode)mode;
+    EnsureHill(); // Clients build the ring the first time the clock says it's that kind of round.
+    EmitSignal (SignalName.RoundClockUpdated, secondsLeft, zapLimit, mode, hillHolder);
   }
 
   [Rpc (MultiplayerApi.RpcMode.AnyPeer, CallLocal = true)]
