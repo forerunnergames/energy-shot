@@ -1049,7 +1049,11 @@ public partial class PlaytestDriver : Node
     AimAt (Self.GlobalPosition + new Vector3 (0.0f, -1.0f, -6.0f));
     var lasersBefore = LaserPickupNames();
     var ammoStonesBefore = _stonesSpawned;
-    await SlingAStone (drawMs: 900, "loaded-ammo shot (#190)");
+    // A soft lob, NOT a full draw (issue #272): now that the draw is engine-time
+    // honest, a 900ms draw punches the stone clean through the paper-thin spawn-room
+    // slab & it falls off-world - the server correctly skips the landing ("no ground
+    // beneath") & returns the laser via the caps, & the landed-pickup wait times out.
+    await SlingAStone (drawMs: 300, "loaded-ammo shot (#190)");
     Assert (_stonesSpawned > ammoStonesBefore, "fired the loaded laser out of the slingshot (#190)");
     await WaitUntil (() => Self.SlingshotAmmo == HeldWeapon.None, 10, "firing emptied the slingshot (#190)");
     // Nothing may vanish: the slung laser has to come back as an ordinary pickup.
