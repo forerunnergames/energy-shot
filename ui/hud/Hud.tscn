@@ -23,6 +23,7 @@ shader = ExtResource("6_spltr")
 shader_parameter/intensity = 0.0
 shader_parameter/slide = 0.0
 shader_parameter/seed = 0.0
+shader_parameter/crumbs = 0.0
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_ldrbd"]
 bg_color = Color(0, 0, 0, 0.392157)

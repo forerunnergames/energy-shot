@@ -288,12 +288,16 @@ public partial class Player
     victim.RpcId (victim.NetworkId, MethodName.ReceiveSlingshotHit, energy, DisplayName, (int)ammo, isHeadshot);
   }
 
+  [Signal] public delegate void BreadedEventHandler(); // Slung bread splats the screen (issue #247).
+
   [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
   private void ReceiveSlingshotHit (float energy, string slungByPlayerName, int ammo, bool isHeadshot)
   {
     if (!IsMultiplayerAuthority()) return;
     if (SpawnArmor) return;
     if (Fallen) return; // A body mid-death-sequence is scenery (issue #152).
+    EmitSignal (SignalName.Punched); // Any slung hit blurs the victim like a punch (issue #247).
+    if ((HeldWeapon)ammo == HeldWeapon.Bread) EmitSignal (SignalName.Breaded); // Crumbs everywhere (issue #247).
     GD.Print ($"{DisplayName}: I was thwacked by {slungByPlayerName}'s slingshot!");
     // Getting zapped out by a slung LOAF deserves its own line (issue #190).
     LastDamageKind = (HeldWeapon)ammo == HeldWeapon.None ? DamageKind.Slingshot : DamageKind.SlungItem; // Message context (issue #84).

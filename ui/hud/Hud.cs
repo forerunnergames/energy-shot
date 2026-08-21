@@ -157,6 +157,7 @@ public partial class Hud : Control
     AddChild (_lockOnSound);
     _world.SelfPlayerPunched += OnSelfPlayerPunched;
     _world.SelfPlayerSplattered += OnSelfPlayerSplattered;
+    _world.SelfPlayerBreaded += OnSelfPlayerBreaded; // Issue #247.
     _world.SelfPlayerAirplaneCaught += OnSelfPlayerAirplaneCaught;
     _world.SelfPlayerAirplaneLockAcquired += () => _lockOnSound.Play(); // Issue #211.
     _world.SelfPlayerAteBread += OnSelfPlayerAteBread;
@@ -513,8 +514,15 @@ public partial class Hud : Control
   // line once & broadcasts it, so every peer sees the same text (#53).
   private void OnSelfPlayerAirplaneCaught (string catcherName, string throwerName) => Announce (MessageGenerator.OnAirplaneCatch (throwerName, catcherName));
 
-  private void OnSelfPlayerSplattered()
+  private void OnSelfPlayerSplattered() => Splat (crumbs: false);
+
+  // Slung bread (issue #247): the same overlay machinery, a different splat - small
+  // jagged brown crumbs & crusts, not recolored banana goo.
+  private void OnSelfPlayerBreaded() => Splat (crumbs: true);
+
+  private void Splat (bool crumbs)
   {
+    _splatter.SetShaderParameter ("crumbs", crumbs ? 1.0f : 0.0f);
     _splatterSecondsLeft = SplatterSeconds;
     _splatterRect.Visible = true; // Idle-hidden until there's goo to draw (issue #200).
     _splatterSlide = 0.0f;
