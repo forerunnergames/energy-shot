@@ -97,6 +97,10 @@ Ten darts exist in the level, no more, no less. A **floating, spinning** dart is
 
 Dropping more than about 10 m hurts: 5 health per extra metre, never an instant zap-out. The respawn drop-in from the spawn room is free while your spawn armor is up; stay up there dithering and the 30 m trip costs you.
 
+## Recoil
+
+Every gun climbs your crosshair when it fires, and the climb stacks while you keep firing - recovery only starts after a short pause. A quick laser tap kicks a little, a full-auto burst walks the crosshair up over the burst, the banana launcher kicks hard. The slingshot, the boomerang and the blowgun don't kick.
+
 ## Good to know
 
 - White glow = spawn armor (5s of invulnerability after spawning; firing or punching cancels it).
