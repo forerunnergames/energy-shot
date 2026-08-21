@@ -223,6 +223,10 @@ public partial class Player
     // The berserk slung laser (issue #208) reports like full-auto fire from us; the
     // thrower stays immune to their own spray only because a self-zap would score.
     if (ammo == HeldWeapon.Laser) stone.SpreeHit += (body, hitEnergy, throughBarrier) => OnLaserHitPlayer (body, hitEnergy, throughBarrier, isFullAuto: true, isHeadshot: false);
+    // The other slung guns (issue #244): a slung launcher's bananas blast & stick as
+    // ours; a slung slingshot's stones thwack as ours.
+    if (ammo == HeldWeapon.Banana) stone.SpreeBanana += banana => { banana.Exploded += OnBananaExploded; banana.StuckToPlayer += OnBananaStuck; };
+    if (ammo == HeldWeapon.Slingshot) stone.SpreeStone += child => child.HitPlayer += (victim, hitEnergy, isHeadshot) => OnStoneHitPlayer (victim, hitEnergy, HeldWeapon.None, isHeadshot);
     if (ammo == HeldWeapon.None || IsCosmeticAmmo (ammo)) return;
     // Only the newest flight owns this player's server-side ammo escrow, so an older
     // stone still arcing somewhere can never land somebody else's item (issue #190).

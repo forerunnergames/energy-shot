@@ -35,7 +35,7 @@ With the slingshot **out and empty**, walking onto any world item **loads it** i
 
 - One item at a time. While something is nocked, normal pickup rules apply again.
 - Slung items fly the same draw-scaled arc as a stone. Small things sting like a stone; **big things hit hard** - a slung gun deals roughly double the damage and knockback, the banana launcher triple (never a one-hit, even at full draw).
-- A **slung laser goes berserk**: it sprays full-auto shots in random directions as it tumbles, until it lands. Dangerous to everyone near its flight path.
+- **Every slung gun goes berserk**: a slung laser sprays full-auto shots, a slung banana launcher lobs bananas, a slung slingshot flings stones - all in random directions as it tumbles, until it lands. Dangerous to everyone near its flight path. (A slung blowgun is always empty - its darts went back into the level when it left your hands.)
 - Wherever the item lands, it becomes an ordinary world pickup again - nothing is ever destroyed by being fired.
 - Holster the slingshot (or fill it) if you'd rather just pick things up.
 
