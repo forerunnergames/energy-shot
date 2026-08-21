@@ -261,6 +261,37 @@ public partial class Player
     return true;
   }
 
+  // Punch theft (issue #193): the equipped item leaves the victim's hands toward the
+  // puncher - straight into them when the server allows the steal. With fists up (or
+  // the equipped thing out flying) a carried weapon is knocked loose the old #71 way
+  // instead - it still flies out, but a holstered gun isn't in hand, so it isn't stolen.
+  public void LoseWeaponToPunch (int puncherId)
+  {
+    var equipped = PickEquippedStealable();
+    var type = equipped != HeldWeapon.None ? equipped : PickDroppableWeapon();
+    if (type == HeldWeapon.None) return;
+    // Request BEFORE clearing, same as DropHeldWeapon (CodeRabbit on #145): the
+    // server validates against this player's replicated HeldWeapon.
+    Spawner.SendPunchTheftRequest (puncherId, GlobalPosition, type, steal: equipped != HeldWeapon.None);
+    if (type == HeldWeapon.Bread) SetBreadHeld (isHeld: false); // The one non-gun in hand (issue #192).
+    else HeldWeapon &= ~type;
+    ForgetTheft (type);
+    DeselectUnheldWeapon();
+    GD.Print ($"{DisplayName}: That punch took my {type}!");
+  }
+
+  // The thing actually in hand: slot -> flag, equipped bread included (issue #192).
+  // A boomerang or airplane out flying isn't in the hand (issues #98 & #102), & fists
+  // are nothing to steal.
+  private HeldWeapon PickEquippedStealable()
+  {
+    var type = _selectedWeapon switch { SelectedWeapon.Laser => HeldWeapon.Laser, SelectedWeapon.Banana => HeldWeapon.Banana, SelectedWeapon.Boomerang => HeldWeapon.Boomerang, SelectedWeapon.Slingshot => HeldWeapon.Slingshot, SelectedWeapon.PaperAirplane => HeldWeapon.PaperAirplane, SelectedWeapon.Blowgun => HeldWeapon.Blowgun, SelectedWeapon.Bread => HeldWeapon.Bread, _ => HeldWeapon.None };
+    if (!Holds (type)) return HeldWeapon.None;
+    if (type == HeldWeapon.Boomerang && IsBoomerangInFlight) return HeldWeapon.None;
+    if (type == HeldWeapon.PaperAirplane && IsAirplaneInFlight) return HeldWeapon.None;
+    return type;
+  }
+
   // Drops the selected gun (or another carried one while boxing) as a world pickup;
   // the punch branch calls this with a drop chance when a player gets punched.
   public void DropHeldWeapon()
