@@ -243,6 +243,7 @@ public partial class Player
 
   private void HandleCollision (KinematicCollision3D collision)
   {
+    if (TryRopeBounce (collision) || TryHeadBounce (collision)) return; // The boxing ring (issue #174).
     if (collision.GetColliderShape() is not CollisionShape3D { Shape: WorldBoundaryShape3D }) return;
     RespawnFell();
   }
