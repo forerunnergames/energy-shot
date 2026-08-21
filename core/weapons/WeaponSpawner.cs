@@ -850,7 +850,7 @@ public partial class WeaponSpawner : Node3D
   // the equipped loaf (#192) - unlike a boomerang, a fist can take your lunch.
   public static HeldWeapon FirstStealableFlag (HeldWeapon mask)
   {
-    foreach (var flag in new[] { HeldWeapon.Laser, HeldWeapon.Banana, HeldWeapon.Boomerang, HeldWeapon.Slingshot, HeldWeapon.PaperAirplane, HeldWeapon.Bread }) { if ((mask & flag) != 0) return flag; }
+    foreach (var flag in new[] { HeldWeapon.Laser, HeldWeapon.Banana, HeldWeapon.Boomerang, HeldWeapon.Slingshot, HeldWeapon.PaperAirplane, HeldWeapon.Blowgun, HeldWeapon.Bread }) { if ((mask & flag) != 0) return flag; }
     return HeldWeapon.None;
   }
 

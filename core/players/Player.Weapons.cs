@@ -285,7 +285,7 @@ public partial class Player
   // are nothing to steal.
   private HeldWeapon PickEquippedStealable()
   {
-    var type = _selectedWeapon switch { SelectedWeapon.Laser => HeldWeapon.Laser, SelectedWeapon.Banana => HeldWeapon.Banana, SelectedWeapon.Boomerang => HeldWeapon.Boomerang, SelectedWeapon.Slingshot => HeldWeapon.Slingshot, SelectedWeapon.PaperAirplane => HeldWeapon.PaperAirplane, SelectedWeapon.Bread => HeldWeapon.Bread, _ => HeldWeapon.None };
+    var type = _selectedWeapon switch { SelectedWeapon.Laser => HeldWeapon.Laser, SelectedWeapon.Banana => HeldWeapon.Banana, SelectedWeapon.Boomerang => HeldWeapon.Boomerang, SelectedWeapon.Slingshot => HeldWeapon.Slingshot, SelectedWeapon.PaperAirplane => HeldWeapon.PaperAirplane, SelectedWeapon.Blowgun => HeldWeapon.Blowgun, SelectedWeapon.Bread => HeldWeapon.Bread, _ => HeldWeapon.None };
     if (!Holds (type)) return HeldWeapon.None;
     if (type == HeldWeapon.Boomerang && IsBoomerangInFlight) return HeldWeapon.None;
     if (type == HeldWeapon.PaperAirplane && IsAirplaneInFlight) return HeldWeapon.None;

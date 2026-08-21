@@ -24,4 +24,10 @@ public class PunchTheftTest
 
   [TestCase]
   public void BananaChunkIsNeverStealable() => AssertObject (WeaponSpawner.FirstStealableFlag (HeldWeapon.BananaChunk)).IsEqual (HeldWeapon.None);
+
+  [TestCase]
+  public void StealsTheBlowgun() => AssertObject (WeaponSpawner.FirstStealableFlag (HeldWeapon.Blowgun)).IsEqual (HeldWeapon.Blowgun); // Issue #194.
+
+  [TestCase]
+  public void PoisonDartIsNeverStealable() => AssertObject (WeaponSpawner.FirstStealableFlag (HeldWeapon.PoisonDart)).IsEqual (HeldWeapon.None); // Ammo, not a hand weapon (issue #194).
 }
