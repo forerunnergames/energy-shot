@@ -16,7 +16,11 @@ public partial class Player
   private Color BaseColor => PlayerColors.At (_colorIndex);
   // White glow blended over the player's chosen color, so armored players stay identifiable.
   private Color SpawnArmorColor => BaseColor.Lerp (Colors.White, 0.65f);
-  private void SetColor (Color color) => (_mesh.GetSurfaceOverrideMaterial (0) as StandardMaterial3D)!.AlbedoColor = color;
+  private void SetColor (Color color)
+  {
+    (_mesh.GetSurfaceOverrideMaterial (0) as StandardMaterial3D)!.AlbedoColor = color;
+    if (_headMesh != null) (_headMesh.GetSurfaceOverrideMaterial (0) as StandardMaterial3D)!.AlbedoColor = color; // The dome matches (issue #179).
+  }
   // Restores the player's resting color: white glow while spawn armor holds, the chosen color otherwise.
   private void RestoreBaseColor() => SetColor (SpawnArmor ? SpawnArmorColor : BaseColor);
 

@@ -34,7 +34,8 @@ Slot keys select what's in your hands. You spawn with fists **and bread** (B is 
 With the slingshot **out and empty**, walking onto any world item **loads it** instead of collecting it - another player's dropped laser, the banana launcher, the boomerang, even another slingshot, plus loose bread, banana chunks, and a grounded paper airplane. You can only ever load what's on the ground: your own equipped weapons stay in your hands.
 
 - One item at a time. While something is nocked, normal pickup rules apply again.
-- Slung items fly the same draw-scaled arc as a stone and sting about the same, with their own flavor on impact (bread bonks, banana splatters).
+- Slung items fly the same draw-scaled arc as a stone. Small things sting like a stone; **big things hit hard** - a slung gun deals roughly double the damage and knockback, the banana launcher triple (never a one-hit, even at full draw).
+- A **slung laser goes berserk**: it sprays full-auto shots in random directions as it tumbles, until it lands. Dangerous to everyone near its flight path.
 - Wherever the item lands, it becomes an ordinary world pickup again - nothing is ever destroyed by being fired.
 - Holster the slingshot (or fill it) if you'd rather just pick things up.
 
@@ -81,6 +82,10 @@ There is exactly **one** paper airplane in the arena. It's a slot-6 weapon like 
 ## The boxing ring
 
 The spawn box is a boxing ring: its walls are rubber ropes. Run, slide, or get punched into one and you bounce back the way you came with a shove - knock someone into the ropes and they come right back to you. Land on top of another player's head and you spring high into the air. Spawn armor & the room's protection work exactly as before.
+
+## Headshots
+
+Every player has a floating sensor dome above the body. A laser bolt or a slingshot stone (or slung item) that hits the dome is a headshot: a flat 300 damage that ignores the difficulty handicap - one zaps an Expert or Intermediate outright, a Beginner takes exactly two. Punches, bananas, boomerangs, airplanes & darts don't care where they land. Your hitmarker rings higher on a dome hit.
 
 ## Good to know
 

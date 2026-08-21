@@ -344,6 +344,7 @@ public partial class Player : CharacterBody3D
     _laserBoltScene = ResourceLoader.Load <PackedScene> ("res://core/weapons/LaserBolt.tscn");
     _bananaProjectileScene = ResourceLoader.Load <PackedScene> ("res://core/weapons/BananaProjectile.tscn");
     _mesh = GetNode <MeshInstance3D> ("MeshInstance3D");
+    CreateHead(); // The floating sensor dome & its hitbox (issue #179).
     _collisionShape = GetNode <CollisionShape3D> ("CollisionShape3D");
     _energyWeapon = GetNode <EnergyWeapon> ("Camera3D/EnergyWeapon");
     _bananaLauncher = GetNode <BananaLauncher> ("Camera3D/BananaLauncher");
@@ -407,6 +408,7 @@ public partial class Player : CharacterBody3D
     _energyWeapon.FullChargeReached += OnFullChargeReached;
     _crosshairBaseScale = _crossHairs.Scale;
     _camera = GetNode <Camera3D> ("Camera3D");
+    UpdateHeadVisibility(); // Own dome hidden in first person (issue #179).
     _camera.Current = true;
     _standingCameraHeight = _camera.Position.Y;
     _isInputEnabled = true;
