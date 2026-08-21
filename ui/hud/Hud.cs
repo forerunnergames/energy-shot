@@ -85,7 +85,7 @@ public partial class Hud : Control
     _vignette.SetShaderParameter ("intensity", intensity);
     // Above the threshold it draws nothing, so stop drawing it: three full-screen
     // blended quads per frame is real fill-rate at retina resolutions (issue #200).
-    _vignetteRect.Visible = intensity > 0.0f;
+    _vignetteRect.Visible = intensity > 0.0f || (_world.SelfPlayer?.IsPoisoned ?? false); // The green layer needs it too (issue #261).
   }
 
   private void UpdateLeaderboard()
@@ -156,6 +156,7 @@ public partial class Hud : Control
     _lockOnSound = new AudioStreamPlayer { Stream = ProceduralSounds.LockOn(), MaxPolyphony = 2 }; // Issue #211.
     AddChild (_lockOnSound);
     _world.SelfPlayerPunched += OnSelfPlayerPunched;
+    _world.SelfPlayerPoisonTicked += () => _poisonPulse = 1.0f; // Issue #261.
     _world.SelfPlayerSplattered += OnSelfPlayerSplattered;
     _world.SelfPlayerAirplaneCaught += OnSelfPlayerAirplaneCaught;
     _world.SelfPlayerAirplaneLockAcquired += () => _lockOnSound.Play(); // Issue #211.
@@ -341,6 +342,7 @@ public partial class Hud : Control
     UpdateCooldownMeters();
     UpdateBreadIcon();
     UpdatePoisonTint(); // Issue #194.
+    UpdatePoisonVignette (delta); // Issue #261.
     UpdateDartAmmo(); // Issue #236.
     UpdateBreadNotice();
     UpdateDeathOverlay();
@@ -421,9 +423,14 @@ public partial class Hud : Control
   // being near-blind lingers (issue #68).
   private void UpdateBlur (double delta)
   {
+    // Poison holds a blur floor that grows with the dart count (issue #261); punches
+    // still stack on top & fade back down to that floor, not to sharp.
+    var self = _world.SelfPlayer;
+    var poisonFloor = self == null ? 0.0f : Mathf.Min (0.6f, 0.25f * self.PoisonDarts);
+    _blurIntensity = Mathf.Max (_blurIntensity, poisonFloor);
     if (_blurIntensity <= 0.0f) return;
     var fadePerSecond = Mathf.Lerp (0.25f, 0.1f, _blurIntensity);
-    _blurIntensity = Mathf.Max (0.0f, _blurIntensity - fadePerSecond * (float)delta);
+    _blurIntensity = Mathf.Max (poisonFloor, _blurIntensity - fadePerSecond * (float)delta);
     _blur.SetShaderParameter ("intensity", _blurIntensity);
     // Sampling the screen texture forces a back-buffer copy, so the node only
     // stays up while there's actually blur to draw (issue #200).
@@ -454,6 +461,20 @@ public partial class Hud : Control
     _fullAutoMeter.SetFraction (self.FullAutoReadyFraction);
     _bananaMeter.SetFraction (self.BananaReadyFraction);
     _eatMeter.SetDraining (self.BreadEatRemainingFraction, self.Eating); // Reverse: it drains to empty (issue #192).
+  }
+
+  // The green vignette (issue #261): a baseline while poisoned, & a pulse on every
+  // tick that fades over a second - so the edges of the screen breathe with the damage.
+  private float _poisonPulse;
+
+  private void UpdatePoisonVignette (double delta)
+  {
+    var self = _world.SelfPlayer;
+    _poisonPulse = Mathf.Max (0.0f, _poisonPulse - (float)delta);
+    var baseline = self != null && self.IsPoisoned ? 0.25f : 0.0f;
+    var poison = self != null && self.IsPoisoned ? Mathf.Min (1.0f, baseline + 0.7f * _poisonPulse) : 0.0f;
+    _vignette.SetShaderParameter ("poison", poison);
+    if (poison > 0.0f) _vignetteRect.Visible = true;
   }
 
   // The health bar turns sickly green while darts are embedded (issue #194); polling
