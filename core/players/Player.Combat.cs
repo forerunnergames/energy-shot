@@ -62,7 +62,7 @@ public partial class Player
   private void DischargeWeapon() => _energyWeapon.Discharge();
   // Capped at 200: only banana energies exceed 1.0, & the sticky one-hit kill needs
   // the full 200 to zap out an Expert (issue #83).
-  private static int CalculateHealthDecrease (float energyShot) => Mathf.Min (200, Mathf.RoundToInt (energyShot * 100.0f));
+  public static int CalculateHealthDecrease (float energyShot) => Mathf.Min (200, Mathf.RoundToInt (energyShot * 100.0f));
 
   // Casts a ray from the camera along the aim direction, ignoring ourselves, &
   // returns whatever it hits (or null); punches need to know geometry from air (issue #122).

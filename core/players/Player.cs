@@ -189,7 +189,9 @@ public partial class Player : CharacterBody3D
   [Export] public float FullAutoDurationSeconds = 3.0f;
   [Export] public float FullAutoCooldownSeconds = 15.0f;
   [Export] public float FullAutoShotIntervalSeconds = 0.15f;
-  [Export] public float FullAutoEnergy = 0.12f;
+  // Doubled from 0.12 (issue #218): 24 damage/shot means 9-17 shots to zap by health tier
+  // (480 potential per 3s burst) - real sustained pressure, nowhere near the one-shot threshold.
+  [Export] public float FullAutoEnergy = 0.24f;
   // Brief - the spawn room & spawn armor already prevent instant re-engagement (#48).
   [Export] public float RespawnInputLockSeconds = 0.3f;
   // Halved from 0.6 (issue #82): fast enough for combos, not autoclicker-spam fast.
