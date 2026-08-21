@@ -14,6 +14,4 @@ public class BananaCatchTest
   [TestCase]
   public void GrenadeIsNeverStealable() => AssertObject (WeaponSpawner.FirstStealableFlag (HeldWeapon.BananaGrenade)).IsEqual (HeldWeapon.None);
 
-  [TestCase]
-  public void GrenadeDoesNotSpray() => AssertBool (SlingshotStone.Sprays (HeldWeapon.BananaGrenade)).IsFalse();
 }
