@@ -188,6 +188,7 @@ public partial class Player : CharacterBody3D
 
   [Export] public float SpawnArmorSeconds = 5.0f;
   [Export] public float MouseSensitivity = 0.0025f;
+  [Export] public float ThirdPersonMaxPitchUpDegrees = 60.0f; // Issue #234.
   [Export] public float FullAutoDurationSeconds = 3.0f;
   [Export] public float FullAutoCooldownSeconds = 15.0f;
   [Export] public float FullAutoShotIntervalSeconds = 0.15f;
@@ -485,6 +486,10 @@ public partial class Player : CharacterBody3D
     if (@event is not InputEventMouseMotion motionEvent) return;
     RotateY (-motionEvent.Relative.X * MouseSensitivity);
     _camera.RotateX (-motionEvent.Relative.Y * MouseSensitivity);
-    _camera.Rotation = new Vector3 (Mathf.Clamp (_camera.Rotation.X, -Mathf.Pi / 2.0f, Mathf.Pi / 2.0f), _camera.Rotation.Y, _camera.Rotation.Z);
+    // Third person can't pitch all the way up (issue #234): the chase arm hangs behind
+    // the head camera, so looking straight up swung it down into the floor, where the
+    // camera z-fought the ground texture. The ceiling keeps the arm above your feet.
+    var maxUp = _thirdPerson ? Mathf.DegToRad (ThirdPersonMaxPitchUpDegrees) : Mathf.Pi / 2.0f;
+    _camera.Rotation = new Vector3 (Mathf.Clamp (_camera.Rotation.X, -Mathf.Pi / 2.0f, maxUp), _camera.Rotation.Y, _camera.Rotation.Z);
   }
 }
