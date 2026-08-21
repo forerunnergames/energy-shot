@@ -18,6 +18,9 @@ public partial class Hud : Control
   [Signal] public delegate void GameQuitEventHandler();
   private World _world = null!;
   private ProgressBar _healthBar = null!;
+  private Label _roundClock = null!; // Issue #153.
+  private ColorRect _roundOverlay = null!;
+  private RichTextLabel _roundBoard = null!;
   private StyleBoxFlat? _poisonFill; // Green fill swapped in while poisoned (issue #194).
   private bool _poisonTintShown;
   private MessageScroller _messageScroller = null!;
@@ -166,6 +169,10 @@ public partial class Hud : Control
     _world.PlayerLeftGame += OnPlayerLeftGame;
     _world.RemoteMessageReceived += OnRemoteMessageReceived;
     _world.AdminMessageReceived += OnAdminMessageReceived;
+    _world.RoundClockUpdated += OnRoundClockUpdated; // Issue #153.
+    _world.RoundEnded += OnRoundEnded;
+    _world.RoundStarted += OnRoundStarted;
+    CreateRoundUi();
     _world.PlayerScored += OnPlayerScored;
     _world.PlayerRespawnedShot += OnPlayerRespawnedShot;
     _world.PlayerRespawnedFell += OnPlayerRespawnedFell;
@@ -200,6 +207,45 @@ public partial class Hud : Control
     _deathCountdown.SetAnchorsPreset (LayoutPreset.FullRect);
     _deathOverlay.AddChild (_deathCountdown);
   }
+
+  // Rounds (issue #153), code-built like the death overlay: a top-center clock while
+  // a round runs & a full-screen scoreboard between rounds. Neither captures input.
+  private void CreateRoundUi()
+  {
+    _roundClock = new Label { HorizontalAlignment = HorizontalAlignment.Center, MouseFilter = MouseFilterEnum.Ignore, Visible = false };
+    _roundClock.AddThemeFontSizeOverride ("font_size", 40);
+    _roundClock.SetAnchorsPreset (LayoutPreset.CenterTop);
+    _roundClock.OffsetTop = 12.0f;
+    AddChild (_roundClock);
+    _roundOverlay = new ColorRect { Color = new Color (0.0f, 0.0f, 0.0f, 0.7f), MouseFilter = MouseFilterEnum.Ignore, Visible = false };
+    _roundOverlay.SetAnchorsPreset (LayoutPreset.FullRect);
+    AddChild (_roundOverlay);
+    _roundBoard = new RichTextLabel { BbcodeEnabled = true, FitContent = true, ScrollActive = false, MouseFilter = MouseFilterEnum.Ignore };
+    _roundBoard.AddThemeFontSizeOverride ("normal_font_size", 40);
+    _roundBoard.AddThemeFontSizeOverride ("bold_font_size", 44);
+    _roundBoard.SetAnchorsPreset (LayoutPreset.Center);
+    _roundBoard.GrowHorizontal = GrowDirection.Both;
+    _roundBoard.GrowVertical = GrowDirection.Both;
+    _roundBoard.CustomMinimumSize = new Vector2 (1100.0f, 0.0f);
+    _roundOverlay.AddChild (_roundBoard);
+  }
+
+  private void OnRoundClockUpdated (int secondsLeft, int zapLimit)
+  {
+    var clock = secondsLeft >= 0 ? $"{secondsLeft / 60}:{secondsLeft % 60:00}" : string.Empty;
+    var target = zapLimit > 0 ? $"first to {zapLimit}" : string.Empty;
+    _roundClock.Text = string.Join ("   ·   ", new[] { clock, target }.Where (part => part.Length > 0));
+    _roundClock.Visible = _roundClock.Text.Length > 0 && !_roundOverlay.Visible;
+  }
+
+  private void OnRoundEnded (string scoreboardBbcode)
+  {
+    _roundBoard.Text = scoreboardBbcode;
+    _roundOverlay.Visible = true;
+    _roundClock.Visible = false;
+  }
+
+  private void OnRoundStarted() => _roundOverlay.Visible = false;
 
   // Crouch toggle-vs-hold (issue #147), persisted & offered in the pause (quit)
   // dialog - the only in-game UI with a visible mouse - like the music toggle (#137).

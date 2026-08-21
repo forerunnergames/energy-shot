@@ -85,3 +85,7 @@ There is exactly **one** paper airplane in the arena. It's a slot-6 weapon like 
 - Getting zapped out also drops **everything** you were carrying - weapons, your uneaten bread, and anything nocked in your slingshot - right where you fell. Dropped items expire after a few seconds. (A loaf ruined by an interrupted eat is gone, not dropped.)
 - Kills heal you 50 HP. Falling off the world costs a point - your score can go negative.
 - Difficulty picks your health pool (Beginner 400 / Intermediate 300 / Expert 200), and lower-tier players hit higher-tier players harder.
+
+## Rounds
+
+A round ends after **5 minutes or when somebody reaches 20 zaps**, whichever comes first (the clock sits top-center while at least two players are in). Then everyone freezes for 10 seconds on the scoreboard - zaps, zap-outs, assists (you damaged them within 10 s of someone else's zap), falls - with sarcastic superlatives, and a fresh round starts: scores zeroed, everybody respawned. Hosts set both limits in the Host Game dialog (0 = no limit); the dedicated server takes `--round-minutes N` and `--zap-limit N`.

@@ -338,8 +338,11 @@ public partial class Player
     {
       _zapOutSound.Play();
       attacker?.RpcId (attackerId, MethodName.NotifyScored, DisplayName);
+      CreditAssist (attackerId); // Whoever softened us up within the window (issue #153).
       RespawnShot (attackerName);
     }
+
+    if (Health > 0) RememberDamager (attackerId); // Survived: this hit may become somebody's assist (issue #153).
     // Survived it (CodeRabbit on #214): the capture is only ever the death snapshot's
     // context, so a nonlethal interruption must not still read as "died eating" when
     // a later, unrelated hit finishes the job.
