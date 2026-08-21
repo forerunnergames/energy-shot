@@ -17,6 +17,9 @@ public class ChatTest
   public void SanitizerFlattensNewlinesAndTrims() => AssertString (World.SanitizeChat ("  hi\nthere\r\n ")).IsEqual ("hi there");
 
   [TestCase]
+  public void SanitizerFlattensUnicodeLineSeparatorsAndControls() => AssertString (World.SanitizeChat ("a\u2028b\u2029c\u0085d\te")).IsEqual ("a b c d e");
+
+  [TestCase]
   public void SanitizerLeavesShortTextAlone() => AssertString (World.SanitizeChat ("gg")).IsEqual ("gg");
 
   [TestCase]

@@ -153,10 +153,12 @@ public partial class World : Node3D
     RpcId (1, MethodName.RequestChat, text);
   }
 
-  // Flattens to one line & caps the length. Pure & unit-tested.
+  // Flattens to one line & caps the length. Every control character & Unicode line
+  // or paragraph separator (CodeRabbit on #224: U+0085, U+2028, U+2029 would split
+  // the display & the server log) becomes a space. Pure & unit-tested.
   public static string SanitizeChat (string text)
   {
-    var single = text.Replace ('\n', ' ').Replace ('\r', ' ').Trim();
+    var single = new string (text.Select (c => char.IsControl (c) || c is '\u0085' or '\u2028' or '\u2029' ? ' ' : c).ToArray()).Trim();
     return single.Length <= MaxChatChars ? single : single[..MaxChatChars];
   }
 
@@ -456,6 +458,7 @@ public partial class World : Node3D
 
   private void OnClientDisconnectedFromServer (long id)
   {
+    _lastChatMs.Remove (id); // Chat rate-limit state leaves with the peer (CodeRabbit on #224).
     RemovePlayer (id);
     _versionLinePeerIds.Remove ((int)id); // A rejoin counts as a fresh join (PR #166 review).
     ServerLog.Event (id, "disconnected");
