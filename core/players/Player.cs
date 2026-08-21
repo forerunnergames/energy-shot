@@ -212,9 +212,7 @@ public partial class Player : CharacterBody3D
   // INSANE on purpose (issue #83): launching a banana should feel like it.
   [Export] public float BananaRecoilRadians = 0.35f;
   [Export] public float StickyBananaSeconds = 1.0f;
-  // 60 -> 42 (issue #235): the sticky launch sent players far too high; the rocket-jump
-  // still clears buildings, it just isn't a trip to the spawn room any more.
-  [Export] public float StickyLaunchSpeed = 42.0f;
+  [Export] public float StickyLaunchSpeed = 60.0f;
   // 200 damage: one-hit-kills an Expert, bypassing the survivable clamp (issue #83).
   [Export] public float StickyBananaEnergy = 2.0f;
   [Export] public float CameraKickRadians = 0.06f;
