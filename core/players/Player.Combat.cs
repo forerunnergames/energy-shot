@@ -245,28 +245,35 @@ public partial class Player
     var bolt = _laserBoltScene.Instantiate <LaserBolt>();
     GetParent().AddChild (bolt);
     bolt.Launch (origin, sweepStart, direction, energy, isLive, this);
-    if (isLive) bolt.HitPlayer += (body, hitEnergy, throughBarrier) => OnLaserHitPlayer (body, hitEnergy, throughBarrier, isFullAuto);
+    if (isLive) bolt.HitPlayer += (body, hitEnergy, throughBarrier, isHeadshot) => OnLaserHitPlayer (body, hitEnergy, throughBarrier, isFullAuto, isHeadshot);
   }
 
-  private void OnLaserHitPlayer (CharacterBody3D body, float energy, bool throughBarrier, bool isFullAuto)
+  private void OnLaserHitPlayer (CharacterBody3D body, float energy, bool throughBarrier, bool isFullAuto, bool isHeadshot)
   {
     if (body is not Player victim || victim.NetworkId == NetworkId) return;
-    HitPuppet (victim, energy, throughBarrier, isFullAuto);
+    HitPuppet (victim, energy, throughBarrier, isFullAuto, isHeadshot);
   }
 
   // The victim is the single owner of its health: the shooter only reports the hit,
   // the victim applies damage & replicates Health to everyone, & tells the shooter
   // when it scored a kill (see issue #20).
-  private void HitPuppet (Player playerPuppet, float energy, bool throughBarrier, bool isFullAuto)
+  private void HitPuppet (Player playerPuppet, float energy, bool throughBarrier, bool isFullAuto, bool isHeadshot)
   {
-    GD.Print ($"{DisplayName}: I hit {playerPuppet.DisplayName}!");
+    GD.Print ($"{DisplayName}: I hit {playerPuppet.DisplayName}{(isHeadshot ? " on the dome" : "")}!");
+    PlayHitmarker (isHeadshot);
+    ReportToServer ($"hit: {DisplayName} zapped {playerPuppet.DisplayName} (energy {energy:0.00}{(isHeadshot ? ", headshot" : "")})");
+    playerPuppet.RpcId (playerPuppet.NetworkId, MethodName.ReceiveHit, energy, DisplayName, throughBarrier, isFullAuto, isHeadshot);
+  }
+
+  // A headshot's hitmarker rings higher (issue #179): the shooter knows it landed.
+  private void PlayHitmarker (bool isHeadshot)
+  {
+    _hitmarkerSound.PitchScale = isHeadshot ? 1.6f : 1.0f;
     _hitmarkerSound.Play();
-    ReportToServer ($"hit: {DisplayName} zapped {playerPuppet.DisplayName} (energy {energy:0.00})");
-    playerPuppet.RpcId (playerPuppet.NetworkId, MethodName.ReceiveHit, energy, DisplayName, throughBarrier, isFullAuto);
   }
 
   [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
-  private void ReceiveHit (float energy, string shotByPlayerName, bool throughBarrier, bool isFullAuto)
+  private void ReceiveHit (float energy, string shotByPlayerName, bool throughBarrier, bool isFullAuto, bool isHeadshot)
   {
     if (!IsMultiplayerAuthority()) return;
     if (SpawnArmor) return;
@@ -277,7 +284,7 @@ public partial class Player
     LastDamageKind = isFullAuto ? DamageKind.FullAuto : DamageKind.Laser; // Message context (issue #84).
     // Distinct victim feedback for a through-barrier zap (issue #94).
     if (throughBarrier) _throughWallZapSound.Play();
-    ApplyDamage (energy, shotByPlayerName, knockbackScale: 1.0f, throughBarrier: throughBarrier);
+    ApplyDamage (energy, shotByPlayerName, knockbackScale: 1.0f, throughBarrier: throughBarrier, isHeadshot: isHeadshot);
   }
 
   [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
@@ -303,12 +310,12 @@ public partial class Player
     LoseWeaponToPunch (puncherId);
   }
 
-  private void ApplyDamage (float energy, string attackerName, float knockbackScale, bool isSurvivableAtFullHealth = false, bool throughBarrier = false)
-    => ApplyDamageFrom (Multiplayer.GetRemoteSenderId(), energy, attackerName, knockbackScale, isSurvivableAtFullHealth, throughBarrier);
+  private void ApplyDamage (float energy, string attackerName, float knockbackScale, bool isSurvivableAtFullHealth = false, bool throughBarrier = false, bool isHeadshot = false)
+    => ApplyDamageFrom (Multiplayer.GetRemoteSenderId(), energy, attackerName, knockbackScale, isSurvivableAtFullHealth, throughBarrier, isHeadshot);
 
   // Split from ApplyDamage so delayed damage (the sticky banana fuse) can carry the
   // attacker id captured while the RPC context still existed (issue #83).
-  private void ApplyDamageFrom (int attackerId, float energy, string attackerName, float knockbackScale, bool isSurvivableAtFullHealth = false, bool throughBarrier = false)
+  private void ApplyDamageFrom (int attackerId, float energy, string attackerName, float knockbackScale, bool isSurvivableAtFullHealth = false, bool throughBarrier = false, bool isHeadshot = false)
   {
     // Already zapped out (issue #152): a body lying through its death sequence takes
     // no further damage - late stickies, blasts, & punches land on scenery.
@@ -323,6 +330,9 @@ public partial class Player
     var attacker = GetParent().GetNodeOrNull <Player> ($"{attackerId}");
     var handicap = 1.0f + 0.5f * Mathf.Max (0, TierOf (MaxHealth) - TierOf (attacker?.MaxHealth ?? MaxHealth));
     var decrease = Mathf.RoundToInt (CalculateHealthDecrease (energy) * handicap);
+    // A headshot is a flat, unhandicapped HeadshotDamage (issue #179): one zaps an
+    // Expert or Intermediate outright, a Beginner takes exactly two.
+    if (isHeadshot) decrease = HeadshotDamage;
     // A full-charge shot is lethal on ANY target (issue #93): the 100-damage cap &
     // tier handicap don't apply - only the survivable banana blast is exempt.
     if (energy >= EnergyWeapon.FullChargeEnergyThreshold && !isSurvivableAtFullHealth) decrease = Health;

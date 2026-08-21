@@ -1,3 +1,4 @@
+using com.forerunnergames.energyshot.players;
 using Godot;
 
 namespace com.forerunnergames.energyshot.weapons;
@@ -27,7 +28,7 @@ public partial class LaserBolt : Node3D
   // bolt drooping onto the ground at the end of its arc leaves nothing, while
   // deliberately shooting at the ground still scorches it.
   [Export] public float BurnMarkMinImpactSpeedFraction = 0.5f;
-  [Signal] public delegate void HitPlayerEventHandler (CharacterBody3D player, float energy, bool throughBarrier);
+  [Signal] public delegate void HitPlayerEventHandler (CharacterBody3D player, float energy, bool throughBarrier, bool isHeadshot);
   // Baseline bright red at every charge level (issue #92); charge only makes it hotter.
   private static readonly Color LowEnergyColor = new(3.0f, 0.12f, 0.1f);
   private static readonly Color HighEnergyColor = new(6.0f, 0.3f, 0.15f);
@@ -54,6 +55,7 @@ public partial class LaserBolt : Node3D
     _energy = energy;
     _isLive = isLive;
     _exclusions = shooter == null ? new Godot.Collections.Array <Rid>() : new Godot.Collections.Array <Rid> { shooter.GetRid() };
+    if (shooter is Player own) _exclusions.Add (own.HeadRid); // Your own dome is not a target (issue #179).
     Orient();
     ApplyEnergyVisuals();
   }
@@ -82,6 +84,7 @@ public partial class LaserBolt : Node3D
       // Point-blank bolts can spawn inside the target's collider; without this the
       // sweep never registers & the bolt sails through (see issue #52).
       query.HitFromInside = true;
+      query.CollideWithAreas = true; // Heads are Area3D hitboxes (issue #179).
       var hit = GetWorld3D().DirectSpaceState.IntersectRay (query);
       if (hit.Count == 0) break;
       if (!ResolveHit (hit)) return;
@@ -96,9 +99,19 @@ public partial class LaserBolt : Node3D
   // pierced collider so the sweep doesn't re-hit it (see issue #50).
   private bool ResolveHit (Godot.Collections.Dictionary hit)
   {
-    if (hit["collider"].AsGodotObject() is CharacterBody3D player)
+    var collider = hit["collider"].AsGodotObject();
+
+    // The dome first (issue #179): a head hit is a body hit with a flag.
+    if (collider is HeadHitbox head)
     {
-      if (_isLive) EmitSignal (SignalName.HitPlayer, player, _energy, _piercedBarrier);
+      if (_isLive) EmitSignal (SignalName.HitPlayer, head.Player, _energy, _piercedBarrier, true);
+      QueueFree();
+      return false;
+    }
+
+    if (collider is CharacterBody3D player)
+    {
+      if (_isLive) EmitSignal (SignalName.HitPlayer, player, _energy, _piercedBarrier, false);
       QueueFree();
       return false;
     }

@@ -83,6 +83,10 @@ There is exactly **one** paper airplane in the arena. It's a slot-6 weapon like 
 
 The spawn box is a boxing ring: its walls are rubber ropes. Run, slide, or get punched into one and you bounce back the way you came with a shove - knock someone into the ropes and they come right back to you. Land on top of another player's head and you spring high into the air. Spawn armor & the room's protection work exactly as before.
 
+## Headshots
+
+Every player has a floating sensor dome above the body. A laser bolt or a slingshot stone (or slung item) that hits the dome is a headshot: a flat 300 damage that ignores the difficulty handicap - one zaps an Expert or Intermediate outright, a Beginner takes exactly two. Punches, bananas, boomerangs, airplanes & darts don't care where they land. Your hitmarker rings higher on a dome hit.
+
 ## Good to know
 
 - White glow = spawn armor (5s of invulnerability after spawning; firing or punching cancels it).

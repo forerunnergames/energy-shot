@@ -18,7 +18,7 @@ public partial class SlingshotStone : Node3D
   // Doubled from 6 (issue #163): stones fly their full arc & only despawn on impact
   // or well past relevance.
   [Export] public float MaxLifetimeSeconds = 12.0f;
-  [Signal] public delegate void HitPlayerEventHandler (Player victim, float energy);
+  [Signal] public delegate void HitPlayerEventHandler (Player victim, float energy, bool isHeadshot);
   // Where the flight ended (issue #190): a slung world item becomes a normal pickup
   // again wherever it stops, so nothing loaded into a slingshot can vanish.
   [Signal] public delegate void LandedEventHandler (Vector3 position);
@@ -50,7 +50,7 @@ public partial class SlingshotStone : Node3D
   private float _energy;
   private float _age;
   private bool _isLive;
-  private Rid _shooterRid;
+  private Godot.Collections.Array <Rid> _exclusions = new();
 
   // Shared look for the world pickup & the held model (issue #99): a simple Y-frame
   // slingshot built from primitive boxes - a wooden handle, two angled prongs, & a
@@ -149,7 +149,8 @@ public partial class SlingshotStone : Node3D
     GravityAcceleration = gravity; // Draw-scaled (issue #163): full draws fly flatter arcs.
     _energy = energy;
     _isLive = isLive;
-    _shooterRid = shooter.GetRid();
+    _exclusions = new Godot.Collections.Array <Rid> { shooter.GetRid() };
+    if (shooter is Player own) _exclusions.Add (own.HeadRid); // Your own dome is not a target (issue #179).
   }
 
   public override void _PhysicsProcess (double delta)
@@ -162,8 +163,9 @@ public partial class SlingshotStone : Node3D
     _sweptFromStart = true;
     _velocity.Y -= GravityAcceleration * dt;
     var to = GlobalPosition + _velocity * dt;
-    var query = PhysicsRayQueryParameters3D.Create (from, to, exclude: new Godot.Collections.Array <Rid> { _shooterRid });
+    var query = PhysicsRayQueryParameters3D.Create (from, to, exclude: _exclusions);
     query.HitFromInside = true;
+    query.CollideWithAreas = true; // Heads are Area3D hitboxes (issue #179).
     var hit = GetWorld3D().DirectSpaceState.IntersectRay (query);
 
     if (hit.Count == 0)
@@ -180,7 +182,9 @@ public partial class SlingshotStone : Node3D
     // ray a metre too, so this is belt & braces - & it also keeps the resting item
     // from z-fighting with whatever it landed against.
     GlobalPosition = (Vector3)hit["position"] + (Vector3)hit["normal"] * SurfaceClearance;
-    End (hit["collider"].AsGodotObject() as Player);
+    var collider = hit["collider"].AsGodotObject();
+    if (collider is HeadHitbox head) { End (head.Player, isHeadshot: true); return; } // Issue #179.
+    End (collider as Player, isHeadshot: false);
   }
 
   private void UpdateSpree (float dt)
@@ -192,7 +196,7 @@ public partial class SlingshotStone : Node3D
     var bolt = BoltScene.Instantiate <LaserBolt>();
     GetParent().AddChild (bolt);
     bolt.Launch (GlobalPosition, GlobalPosition, direction, SpreeEnergy, _isLive, shooter: null);
-    if (_isLive) bolt.HitPlayer += (body, energy, throughBarrier) => EmitSignal (SignalName.SpreeHit, body, energy, throughBarrier);
+    if (_isLive) bolt.HitPlayer += (body, energy, throughBarrier, _) => EmitSignal (SignalName.SpreeHit, body, energy, throughBarrier); // A tumbling gun never lands dome shots.
     var pew = new AudioStreamPlayer3D { Stream = SpreeShotSound, PitchScale = 1.3f, VolumeDb = -6.0f };
     GetParent().AddChild (pew);
     pew.GlobalPosition = GlobalPosition;
@@ -214,13 +218,13 @@ public partial class SlingshotStone : Node3D
   // One terminal report per flight (issue #190): the hit (if any) & then the resting
   // spot, so the shooter can both damage the victim & ask the server to turn the
   // slung item back into a world pickup where it came to rest.
-  private void End (Player? victim)
+  private void End (Player? victim, bool isHeadshot = false)
   {
     PlayImpactFlavor();
 
     if (_isLive)
     {
-      if (victim != null) EmitSignal (SignalName.HitPlayer, victim, _energy);
+      if (victim != null) EmitSignal (SignalName.HitPlayer, victim, _energy, isHeadshot);
       EmitSignal (SignalName.Landed, GlobalPosition);
     }
 
