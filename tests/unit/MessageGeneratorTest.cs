@@ -158,7 +158,7 @@ public class MessageGeneratorTest
   public void LaserPoolsSplitOnCharge()
   {
     AssertObject (MessageGenerator.SelectZappedPool (Laser (0.96f))).IsSame (MessagePools.FullCharge);
-    AssertObject (MessageGenerator.SelectZappedPool (new DeathContext { Kind = DamageKind.FullAuto, Energy = 0.24f })).IsSame (MessagePools.FullAuto);
+    AssertObject (MessageGenerator.SelectZappedPool (new DeathContext { Kind = DamageKind.FullAuto })).IsSame (MessagePools.FullAuto);
     AssertObject (MessageGenerator.SelectZappedPool (Laser())).IsSame (MessagePools.Zapped);
   }
 
