@@ -12,12 +12,18 @@ public partial class Player
   [Export] public float FallDamageFreeMeters = 10.0f;
   [Export] public float FallDamagePerMeter = 0.05f; // Energy per metre past the free drop: 0.05 = 5 health per metre.
   public const float MaxFallEnergy = 0.9f;
+  private const float TeleportMeters = 6.0f; // More than any physics frame can move you.
   private float _fallPeakY;
+  private Vector3 _lastFallSample;
   private bool _wasOnFloor = true;
 
   // Called after MoveAndSlide each physics frame: track the apex, settle the bill on landing.
+  // A position that jumped further than physics could carry it in one frame is a
+  // teleport (a respawn, the playtest driver) - no bill for a trip you didn't fall.
   private void UpdateFallDamage()
   {
+    if (GlobalPosition.DistanceTo (_lastFallSample) > TeleportMeters) ResetFallTracking();
+    _lastFallSample = GlobalPosition;
     var onFloor = IsOnFloor();
     if (!onFloor) _fallPeakY = Mathf.Max (_fallPeakY, GlobalPosition.Y);
     if (onFloor && !_wasOnFloor) LandFrom (_fallPeakY);
@@ -41,6 +47,7 @@ public partial class Player
   private void ResetFallTracking()
   {
     _fallPeakY = GlobalPosition.Y;
+    _lastFallSample = GlobalPosition;
     _wasOnFloor = true;
   }
 }
