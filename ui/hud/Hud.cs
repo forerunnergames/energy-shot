@@ -19,6 +19,8 @@ public partial class Hud : Control
   private World _world = null!;
   private ProgressBar _healthBar = null!;
   private Label _roundClock = null!; // Issue #153.
+  private ScopeView _scopeView = null!; // Issue #236.
+  private Label _dartAmmo = null!;
   private ColorRect _roundOverlay = null!;
   private RichTextLabel _roundBoard = null!;
   private StyleBoxFlat? _poisonFill; // Green fill swapped in while poisoned (issue #194).
@@ -174,6 +176,7 @@ public partial class Hud : Control
     _world.RoundEnded += OnRoundEnded;
     _world.RoundStarted += OnRoundStarted;
     CreateRoundUi();
+    CreateScopeUi(); // Issue #236.
     _world.ChatReceived += OnChatReceived; // Issue #188.
     CreateChatBox();
     _world.PlayerScored += OnPlayerScored;
@@ -209,6 +212,32 @@ public partial class Hud : Control
     _deathCountdown.AddThemeFontSizeOverride ("font_size", 48);
     _deathCountdown.SetAnchorsPreset (LayoutPreset.FullRect);
     _deathOverlay.AddChild (_deathCountdown);
+  }
+
+  // The blowgun's scope view & dart count (issue #236): the scope draws over
+  // everything while scoped; the ammo readout sits under the crosshair whenever the
+  // blowgun is out. Both poll the local player, like the bread icon.
+  private void CreateScopeUi()
+  {
+    _scopeView = new ScopeView();
+    AddChild (_scopeView);
+    _dartAmmo = new Label { HorizontalAlignment = HorizontalAlignment.Center, MouseFilter = MouseFilterEnum.Ignore, Visible = false };
+    _dartAmmo.AddThemeFontSizeOverride ("font_size", 34);
+    _dartAmmo.SetAnchorsPreset (LayoutPreset.Center);
+    _dartAmmo.GrowHorizontal = GrowDirection.Both;
+    _dartAmmo.OffsetTop = 48.0f;
+    AddChild (_dartAmmo);
+  }
+
+  private void UpdateDartAmmo()
+  {
+    var self = _world.SelfPlayer;
+    _scopeView.Track (self);
+    var show = self != null && Visible && self.IsBlowgunSelected && self.HasBlowgun;
+    _dartAmmo.Visible = show;
+    if (!show) return;
+    _dartAmmo.Text = self!.BlowgunDarts > 0 ? $"darts: {self.BlowgunDarts}" : "darts: 0 - find ammo";
+    _dartAmmo.Modulate = self.BlowgunDarts > 0 ? Colors.White : new Color (1.0f, 0.5f, 0.4f);
   }
 
   // Rounds (issue #153), code-built like the death overlay: a top-center clock while
@@ -312,6 +341,7 @@ public partial class Hud : Control
     UpdateCooldownMeters();
     UpdateBreadIcon();
     UpdatePoisonTint(); // Issue #194.
+    UpdateDartAmmo(); // Issue #236.
     UpdateBreadNotice();
     UpdateDeathOverlay();
     UpdateTargetRing();

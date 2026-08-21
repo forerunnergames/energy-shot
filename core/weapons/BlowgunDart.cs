@@ -4,19 +4,22 @@ using com.forerunnergames.energyshot.ui.hud;
 
 namespace com.forerunnergames.energyshot.weapons;
 
-// The blowgun's poison dart (issue #194): a small, quiet, swept-ray projectile
-// modeled on LaserBolt. The impact does no damage - the poison ticks do (see
-// Player.Poison.cs). Stealth audio model: the dart carries its own whoosh with a
-// tiny audible radius, so players only hear it when it flies near them; the muzzle
-// pfft lives on the shooter with an even smaller radius (Player.Blowgun.cs).
+// The blowgun's poison dart (issues #194 & #236): a swept-ray projectile that flies
+// fast but VISIBLY - you can watch it cross the arena - with next to no drop, a long
+// lifetime (it's the sniper), & a proper fletched dart body so it never reads as a
+// green ball. The impact does no damage; the poison does (Player.Poison.cs). Stealth
+// audio: the dart carries its own short-range whoosh, audible only to whoever it
+// passes close to. A miss that hits geometry LANDS as an armed ground dart (#248).
 public partial class BlowgunDart : Node3D
 {
   [Signal] public delegate void HitPlayerEventHandler (Player player);
-  private const float MaxLifetimeSeconds = 3.0f;
-  // Gentle arc: a dart is breath-powered, not a laser - the droop reads as funny.
-  private const float DropAcceleration = 6.0f;
-  private static readonly Color DartBody = new(0.35f, 0.25f, 0.15f);
-  private static readonly Color TuftGreen = new(0.4f, 0.8f, 0.3f);
+  [Signal] public delegate void LandedEventHandler (Vector3 position);
+  public const float ShaftLength = 0.7f;
+  private const float MaxLifetimeSeconds = 6.0f;
+  private const float DropAcceleration = 0.3f; // Near-zero: a sniper line, not a lob.
+  private static readonly Color DartBody = new(0.2f, 0.2f, 0.22f);
+  private static readonly Color Tip = new(0.85f, 0.85f, 0.9f);
+  private static readonly Color Fletch = new(1.0f, 0.25f, 0.15f);
   private Vector3 _velocity;
   private Vector3 _sweepStart;
   private bool _sweptFromStart;
@@ -27,16 +30,13 @@ public partial class BlowgunDart : Node3D
   public override void _Ready()
   {
     AddChild (CreateDartVisual());
-    // The fly-by whoosh (issue #194): positional & short-range, so it IS the stealth
-    // model - audible only to whoever the dart passes close to. Looped for the
-    // dart's whole flight, like the boomerang's whoosh (issue #98).
-    var whoosh = new AudioStreamPlayer3D { Stream = ProceduralSounds.DartWhoosh(), UnitSize = 1.5f, MaxDistance = 5.0f, Autoplay = true };
+    // The fly-by whoosh (issue #194): positional & short-range - hearing it means the
+    // dart is near YOU. Looped for the flight, like the boomerang's (issue #98).
+    var whoosh = new AudioStreamPlayer3D { Stream = ProceduralSounds.DartWhoosh(), UnitSize = 2.0f, MaxDistance = 7.0f, Autoplay = true };
     whoosh.Finished += () => whoosh.Play();
     AddChild (whoosh);
   }
 
-  // sweepStart is the shooter's camera position, same reasoning as LaserBolt (issue
-  // #112): the first sweep covers camera->muzzle so point-blank walls can't be skipped.
   public void Launch (Vector3 origin, Vector3 sweepStart, Vector3 direction, float speed, bool isLive, CharacterBody3D shooter)
   {
     GlobalPosition = origin;
@@ -44,6 +44,7 @@ public partial class BlowgunDart : Node3D
     _velocity = direction.Normalized() * speed;
     _isLive = isLive;
     _exclusions = new Godot.Collections.Array <Rid> { shooter.GetRid() };
+    if (shooter is Player own) _exclusions.Add (own.HeadRid);
     Orient();
   }
 
@@ -63,8 +64,8 @@ public partial class BlowgunDart : Node3D
     _velocity.Y -= DropAcceleration * dt;
     var to = GlobalPosition + _velocity * dt;
     var query = PhysicsRayQueryParameters3D.Create (from, to, exclude: _exclusions);
-    // Point-blank darts can start inside the target's collider (issue #52's lesson).
     query.HitFromInside = true;
+    query.CollideWithAreas = true; // Heads are Area3D hitboxes (issue #179) - a dart to the dome still only poisons.
     var hit = GetWorld3D().DirectSpaceState.IntersectRay (query);
 
     if (hit.Count > 0)
@@ -77,12 +78,15 @@ public partial class BlowgunDart : Node3D
     Orient();
   }
 
-  // Players stop the dart & (on the shooter's live copy) get poisoned; geometry just
-  // stops it - a dart in a wall is spent, no pierce, no pickup (only darts embedded
-  // in a player fall out on death & become loadable, issue #194).
+  // A player stops the dart & (on the live copy) gets poisoned; geometry stops it &
+  // (on the live copy) the server is told where it landed, so it becomes an armed
+  // ground dart instead of vanishing (issues #236 & #248).
   private void ResolveHit (Godot.Collections.Dictionary hit)
   {
-    if (_isLive && hit["collider"].AsGodotObject() is CharacterBody3D player && player is Player victim) EmitSignal (SignalName.HitPlayer, victim);
+    var collider = hit["collider"].AsGodotObject();
+    var victim = collider is HeadHitbox head ? head.Player : collider as Player;
+    if (victim != null && _isLive) EmitSignal (SignalName.HitPlayer, victim);
+    if (victim == null && _isLive) EmitSignal (SignalName.Landed, (Vector3)hit["position"] + (Vector3)hit["normal"] * 0.2f);
     QueueFree();
   }
 
@@ -92,19 +96,26 @@ public partial class BlowgunDart : Node3D
     LookAt (GlobalPosition + _velocity, Vector3.Up);
   }
 
-  // Code-built visuals, fresh materials per call so overlay tweaks can't bleed
-  // between held models, pickups, & projectiles (the SlingshotStone convention).
+  // Code-built, fresh materials per call (the SlingshotStone convention).
 
-  // The dart: a thin shaft with a bright tuft so victims can spot their pincushion.
+  // A real dart (issue #236): a long dark shaft along -Z (the flight direction after
+  // LookAt), a bright steel tip in front, & three red fletching fins at the back.
   public static Node3D CreateDartVisual()
   {
     var root = new Node3D();
-    root.AddChild (new MeshInstance3D { Mesh = new CylinderMesh { TopRadius = 0.012f, BottomRadius = 0.012f, Height = 0.28f }, RotationDegrees = new Vector3 (90.0f, 0.0f, 0.0f), MaterialOverride = new StandardMaterial3D { AlbedoColor = DartBody, Roughness = 0.7f } });
-    root.AddChild (new MeshInstance3D { Mesh = new SphereMesh { Radius = 0.03f, Height = 0.06f }, Position = new Vector3 (0.0f, 0.0f, 0.16f), MaterialOverride = new StandardMaterial3D { AlbedoColor = TuftGreen, Roughness = 0.4f } });
+    root.AddChild (new MeshInstance3D { Mesh = new CylinderMesh { TopRadius = 0.022f, BottomRadius = 0.022f, Height = ShaftLength }, RotationDegrees = new Vector3 (90.0f, 0.0f, 0.0f), MaterialOverride = new StandardMaterial3D { AlbedoColor = DartBody, Roughness = 0.6f } });
+    root.AddChild (new MeshInstance3D { Mesh = new CylinderMesh { TopRadius = 0.0f, BottomRadius = 0.03f, Height = 0.12f }, Position = new Vector3 (0.0f, 0.0f, -ShaftLength / 2.0f - 0.06f), RotationDegrees = new Vector3 (-90.0f, 0.0f, 0.0f), MaterialOverride = new StandardMaterial3D { AlbedoColor = Tip, Metallic = 0.8f, Roughness = 0.2f } });
+    for (var i = 0; i < 3; ++i)
+    {
+      var fin = new MeshInstance3D { Mesh = new BoxMesh { Size = new Vector3 (0.01f, 0.11f, 0.16f) }, Position = new Vector3 (0.0f, 0.055f, ShaftLength / 2.0f - 0.1f), MaterialOverride = new StandardMaterial3D { AlbedoColor = Fletch, Roughness = 0.5f } };
+      var pivot = new Node3D { RotationDegrees = new Vector3 (0.0f, 0.0f, 120.0f * i) };
+      pivot.AddChild (fin);
+      root.AddChild (pivot);
+    }
     return root;
   }
 
-  // The blowgun itself: a long tube - with a scope, which is the whole joke.
+  // The blowgun itself: a long tube with a scope - the whole joke.
   public static Node3D CreateBlowgunVisual()
   {
     var root = new Node3D();

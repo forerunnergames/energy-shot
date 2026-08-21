@@ -13,9 +13,20 @@ public static class ProceduralSounds
   // on purpose, & its emitter clamps the audible radius to a few feet.
   public static AudioStreamWav DartPfft()
   {
-    var samples = new float[(int)(SampleRate * 0.18f)];
-    AddCrunch (samples, startSeconds: 0.0f, brightness: 0.12f);
-    AddChime (samples, startSeconds: 0.02f, fromHz: 220.0f, toHz: 140.0f, seconds: 0.12f, amplitude: 0.08f);
+    var samples = new float[(int)(SampleRate * 0.2f)];
+    AddCrunch (samples, startSeconds: 0.0f, brightness: 0.15f);
+    AddCrunch (samples, startSeconds: 0.03f, brightness: 0.1f);
+    AddChime (samples, startSeconds: 0.01f, fromHz: 260.0f, toHz: 120.0f, seconds: 0.16f, amplitude: 0.35f);
+    return FromSamples (samples);
+  }
+
+  // The scoped heartbeat (issue #236): a low double thump - lub, dub - the shooter
+  // times the settled window against.
+  public static AudioStreamWav Heartbeat()
+  {
+    var samples = new float[(int)(SampleRate * 0.35f)];
+    AddChime (samples, startSeconds: 0.0f, fromHz: 70.0f, toHz: 45.0f, seconds: 0.12f, amplitude: 0.6f);
+    AddChime (samples, startSeconds: 0.16f, fromHz: 60.0f, toHz: 40.0f, seconds: 0.14f, amplitude: 0.45f);
     return FromSamples (samples);
   }
 
