@@ -1568,6 +1568,18 @@ public partial class PlaytestDriver : Node
 
     for (var attempt = 0; attempt < 5; ++attempt)
     {
+      // A pickup grant can land mid-phase & auto-equip itself (#128 is by design) -
+      // an airplane did exactly that in CI & the shoot press THREW it, dropping the
+      // shooter to fists for every retry (issue #272). Re-assert the selection, so a
+      // selection stomp costs one loud reselect instead of the whole phase.
+      if (Self.SelectedWeapon != SelectedWeapon.Slingshot)
+      {
+        GD.Print ($"SlingAStone: selection was stomped to {Self.SelectedWeapon} - reselecting the slingshot (issue #272)");
+        PressAction ("weapon_5");
+        await TryWaitUntil (() => Self.SelectedWeapon == SelectedWeapon.Slingshot, 5);
+        ReleaseAction ("weapon_5");
+      }
+
       _lastStone = null;
       PressAction ("shoot");
       await TryWaitUntil (() => Self.SlingshotDrawSeconds >= targetDrawSeconds, 15);
