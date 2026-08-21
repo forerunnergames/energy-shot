@@ -50,6 +50,13 @@ public static class Settings
     set => Set ("max_players", value);
   }
 
+  // Host-chosen game mode (issue #44): 0 = zaps, 1 = king of the hill.
+  public static int GameMode
+  {
+    get => Mathf.Clamp (GetInt ("game_mode"), 0, 1);
+    set => Set ("game_mode", value);
+  }
+
   // Host-chosen round limits (issue #153): 0 disables that axis.
   public static int RoundMinutes
   {

@@ -230,11 +230,13 @@ public partial class Hud : Control
     _roundOverlay.AddChild (_roundBoard);
   }
 
-  private void OnRoundClockUpdated (int secondsLeft, int zapLimit)
+  private void OnRoundClockUpdated (int secondsLeft, int zapLimit, int mode, string hillHolder)
   {
     var clock = secondsLeft >= 0 ? $"{secondsLeft / 60}:{secondsLeft % 60:00}" : string.Empty;
     var target = zapLimit > 0 ? $"first to {zapLimit}" : string.Empty;
-    _roundClock.Text = string.Join ("   ·   ", new[] { clock, target }.Where (part => part.Length > 0));
+    // King of the Hill (issue #44): who holds it, or that it's contested, or nobody.
+    var hill = (GameMode)mode != GameMode.KingOfTheHill ? string.Empty : hillHolder.Length == 0 ? "hill: empty" : hillHolder == "contested" ? "hill: CONTESTED" : $"hill: {hillHolder}";
+    _roundClock.Text = string.Join ("   ·   ", new[] { clock, target, hill }.Where (part => part.Length > 0));
     _roundClock.Visible = _roundClock.Text.Length > 0 && !_roundOverlay.Visible;
   }
 

@@ -14,6 +14,7 @@ public partial class HostGameDialog : Control
   private OptionButton _difficulty = null!;
   private OptionButton _playerColor = null!;
   private SpinBox _maxPlayers = null!;
+  private OptionButton _gameMode = null!; // Issue #44.
   private SpinBox _roundMinutes = null!; // Issue #153.
   private SpinBox _zapLimit = null!;
   private LineEdit _password = null!;
@@ -41,6 +42,7 @@ public partial class HostGameDialog : Control
     _playerColor.GetPopup().AddThemeFontSizeOverride ("font_size", 90);
     PlayerColors.Populate (_playerColor); // Selectable body color (issue #43).
     _maxPlayers = GetNode <SpinBox> ("PanelContainer/MarginContainer/VBoxContainer/MaxPlayers");
+    _gameMode = GetNode <OptionButton> ("PanelContainer/MarginContainer/VBoxContainer/GameMode");
     _roundMinutes = GetNode <SpinBox> ("PanelContainer/MarginContainer/VBoxContainer/RoundMinutes");
     _zapLimit = GetNode <SpinBox> ("PanelContainer/MarginContainer/VBoxContainer/ZapLimit");
     _password = GetNode <LineEdit> ("PanelContainer/MarginContainer/VBoxContainer/Password");
@@ -67,6 +69,7 @@ public partial class HostGameDialog : Control
     _difficulty.Selected = Settings.Difficulty;
     _playerColor.Selected = PlayerColors.NormalizeIndex (Settings.PlayerColor);
     _maxPlayers.Value = Settings.MaxPlayers;
+    _gameMode.Selected = Settings.GameMode;
     _roundMinutes.Value = Settings.RoundMinutes;
     _zapLimit.Value = Settings.ZapLimit;
     UpdateHostGameButtonState();
@@ -117,6 +120,7 @@ public partial class HostGameDialog : Control
     Settings.Difficulty = _difficulty.Selected;
     Settings.PlayerColor = _playerColor.Selected;
     Settings.MaxPlayers = (int)_maxPlayers.Value;
+    Settings.GameMode = _gameMode.Selected; // Read back by World.OnHostGameSuccess (issue #44).
     Settings.RoundMinutes = (int)_roundMinutes.Value; // Read back by World.OnHostGameSuccess (issue #153).
     Settings.ZapLimit = (int)_zapLimit.Value;
     Settings.HostPassword = _password.Text;

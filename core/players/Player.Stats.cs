@@ -41,6 +41,17 @@ public partial class Player
     GD.Print ($"{DisplayName}: assist on {zappedPlayerName} ({Assists} total)");
   }
 
+  // King of the Hill (issue #44): the server awards a point per second of sole
+  // occupancy; the player owns its Score, so the award arrives as an RPC. Peer-1 only.
+  [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
+  public void NotifyHillPoint()
+  {
+    var sender = Multiplayer.GetRemoteSenderId();
+    var authorized = sender == 1 || (sender == 0 && Multiplayer.IsServer());
+    if (!authorized || !IsMultiplayerAuthority()) return;
+    ++Score;
+  }
+
   // A new round (issue #153): the server tells every player to zero its counters &
   // respawn fresh. Peer-1-only, the admin-message rule; a direct (non-RPC) call is
   // honored only inside the server process - the host resetting its own player

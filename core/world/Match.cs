@@ -8,6 +8,10 @@ namespace com.forerunnergames.energyshot.core.world;
 // superlative, & the scoreboard text. No nodes, no network - unit-tested directly.
 public readonly record struct RoundStats (string Name, string ColorHex, int Zaps, int ZapOuts, int Assists, int Falls);
 
+// Zaps = classic deathmatch scoring; KingOfTheHill = points per second of sole hill
+// occupancy (issue #44). Both share the round clock, the limits, & the scoreboard.
+public enum GameMode { Zaps = 0, KingOfTheHill = 1 }
+
 public static class Match
 {
   public const int DefaultRoundMinutes = 5;
@@ -45,10 +49,12 @@ public static class Match
 
   // BBCode for the end-of-round overlay: a table of everybody's numbers, then the
   // superlatives. titleFor renders one award line (the generator picks the template).
-  public static string BuildScoreboard (IReadOnlyList <RoundStats> stats, List <(List <string> Pool, string Name)> awards, System.Func <List <string>, string, string> titleFor)
+  public static string ScoreColumnLabel (GameMode mode) => mode == GameMode.KingOfTheHill ? "Hill pts" : "Zaps";
+
+  public static string BuildScoreboard (IReadOnlyList <RoundStats> stats, List <(List <string> Pool, string Name)> awards, System.Func <List <string>, string, string> titleFor, GameMode mode = GameMode.Zaps)
   {
     var rows = stats.Select (s => $"[cell][color=#{s.ColorHex}]{EscapeBbcode (s.Name)}[/color][/cell][cell]{s.Zaps}[/cell][cell]{s.ZapOuts}[/cell][cell]{s.Assists}[/cell][cell]{s.Falls}[/cell]");
-    var table = $"[table=5][cell][b]Player[/b][/cell][cell][b]Zaps[/b][/cell][cell][b]Zap-outs[/b][/cell][cell][b]Assists[/b][/cell][cell][b]Falls[/b][/cell]{string.Concat (rows)}[/table]";
+    var table = $"[table=5][cell][b]Player[/b][/cell][cell][b]{ScoreColumnLabel (mode)}[/b][/cell][cell][b]Zap-outs[/b][/cell][cell][b]Assists[/b][/cell][cell][b]Falls[/b][/cell]{string.Concat (rows)}[/table]";
     var titles = string.Join ("\n", awards.Select (award => titleFor (award.Pool, EscapeBbcode (award.Name))));
     return $"[center][b]ROUND OVER[/b]\n\n{table}\n\n{titles}[/center]";
   }
