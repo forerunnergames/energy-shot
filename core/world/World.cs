@@ -263,7 +263,7 @@ public partial class World : Node3D
     // axis. Playtest runs assert exact scores & crowns across ~3 minutes, so a round
     // end mid-run would break them: the harness flag turns rounds off.
     var isPlaytest = OS.GetCmdlineUserArgs().Contains ("--playtest");
-    ConfigureRound (isPlaytest ? 0 : ParseArgInt ("--round-minutes", Match.DefaultRoundMinutes) * 60, isPlaytest ? 0 : ParseArgInt ("--zap-limit", Match.DefaultZapLimit));
+    ConfigureRound (isPlaytest ? 0 : Mathf.Clamp (ParseArgInt ("--round-minutes", Match.DefaultRoundMinutes), 0, Match.MaxRoundMinutes) * 60, isPlaytest ? 0 : Mathf.Clamp (ParseArgInt ("--zap-limit", Match.DefaultZapLimit), 0, Match.MaxZapLimit));
     var peer = new ENetMultiplayerPeer();
     var error = peer.CreateServer (port);
 
@@ -424,6 +424,9 @@ public partial class World : Node3D
   {
     var player = _playerScene.Instantiate <Player>();
     player.Name = $"{peerId}";
+    // Joining during the intermission (CodeRabbit on #226): you get the frozen
+    // scoreboard too, not a private head start; ReceiveRoundStarted releases everyone.
+    if (_intermission && IsActiveServer() && peerId != Multiplayer.GetUniqueId()) RpcId (peerId, MethodName.ReceiveRoundEnded, _lastBoard);
     player.MaxHealth = maxHealth;
     player.ColorIndex = colorIndex; // Chosen body color (issue #43), carried into spawn state for every peer.
     player.RespawnedShot += (respawnedPlayerName, shotByPlayerName) => _networkManager.NotifyPlayerRespawnedShot (respawnedPlayerName, shotByPlayerName);
@@ -490,6 +493,7 @@ public partial class World : Node3D
   private int _zapLimit;
   private float _roundElapsed;
   private bool _intermission;
+  private string _lastBoard = string.Empty; // Replayed to anyone who joins mid-intermission (CodeRabbit on #226).
 
   private void ConfigureRound (int roundSeconds, int zapLimit)
   {
@@ -520,6 +524,7 @@ public partial class World : Node3D
     var stats = ordered.Select (player => new RoundStats (player.DisplayName, PlayerColors.TextHex (player.ColorIndex), player.Score, player.ZapOuts, player.Assists, player.Falls)).ToList();
     var board = Match.BuildScoreboard (stats, Match.AwardTitles (stats), MessageGenerator.RoundTitle);
     ServerLog.Event ($"round over: {string.Join (", ", stats.Select (s => $"{s.Name} {s.Zaps}/{s.ZapOuts}/{s.Assists}/{s.Falls}"))}");
+    _lastBoard = board;
     Rpc (MethodName.ReceiveRoundEnded, board);
     await ToSignal (GetTree().CreateTimer (Match.IntermissionSeconds), SceneTreeTimer.SignalName.Timeout);
     if (!IsInsideTree() || !IsActiveServer()) return;

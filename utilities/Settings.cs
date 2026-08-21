@@ -53,13 +53,13 @@ public static class Settings
   // Host-chosen round limits (issue #153): 0 disables that axis.
   public static int RoundMinutes
   {
-    get => Mathf.Clamp (GetInt ("round_minutes", core.world.Match.DefaultRoundMinutes), 0, 60);
+    get => Mathf.Clamp (GetInt ("round_minutes", core.world.Match.DefaultRoundMinutes), 0, core.world.Match.MaxRoundMinutes);
     set => Set ("round_minutes", value);
   }
 
   public static int ZapLimit
   {
-    get => Mathf.Clamp (GetInt ("zap_limit", core.world.Match.DefaultZapLimit), 0, 200);
+    get => Mathf.Clamp (GetInt ("zap_limit", core.world.Match.DefaultZapLimit), 0, core.world.Match.MaxZapLimit);
     set => Set ("zap_limit", value);
   }
 

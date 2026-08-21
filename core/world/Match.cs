@@ -12,6 +12,8 @@ public static class Match
 {
   public const int DefaultRoundMinutes = 5;
   public const int DefaultZapLimit = 20;
+  public const int MaxRoundMinutes = 60;
+  public const int MaxZapLimit = 200;
   public const float IntermissionSeconds = 10.0f;
 
   // Either limit ends it; a limit of 0 means "no limit" on that axis.
@@ -37,13 +39,17 @@ public static class Match
     awards.Add ((pool, best.Name));
   }
 
+  // Player names are player-typed & land in a BBCode label (CodeRabbit on #226): an
+  // opening bracket renders as itself, never as a smuggled tag.
+  public static string EscapeBbcode (string text) => text.Replace ("[", "[lb]");
+
   // BBCode for the end-of-round overlay: a table of everybody's numbers, then the
   // superlatives. titleFor renders one award line (the generator picks the template).
   public static string BuildScoreboard (IReadOnlyList <RoundStats> stats, List <(List <string> Pool, string Name)> awards, System.Func <List <string>, string, string> titleFor)
   {
-    var rows = stats.Select (s => $"[cell][color=#{s.ColorHex}]{s.Name}[/color][/cell][cell]{s.Zaps}[/cell][cell]{s.ZapOuts}[/cell][cell]{s.Assists}[/cell][cell]{s.Falls}[/cell]");
+    var rows = stats.Select (s => $"[cell][color=#{s.ColorHex}]{EscapeBbcode (s.Name)}[/color][/cell][cell]{s.Zaps}[/cell][cell]{s.ZapOuts}[/cell][cell]{s.Assists}[/cell][cell]{s.Falls}[/cell]");
     var table = $"[table=5][cell][b]Player[/b][/cell][cell][b]Zaps[/b][/cell][cell][b]Zap-outs[/b][/cell][cell][b]Assists[/b][/cell][cell][b]Falls[/b][/cell]{string.Concat (rows)}[/table]";
-    var titles = string.Join ("\n", awards.Select (award => titleFor (award.Pool, award.Name)));
+    var titles = string.Join ("\n", awards.Select (award => titleFor (award.Pool, EscapeBbcode (award.Name))));
     return $"[center][b]ROUND OVER[/b]\n\n{table}\n\n{titles}[/center]";
   }
 }

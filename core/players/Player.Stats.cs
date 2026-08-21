@@ -42,12 +42,15 @@ public partial class Player
   }
 
   // A new round (issue #153): the server tells every player to zero its counters &
-  // respawn fresh. Peer-1-only, the admin-message rule; the host calls it directly.
+  // respawn fresh. Peer-1-only, the admin-message rule; a direct (non-RPC) call is
+  // honored only inside the server process - the host resetting its own player
+  // (CodeRabbit on #226).
   [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
   public void ResetForNewRound()
   {
     var sender = Multiplayer.GetRemoteSenderId();
-    if (sender != 1 && sender != 0) return;
+    var authorized = sender == 1 || (sender == 0 && Multiplayer.IsServer());
+    if (!authorized) return;
     if (!IsMultiplayerAuthority()) return;
     Score = 0;
     ZapOuts = 0;

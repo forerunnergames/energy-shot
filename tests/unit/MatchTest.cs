@@ -43,6 +43,13 @@ public class MatchTest
   }
 
   [TestCase]
+  public void ScoreboardEscapesSmuggledTagsInNames()
+  {
+    var stats = new List <RoundStats> { Stats ("[img]x[/img]", 1, 0, 0, 0) };
+    AssertBool (Match.BuildScoreboard (stats, Match.AwardTitles (stats), (pool, name) => name).Contains ("[img]")).IsFalse();
+  }
+
+  [TestCase]
   public void ScoreboardCarriesEveryPlayerAndTitle()
   {
     var stats = new List <RoundStats> { Stats ("alpha", 3, 1, 0, 0), Stats ("beta", 1, 3, 0, 2) };
