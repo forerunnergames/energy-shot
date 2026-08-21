@@ -200,6 +200,10 @@ public partial class MessageScroller : Control
     tween.TweenProperty (_messageLabel3, "modulate:a", 0.8f, 0.5f).From (1.0f);
   }
 
+  // Chat lines (issue #188) join the Tab archive in their sender's color without ever
+  // entering the scroller feed, so the history interleaves talk & events chronologically.
+  public void AddToHistoryOnly (string singleLineMessage, Color color) => AddMessageToHistory (color, singleLineMessage);
+
   // The history keeps each message's scroller color (issue #101), e.g. your own
   // deaths stay red there too.
   private void AddMessageToHistory (Color color, string singleLineMessage)
