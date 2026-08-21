@@ -18,6 +18,8 @@ public partial class Hud : Control
   [Signal] public delegate void GameQuitEventHandler();
   private World _world = null!;
   private ProgressBar _healthBar = null!;
+  private StyleBoxFlat? _poisonFill; // Green fill swapped in while poisoned (issue #194).
+  private bool _poisonTintShown;
   private MessageScroller _messageScroller = null!;
   private ConfirmationDialog2 _quitDialog = null!;
   private Label _scoreLabel = null!;
@@ -229,6 +231,7 @@ public partial class Hud : Control
     UpdateSplatter (delta);
     UpdateCooldownMeters();
     UpdateBreadIcon();
+    UpdatePoisonTint(); // Issue #194.
     UpdateBreadNotice();
     UpdateDeathOverlay();
     UpdateTargetRing();
@@ -341,6 +344,19 @@ public partial class Hud : Control
     _fullAutoMeter.SetFraction (self.FullAutoReadyFraction);
     _bananaMeter.SetFraction (self.BananaReadyFraction);
     _eatMeter.SetDraining (self.BreadEatRemainingFraction, self.Eating); // Reverse: it drains to empty (issue #192).
+  }
+
+  // The health bar turns sickly green while darts are embedded (issue #194); polling
+  // like the bread icon, since the dart count changes with no HUD-facing signal.
+  private void UpdatePoisonTint()
+  {
+    var self = _world.SelfPlayer;
+    if (self == null || !Visible) return;
+    if (self.IsPoisoned == _poisonTintShown) return;
+    _poisonTintShown = self.IsPoisoned;
+    if (_poisonFill == null && _healthBar.GetThemeStylebox ("fill") is StyleBoxFlat fill) { _poisonFill = (StyleBoxFlat)fill.Duplicate(); _poisonFill.BgColor = Player.PoisonGreen; }
+    if (_poisonTintShown && _poisonFill != null) { _healthBar.AddThemeStyleboxOverride ("fill", _poisonFill); return; }
+    _healthBar.RemoveThemeStyleboxOverride ("fill");
   }
 
   // The bread icon dims once the loaf is eaten & brightens when a respawn restocks

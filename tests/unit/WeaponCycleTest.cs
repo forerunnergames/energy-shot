@@ -48,12 +48,12 @@ public class WeaponCycleTest
     var all = new List <SelectedWeapon>
     {
       SelectedWeapon.Fists, SelectedWeapon.Laser, SelectedWeapon.Banana, SelectedWeapon.Boomerang,
-      SelectedWeapon.Slingshot, SelectedWeapon.PaperAirplane, SelectedWeapon.Bread
+      SelectedWeapon.Slingshot, SelectedWeapon.PaperAirplane, SelectedWeapon.Blowgun, SelectedWeapon.Bread
     };
     var current = SelectedWeapon.Fists;
     var visited = new List <SelectedWeapon>();
     for (var i = 0; i < all.Count; ++i) { current = Player.NextCycleSlot (all, current, 1); visited.Add (current); }
     AssertObject (current).IsEqual (SelectedWeapon.Fists); // Full lap wraps home.
-    AssertInt (visited.Count).IsEqual (7);
+    AssertInt (visited.Count).IsEqual (8); // Blowgun joined the wheel (issue #194).
   }
 }

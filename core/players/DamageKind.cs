@@ -16,5 +16,7 @@ public enum DamageKind
   // The paper airplane's ignite-then-pop, thrown or slung onto you (issues #102 & #191)...
   PaperAirplane,
   // ...or set off by stepping on a grounded, armed one (issue #191).
-  Landmine
+  Landmine,
+  // Accumulated blowgun-dart ticks (issue #194): the poison zaps, never the impact.
+  Poison
 }

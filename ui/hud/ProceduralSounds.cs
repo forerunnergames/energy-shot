@@ -9,6 +9,26 @@ public static class ProceduralSounds
   private const int SampleRate = 22050;
 
   // A satisfying munch: three quick, soft crunches followed by a warm rising heal chime.
+  // The blowgun's muzzle pfft (issue #194): one soft, dark breath of noise - quiet
+  // on purpose, & its emitter clamps the audible radius to a few feet.
+  public static AudioStreamWav DartPfft()
+  {
+    var samples = new float[(int)(SampleRate * 0.18f)];
+    AddCrunch (samples, startSeconds: 0.0f, brightness: 0.12f);
+    AddChime (samples, startSeconds: 0.02f, fromHz: 220.0f, toHz: 140.0f, seconds: 0.12f, amplitude: 0.08f);
+    return FromSamples (samples);
+  }
+
+  // The dart's fly-by whoosh (issue #194): a airy falling sweep, looped for the
+  // flight; short-range on its emitter, so hearing it means the dart is NEAR you.
+  public static AudioStreamWav DartWhoosh()
+  {
+    var samples = new float[(int)(SampleRate * 0.3f)];
+    AddChime (samples, startSeconds: 0.0f, fromHz: 900.0f, toHz: 650.0f, seconds: 0.3f, amplitude: 0.05f);
+    AddChime (samples, startSeconds: 0.0f, fromHz: 1400.0f, toHz: 950.0f, seconds: 0.3f, amplitude: 0.03f);
+    return FromSamples (samples);
+  }
+
   public static AudioStreamWav Munch()
   {
     var samples = new float[(int)(SampleRate * 0.7f)];

@@ -217,6 +217,7 @@ public partial class Player
     stone.Launch (origin, sweepStart, direction, speed, gravity, energy, isLive, this);
     if (!isLive) return;
     if (ammo == HeldWeapon.PaperAirplane) stone.HitPlayer += (victim, _) => OnSlungAirplaneHitPlayer (stone, victim);
+    else if (ammo == HeldWeapon.PoisonDart) stone.HitPlayer += (victim, _) => OnSlungDartHitPlayer (stone, victim); // Issue #194.
     else stone.HitPlayer += (victim, hitEnergy) => OnStoneHitPlayer (victim, hitEnergy, ammo);
     if (ammo == HeldWeapon.None || IsCosmeticAmmo (ammo)) return;
     // Only the newest flight owns this player's server-side ammo escrow, so an older
@@ -244,6 +245,18 @@ public partial class Player
     _hitmarkerSound.Play();
     ReportToServer ($"airplane: {DisplayName} slung the paper airplane into {victim.DisplayName}");
     Spawner.SendAirplaneStrikeRequest (victim.NetworkId);
+  }
+
+  // A slung dart poisons exactly like a blown one (issue #194): no stone damage -
+  // the embed is the payload. Strike-consumes like the airplane: no landing, no
+  // pickup; the server just settles the escrow books.
+  private void OnSlungDartHitPlayer (SlingshotStone stone, Player victim)
+  {
+    if (_ammoStone == stone) _ammoStone = null;
+    _hitmarkerSound.Play();
+    Spawner.SendDartStrikeRequest();
+    if (victim.NetworkId == Multiplayer.GetUniqueId()) return;
+    victim.RpcId (victim.NetworkId, MethodName.ReceiveDartHit, DisplayName);
   }
 
   // Distinct release thwack (issue #99): the punch thud replayed fast & positional

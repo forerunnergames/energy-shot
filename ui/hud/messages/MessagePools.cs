@@ -248,6 +248,15 @@ public static class MessagePools
     "beep, beep, beep, pop: goodnight {v}"
   };
 
+  // Accumulated poison-dart ticks got them (issue #194): sickly-goofy, never gory.
+  public static readonly List <string> Poison = new()
+  {
+    "{v} turned a lovely shade of swamp. {z}'s darts finally added up",
+    "{v} wobbled, hiccuped, & folded like lawn furniture. {z}'s poison, probably",
+    "{z}'s little pincushion project is complete: {v} is out",
+    "{v} got out-toxined by {z}. Hydrate next time"
+  };
+
   // Someone punched an incoming paper airplane out of the air (issue #102):
   // {z} = the catcher, {v} = the thrower it's being returned to.
   public static readonly List <string> AirplaneCatch = new()
@@ -284,7 +293,7 @@ public static class MessagePools
     Fall, FallStreak, Zapped, ThroughWall, FullCharge, FullAuto, Punch, PunchedOutArmed, FistsVsFists,
     BananaBlast, BananaDirect, HoldingBananaGun, ComboSplatterPunch, JumpShot, SlideShotKiller,
     SlideShotVictim, ZapStreakTier3, ZapStreakTier5, ZapStreakTier7, StreakEnded, StreakLost,
-    ZappedStreak, Boomerang, Slingshot, SlungItem, PaperAirplane, Landmine, AirplaneCatch, TheftRevenge,
+    ZappedStreak, Boomerang, Slingshot, SlungItem, PaperAirplane, Landmine, Poison, AirplaneCatch, TheftRevenge,
     ZappedEating
   };
 }

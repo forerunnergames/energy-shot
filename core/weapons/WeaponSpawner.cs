@@ -25,6 +25,10 @@ public partial class WeaponSpawner : Node3D
   [Export] public int MaxBoomerangs = 1;
   [Export] public int MaxSlingshots = 1;
   [Export] public int MaxPaperAirplanes = 1;
+  [Export] public int MaxBlowguns = 1; // The stealth weapon (issue #194).
+  // Sanity bound on a death's dart scatter (issue #194): more embedded darts than
+  // this is already a story, & the pickups expire in 5s anyway.
+  private const int MaxScatteredDarts = 8;
   [Export] public float ReconcileIntervalSeconds = 1.0f;
   [Export] public float PickupHoverHeight = 0.9f;
   // Playtest-only (#72 & #197): deterministic pickups the driver can walk to, parked
@@ -202,6 +206,7 @@ public partial class WeaponSpawner : Node3D
     if (candidates.Count > 0 && Count (HeldWeapon.Banana, pickups, players) < MaxBananas) Spawn (HeldWeapon.Banana, TakeRandom (candidates), expires: false);
     if (candidates.Count > 0 && Count (HeldWeapon.Boomerang, pickups, players) < MaxBoomerangs) Spawn (HeldWeapon.Boomerang, TakeRandom (candidates), expires: false);
     if (candidates.Count > 0 && Count (HeldWeapon.Slingshot, pickups, players) < MaxSlingshots) Spawn (HeldWeapon.Slingshot, TakeRandom (candidates), expires: false);
+    if (candidates.Count > 0 && Count (HeldWeapon.Blowgun, pickups, players) < MaxBlowguns) Spawn (HeldWeapon.Blowgun, TakeRandom (candidates), expires: false); // Issue #194.
     // Exactly 1 airplane in the game (issue #102), refolded at a spawn point whenever
     // the level's only one is spent - a mine popped its target, or a thrown or slung
     // one ignited somebody (issue #191). A fresh spawn-point airplane is unarmed, so
@@ -347,6 +352,7 @@ public partial class WeaponSpawner : Node3D
     if (dropped.HasFlag (HeldWeapon.Boomerang)) Spawn (HeldWeapon.Boomerang, spot + Vector3.Left * 0.8f, expires: true, dropperName); // Issue #98.
     if (dropped.HasFlag (HeldWeapon.Slingshot)) Spawn (HeldWeapon.Slingshot, spot + Vector3.Back * 0.8f, expires: true, dropperName); // Issue #99.
     if (dropped.HasFlag (HeldWeapon.PaperAirplane)) Spawn (HeldWeapon.PaperAirplane, spot + Vector3.Forward * 0.8f, expires: true, dropperName); // Issue #102.
+    if (dropped.HasFlag (HeldWeapon.Blowgun)) Spawn (HeldWeapon.Blowgun, spot + Vector3.Forward * 1.6f, expires: true, dropperName); // Issue #194.
     // Death drops the uneaten loaf too (issue #190), & it expires like any other
     // drop so dropped bread can never pile up - respawns restock it anyway.
     if (dropped.HasFlag (HeldWeapon.Bread)) Spawn (HeldWeapon.Bread, spot + Vector3.Right * 1.6f, expires: true, dropperName);
@@ -469,6 +475,59 @@ public partial class WeaponSpawner : Node3D
     // landmine right where it fell & never expires, since it's the only one there is.
     var isAirplane = ammo.Type == HeldWeapon.PaperAirplane;
     Spawn (ammo.Type, spot, expires: !isAirplane, ammo.PreviousOwner, armed: isAirplane);
+  }
+
+  // ------------------------------------------------ poison darts (issue #194)
+
+  // Client -> server entry points; when this peer already is the server, skip the RPC.
+  public void SendDartScatterRequest (Vector3 position, int count)
+  {
+    if (Multiplayer.IsServer()) { RequestDartScatter (position, count); return; }
+    RpcId (1, MethodName.RequestDartScatter, position, count);
+  }
+
+  public void SendDartStrikeRequest()
+  {
+    if (Multiplayer.IsServer()) { RequestDartStrike(); return; }
+    RpcId (1, MethodName.RequestDartStrike);
+  }
+
+  // A death shook the victim's embedded darts out (issue #194): they fall in a ring
+  // beside the body as 5s-expiry pickups a slingshot can load. The count is the
+  // sender's own report, sanity-clamped rather than checked against the replicated
+  // PoisonDarts: the death-path clear can replicate ahead of this RPC (the #167
+  // lesson), darts carry no cap to defend, & the worst a liar buys is a few
+  // seconds of extra scenery.
+  [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
+  private void RequestDartScatter (Vector3 position, int count)
+  {
+    if (!Multiplayer.IsServer()) return;
+    var victimId = SenderOrSelf();
+    var victim = Players().FirstOrDefault (player => player.NetworkId == victimId);
+    if (victim == null) return;
+    var scattered = Mathf.Clamp (count, 0, MaxScatteredDarts);
+    ServerLog.Event (victimId, $"dart scatter: {scattered} dart(s) fall off [{victim.DisplayName}]");
+
+    for (var i = 0; i < scattered; ++i)
+    {
+      var angle = Mathf.Tau * i / Mathf.Max (1, scattered);
+      var target = position + new Vector3 (Mathf.Cos (angle), 0.0f, Mathf.Sin (angle)) * 0.9f;
+      if (!TryFindGround (target, out var spot)) continue; // Over the void: that dart is simply gone.
+      Spawn (HeldWeapon.PoisonDart, spot, expires: true, victim.DisplayName);
+    }
+  }
+
+  // A slung dart connected (issue #194): consume the shooter's escrowed dart so it
+  // can't ALSO land as a pickup - the strike-consumes rule the airplane uses (#191).
+  // The poisoning itself travels shooter -> victim (ReceiveDartHit), so attribution
+  // stays victim-authoritative; this RPC only settles the server's books.
+  [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
+  private void RequestDartStrike()
+  {
+    if (!Multiplayer.IsServer()) return;
+    var attackerId = SenderOrSelf();
+    var slung = _ammoEscrow.RemoveAll (ammo => ammo.LoaderId == attackerId && ammo.Type == HeldWeapon.PoisonDart) > 0;
+    ServerLog.Event (attackerId, slung ? "dart strike: slung dart consumed from escrow" : "dart strike deny: sender had no dart nocked");
   }
 
   // ------------------------------------------- paper airplane hazard (issue #191)
@@ -711,7 +770,7 @@ public partial class WeaponSpawner : Node3D
   // Bread is deliberately absent (issue #190): a boomerang steals weapons, not lunch.
   private static HeldWeapon FirstFlag (HeldWeapon mask)
   {
-    foreach (var flag in new[] { HeldWeapon.Laser, HeldWeapon.Banana, HeldWeapon.Boomerang, HeldWeapon.Slingshot }) { if ((mask & flag) != 0) return flag; }
+    foreach (var flag in new[] { HeldWeapon.Laser, HeldWeapon.Banana, HeldWeapon.Boomerang, HeldWeapon.Slingshot, HeldWeapon.Blowgun }) { if ((mask & flag) != 0) return flag; }
     return HeldWeapon.None;
   }
 

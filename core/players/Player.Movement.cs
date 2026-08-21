@@ -254,6 +254,7 @@ public partial class Player
   {
     CaptureDeathSnapshot();
     DropAllHeldWeapons(); // Death drops everything carried at the death spot (issue #72).
+    ScatterEmbeddedDarts(); // Embedded darts fall beside the body as 5s pickups (issue #194).
     EmitSignal (SignalName.RespawnedShot, DisplayName, shotByPlayerName); // Message shows during the wait (issue #152).
     await LieFallen();
     // A disconnect can free this node mid-lie-down (CodeRabbit on #185): a freed
@@ -319,6 +320,7 @@ public partial class Player
     _energyWeapon.ResetCharge(); // Every life starts with a cold weapon (issue #67).
     ClearStun(); // Death shakes off any punch/banana stun.
     ClearBurning(); // No fire (or incoming airplane) carries into a new life (issue #191).
+    ClearPoison(); // No embedded darts either - fresh lives are clean (issue #194).
     _stickyFlightSecondsLeft = 0.0f; // A new life isn't still banana-launched (issue #83).
     ActivateSpawnArmor();
     // Fresh lives start standing & slide-ready: no lingering pose, no cooldown carryover (#104).

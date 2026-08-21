@@ -66,6 +66,8 @@ public partial class WeaponPickup : Area3D
   private Node3D _slingshotVisual = null!;
   private Node3D _breadVisual = null!;
   private Node3D _airplaneVisual = null!;
+  private Node3D _blowgunVisual = null!;
+  private Node3D _dartVisual = null!;
   private OmniLight3D? _armedLight;
   private bool _armed;
   private WeaponSpawner _spawner = null!;
@@ -93,6 +95,10 @@ public partial class WeaponPickup : Area3D
     _visual.AddChild (_breadVisual);
     _airplaneVisual = PaperAirplaneProjectile.CreateVisual(); // Code-built, shared with the projectile (issue #102).
     _visual.AddChild (_airplaneVisual);
+    _blowgunVisual = BlowgunDart.CreateBlowgunVisual(); // Code-built, shared with the held model (issue #194).
+    _visual.AddChild (_blowgunVisual);
+    _dartVisual = BlowgunDart.CreateDartVisual(); // A death-scattered dart (issue #194).
+    _visual.AddChild (_dartVisual);
     _spawner = GetNode <WeaponSpawner> ("/root/World/WeaponSpawner");
     _expiryLeft = ExpirySeconds;
     UpdateVisuals();
@@ -199,18 +205,21 @@ public partial class WeaponPickup : Area3D
   {
     if (!player.IsMultiplayerAuthority() || player.Fallen) return false;
     if (player.IsLoadingAmmo) return true;
+    if (Weapon == HeldWeapon.PoisonDart) return false; // A fallen dart is ammo, never a hand weapon (issue #194).
     if (IsArmedMine) return !player.SpawnArmor && !player.Burning;
     return !player.Holds (Weapon);
   }
 
   private void UpdateVisuals()
   {
-    if (_laserVisual == null || _boomerangVisual == null || _slingshotVisual == null || _breadVisual == null || _airplaneVisual == null) return;
+    if (_laserVisual == null || _boomerangVisual == null || _slingshotVisual == null || _breadVisual == null || _airplaneVisual == null || _blowgunVisual == null || _dartVisual == null) return;
     _laserVisual.Visible = Weapon == HeldWeapon.Laser;
     _bananaVisual.Visible = Weapon == HeldWeapon.Banana;
     _boomerangVisual.Visible = Weapon == HeldWeapon.Boomerang;
     _slingshotVisual.Visible = Weapon == HeldWeapon.Slingshot; // Issue #99.
     _breadVisual.Visible = Weapon == HeldWeapon.Bread; // Issue #190.
     _airplaneVisual.Visible = Weapon == HeldWeapon.PaperAirplane; // Issue #102.
+    _blowgunVisual.Visible = Weapon == HeldWeapon.Blowgun; // Issue #194.
+    _dartVisual.Visible = Weapon == HeldWeapon.PoisonDart; // Issue #194.
   }
 }
