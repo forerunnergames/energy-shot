@@ -320,6 +320,7 @@ public partial class Player
     EmitSignal (SignalName.HealthChanged, Health);
     Velocity = Vector3.Zero;
     Position = CalculateRandomSpawnPosition();
+    ResetFallTracking(); // The spawn-room drop-in is never a fall (issue #263).
     SetBreadHeld (isHeld: true); // Fresh bread every life (issues #62 & #190).
     _energyWeapon.ResetCharge(); // Every life starts with a cold weapon (issue #67).
     ClearStun(); // Death shakes off any punch/banana stun.

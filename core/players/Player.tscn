@@ -4,7 +4,7 @@
 [ext_resource type="Texture2D" uid="uid://ddlk1r4wak13u" path="res://assets/crosshairs.png" id="2_37lxu"]
 [ext_resource type="PackedScene" uid="uid://bnnjmr0ke3v6d" path="res://core/weapons/EnergyWeapon.tscn" id="4_pk5hr"]
 [ext_resource type="PackedScene" path="res://core/weapons/BananaLauncher.tscn" id="4_bnrfl"]
-[ext_resource type="AudioStream" path="res://assets/sounds/punch.mp3" id="5_punch"]
+[ext_resource type="AudioStream" path="res://assets/sounds/punch.wav" id="5_punch"]
 [ext_resource type="AudioStream" path="res://assets/sounds/jump.mp3" id="10_jump"]
 [ext_resource type="AudioStream" path="res://assets/sounds/hitmarker.wav" id="6_hitmk"]
 [ext_resource type="AudioStream" path="res://assets/sounds/damage.wav" id="7_dmg"]
