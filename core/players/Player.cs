@@ -52,7 +52,9 @@ public partial class Player : CharacterBody3D
   [Signal] public delegate void RespawnedShotEventHandler (string playerName, string shotByPlayerName);
   [Signal] public delegate void RespawnedFellEventHandler (string playerName);
   // Replicated like Health so every peer can render the leaderboard. Never clamped:
-  // fall penalties can take it negative (issue #108).
+  // fall penalties can take it negative (issue #108). Synced ALWAYS, not on-change
+  // (issue #78): a missed delta never re-sent, so a peer could hold a stale score
+  // until the next kill; the setter is idempotent so the constant re-fire is free.
   [Export]
   public int Score
   {

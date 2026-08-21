@@ -726,7 +726,10 @@ public partial class PlaytestDriver : Node
       PressLeftClick();
       await Task.Delay (60);
       ReleaseLeftClick();
-      await Task.Delay (130);
+      // Outlast the 0.3s punch cooldown between swings (#78): at the old 290ms cadence
+      // every other swing landed inside it & was swallowed, & on a slow runner the
+      // whole 3s ritual could pass with no connected punch.
+      await Task.Delay (300);
     }
 
     // 30s, not 5 (#213): the ritual's own 3s expiry ends it either way, & the health
