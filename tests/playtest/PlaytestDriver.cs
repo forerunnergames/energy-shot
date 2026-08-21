@@ -316,6 +316,13 @@ public partial class PlaytestDriver : Node
       // stale by the time we arrive - & the victim is moving through its own phases.
       // Don't spend the swing on thin air; take the spot again next pass.
       if (Self.GlobalPosition.DistanceTo (victim.GlobalPosition) > Self.PunchRange * 0.75f) continue;
+      // Fists again before EVERY swing (#78): re-taking the spot can walk us over a
+      // spawn-room pickup, which auto-equips (#128) - & a left click with the paper
+      // airplane in hand threw it point-blank, armed it at our feet, & we stepped on
+      // our own mine mid-phase.
+      PressAction ("weapon_1");
+      await Task.Delay (50);
+      ReleaseAction ("weapon_1");
       AimAt (victim.GlobalPosition + Vector3.Up);
       PressLeftClick();
       await Task.Delay (80);
