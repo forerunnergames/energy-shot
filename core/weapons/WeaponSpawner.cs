@@ -841,14 +841,16 @@ public partial class WeaponSpawner : Node3D
   // Dropping on purpose (issue #242): Minecraft-style, the item in your hands flies
   // out the way you're looking. Client -> server entry point, then the same
   // validated single-flag path the punch theft uses.
-  public void SendDropTossRequest (Vector3 position, HeldWeapon dropped, Vector3 direction)
+  public void SendDropTossRequest (HeldWeapon dropped, Vector3 direction)
   {
-    if (Multiplayer.IsServer()) { RequestDropToss (position, (int)dropped, direction); return; }
-    RpcId (1, MethodName.RequestDropToss, position, (int)dropped, direction);
+    if (Multiplayer.IsServer()) { RequestDropToss ((int)dropped, direction); return; }
+    RpcId (1, MethodName.RequestDropToss, (int)dropped, direction);
   }
 
+  // The toss starts from the server's own view of where the dropper stands (CodeRabbit
+  // on #243) - a client supplies only what it wants to drop & which way it's looking.
   [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
-  private void RequestDropToss (Vector3 position, int type, Vector3 direction)
+  private void RequestDropToss (int type, Vector3 direction)
   {
     if (!Multiplayer.IsServer()) return;
     var dropperId = SenderOrSelf();
@@ -862,7 +864,7 @@ public partial class WeaponSpawner : Node3D
     }
 
     ServerLog.Event (dropperId, $"drop toss: {dropped} thrown down by [{dropper!.DisplayName}]");
-    SpawnTossed (dropped, position, Horizontal (direction), dropper.DisplayName);
+    SpawnTossed (dropped, dropper.GlobalPosition, Horizontal (direction), dropper.DisplayName);
   }
 
   private static Vector3 Horizontal (Vector3 direction)

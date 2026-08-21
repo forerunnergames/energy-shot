@@ -295,7 +295,7 @@ public partial class Player
     var type = PickEquippedStealable();
     if (type == HeldWeapon.None) return;
     // Request BEFORE clearing, same as DropHeldWeapon (CodeRabbit on #145).
-    Spawner.SendDropTossRequest (GlobalPosition, type, -_camera.GlobalTransform.Basis.Z);
+    Spawner.SendDropTossRequest (type, -_camera.GlobalTransform.Basis.Z);
     if (type == HeldWeapon.Bread) SetBreadHeld (isHeld: false);
     else HeldWeapon &= ~type;
     ForgetTheft (type);
