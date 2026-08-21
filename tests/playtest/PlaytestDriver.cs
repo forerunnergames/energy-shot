@@ -316,6 +316,13 @@ public partial class PlaytestDriver : Node
       // stale by the time we arrive - & the victim is moving through its own phases.
       // Don't spend the swing on thin air; take the spot again next pass.
       if (Self.GlobalPosition.DistanceTo (victim.GlobalPosition) > Self.PunchRange * 0.75f) continue;
+      // Fists again before EVERY swing (#78): re-taking the spot can walk us over a
+      // spawn-room pickup, which auto-equips (#128) - & a left click with the paper
+      // airplane in hand threw it point-blank, armed it at our feet, & we stepped on
+      // our own mine mid-phase.
+      PressAction ("weapon_1");
+      await Task.Delay (50);
+      ReleaseAction ("weapon_1");
       AimAt (victim.GlobalPosition + Vector3.Up);
       PressLeftClick();
       await Task.Delay (80);
@@ -726,7 +733,10 @@ public partial class PlaytestDriver : Node
       PressLeftClick();
       await Task.Delay (60);
       ReleaseLeftClick();
-      await Task.Delay (130);
+      // Outlast the 0.3s punch cooldown between swings (#78): at the old 290ms cadence
+      // every other swing landed inside it & was swallowed, & on a slow runner the
+      // whole 3s ritual could pass with no connected punch.
+      await Task.Delay (300);
     }
 
     // 30s, not 5 (#213): the ritual's own 3s expiry ends it either way, & the health
