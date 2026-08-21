@@ -42,15 +42,30 @@ public partial class Player
   // A dart found us (issue #194). The impact itself does no damage - it plants the
   // next tick's problem. Runs only on the victim's own authority.
   [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
-  private void ReceiveDartHit (string shotByPlayerName)
+  private void ReceiveDartHit (string shotByPlayerName) => EmbedDart (Multiplayer.GetRemoteSenderId(), shotByPlayerName);
+
+  // Stepping on a landed (armed) dart without the blowgun (issues #236 & #248): the
+  // server despawned it & tells us to take it as if it hit us - ownerless, like a
+  // landmine, so nobody scores the eventual zap-out.
+  public void ConfirmDartStepSelf() => ConfirmDartStep(); // The host's own player (an RpcId to yourself is a no-op).
+
+  [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
+  private void ConfirmDartStep()
+  {
+    var sender = Multiplayer.GetRemoteSenderId();
+    if (sender != 1 && sender != 0) return;
+    EmbedDart (0, "a dart on the ground");
+  }
+
+  private void EmbedDart (int attackerId, string attackerName)
   {
     if (!IsMultiplayerAuthority()) return;
     if (SpawnArmor) return; // Armor shrugs darts off like everything else (issue #48).
     if (Fallen) return; // A body mid-death-sequence is scenery (issue #152).
-    _dartOwners.Add ((Multiplayer.GetRemoteSenderId(), shotByPlayerName));
+    _dartOwners.Add ((attackerId, attackerName));
     PoisonDarts = _dartOwners.Count;
     _damageSound.Play(); // The sting is the victim's only impact feedback.
-    GD.Print ($"{DisplayName}: {shotByPlayerName}'s dart stuck in me! ({PoisonDarts} embedded)");
+    GD.Print ($"{DisplayName}: {attackerName}'s dart stuck in me! ({PoisonDarts} embedded)");
     StartPoisonTicksIfIdle();
   }
 
@@ -83,8 +98,8 @@ public partial class Player
     }
   }
 
-  // Death shakes the darts out (issue #194): they fall beside the body as 5s-expiry
-  // pickups a slingshot can load. Request BEFORE clearing (the #145 convention): the
+  // Death shakes the darts out (issues #194 & #236): they fall beside the body as
+  // ARMED ground darts - hazards to step on, ammo to anyone holding the blowgun. Request BEFORE clearing (the #145 convention): the
   // server validates the count against this player's replicated PoisonDarts.
   private void ScatterEmbeddedDarts()
   {

@@ -55,6 +55,7 @@ public partial class Player
     // depend on it. So does bread (issue #190): the death drop clears the loaf right
     // after sending the drop RPC, so without the grace the server denies it.
     foreach (var flag in new[] { HeldWeapon.Laser, HeldWeapon.Banana, HeldWeapon.Boomerang, HeldWeapon.Slingshot, HeldWeapon.PaperAirplane, HeldWeapon.Bread, HeldWeapon.Blowgun }) { if ((removed & flag) != 0) _recentlyHeldUntilMs[flag] = until; }
+    if ((removed & HeldWeapon.Blowgun) != 0) SpillBlowgunDarts(); // Its darts go back to the level's census (issue #236).
   }
 
   // Which slot is out (issue #82). Replicated so every peer renders the right model
@@ -145,7 +146,7 @@ public partial class Player
     _boomerangHeld.Visible = IsBoomerangSelected && HasBoomerang && !IsBoomerangOut; // Empty hand while it's out flying (issue #98).
     _slingshotHeld.Visible = IsSlingshotSelected && HasSlingshot; // Slot 5 (issue #99).
     _airplaneHeld.Visible = IsPaperAirplaneSelected && HasPaperAirplane && !IsAirplaneOut; // Slot 6, empty hand mid-glide (issue #102).
-    _blowgunHeld.Visible = IsBlowgunSelected && HasBlowgun; // Slot 8 (issue #194).
+    _blowgunHeld.Visible = IsBlowgunSelected && HasBlowgun && !IsScoped; // Slot 8 (issue #194); at your eye while scoped (issue #236).
     UpdateHandsVisibility(); // Hands render only while fists are selected (issue #82).
   }
 
@@ -165,6 +166,7 @@ public partial class Player
     if (Input.IsActionJustPressed ("weapon_8") && HasBlowgun) SelectedWeapon = SelectedWeapon.Blowgun; // Slot 8 (issue #194).
     // Cycling (issue #186): mouse wheel for mouse players, Q & E for trackpads -
     // reaching for 7 mid-fight to eat is not a real option.
+    if (IsScoped) return; // While scoped the wheel is the zoom (issue #236), not the weapon cycle.
     if (Input.IsActionJustPressed ("cycle_weapon_next")) CycleSelectedWeapon (1);
     if (Input.IsActionJustPressed ("cycle_weapon_previous")) CycleSelectedWeapon (-1);
   }

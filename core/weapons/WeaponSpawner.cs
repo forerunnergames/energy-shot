@@ -26,6 +26,12 @@ public partial class WeaponSpawner : Node3D
   [Export] public int MaxSlingshots = 1;
   [Export] public int MaxPaperAirplanes = 1;
   [Export] public int MaxBlowguns = 1; // The stealth weapon (issue #194).
+  // The dart economy (issue #236): exactly this many darts exist, ever - in blowguns,
+  // embedded in players, nocked in slingshots, flying, or on the ground. The census
+  // below spawns floating pickups until the count is whole again (the void eats some).
+  [Export] public int MaxDarts = 10;
+  private const float DartFlightGraceSeconds = 7.0f; // A fired dart counts until it lands or hits (max lifetime + margin).
+  private readonly List <ulong> _dartFlightsUntilMs = new();
   // Sanity bound on a death's dart scatter (issue #194): more embedded darts than
   // this is already a story, & the pickups expire in 5s anyway.
   private const int MaxScatteredDarts = 8;
@@ -200,7 +206,31 @@ public partial class WeaponSpawner : Node3D
     }
 
     SpawnSpecialsIfMissing (pickups, players, freePoints);
+    SpawnDartsIfMissing (pickups, players); // Issue #236.
     EnsurePlaytestPickups (pickups, players);
+  }
+
+  // ------------------------------------------------ dart census (issue #236)
+
+  private int CountDarts (List <WeaponPickup> pickups, List <Player> players)
+  {
+    _dartFlightsUntilMs.RemoveAll (until => Time.GetTicksMsec() > until);
+    return pickups.Count (pickup => pickup.Weapon == HeldWeapon.PoisonDart) + players.Sum (player => player.BlowgunDarts + player.PoisonDarts) + _ammoEscrow.Count (ammo => ammo.Type == HeldWeapon.PoisonDart) + _dartFlightsUntilMs.Count;
+  }
+
+  // Floating (spawned) darts scatter over the arena floor, not the weapon points: only
+  // a blowgun holder can collect them, so they're ammo to find, not loot to camp.
+  // Not in playtest runs: the harness asserts its pickups by position (CodeRabbit on #180).
+  private void SpawnDartsIfMissing (List <WeaponPickup> pickups, List <Player> players)
+  {
+    if (_isPlaytest) return;
+    var missing = MaxDarts - CountDarts (pickups, players);
+    for (var i = 0; i < missing; ++i)
+    {
+      var target = new Vector3 (_rng.RandfRange (-35.0f, 35.0f), 0.0f, _rng.RandfRange (-35.0f, 35.0f));
+      if (!TryFindGround (target, out var spot)) continue;
+      Spawn (HeldWeapon.PoisonDart, spot, expires: false);
+    }
   }
 
   // The banana, boomerang (issue #98), & slingshot (issue #99) respawn at random free
@@ -520,9 +550,97 @@ public partial class WeaponSpawner : Node3D
     {
       var angle = Mathf.Tau * i / Mathf.Max (1, scattered);
       var target = position + new Vector3 (Mathf.Cos (angle), 0.0f, Mathf.Sin (angle)) * 0.9f;
-      if (!TryFindGround (target, out var spot)) continue; // Over the void: that dart is simply gone.
-      Spawn (HeldWeapon.PoisonDart, spot, expires: true, victim.DisplayName);
+      if (!TryFindGround (target, out var spot)) continue; // Over the void: the census respawns it.
+      Spawn (HeldWeapon.PoisonDart, spot, expires: false, victim.DisplayName, armed: true); // A landed dart is a hazard (issue #248).
     }
+  }
+
+  // Client -> server entry points for the dart economy (issue #236).
+  public void SendDartFiredRequest()
+  {
+    if (Multiplayer.IsServer()) { RequestDartFired(); return; }
+    RpcId (1, MethodName.RequestDartFired);
+  }
+
+  public void SendDartLandRequest (Vector3 position)
+  {
+    if (Multiplayer.IsServer()) { RequestDartLand (position); return; }
+    RpcId (1, MethodName.RequestDartLand, position);
+  }
+
+  public void SendDartAmmoRequest (string pickupName)
+  {
+    if (Multiplayer.IsServer()) { RequestDartAmmo (pickupName); return; }
+    RpcId (1, MethodName.RequestDartAmmo, pickupName);
+  }
+
+  public void SendDartStepRequest (string pickupName)
+  {
+    if (Multiplayer.IsServer()) { RequestDartStep (pickupName); return; }
+    RpcId (1, MethodName.RequestDartStep, pickupName);
+  }
+
+  // A dart left a blowgun: it counts as in flight for a few seconds so the census
+  // never mints a replacement while it's still in the air.
+  [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
+  private void RequestDartFired()
+  {
+    if (!Multiplayer.IsServer()) return;
+    _dartFlightsUntilMs.Add (Time.GetTicksMsec() + (ulong)(DartFlightGraceSeconds * 1000.0f));
+  }
+
+  // A miss that hit geometry lands as an ARMED ground dart where it stopped (#248).
+  [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
+  private void RequestDartLand (Vector3 position)
+  {
+    if (!Multiplayer.IsServer()) return;
+    if (!TryFindGround (position, out var spot)) { ServerLog.Event (SenderOrSelf(), "dart land skip: no ground; the census respawns it"); return; }
+    ServerLog.Event (SenderOrSelf(), $"dart land: armed at {spot}");
+    Spawn (HeldWeapon.PoisonDart, spot, expires: false, armed: true);
+  }
+
+  // Walking over a ground dart while HOLDING the blowgun loads it as ammo - floating
+  // or landed alike. Validated against the replicated HeldWeapon (#145 convention).
+  [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
+  private void RequestDartAmmo (string pickupName)
+  {
+    if (!Multiplayer.IsServer()) return;
+    var collectorId = SenderOrSelf();
+    var collector = Players().FirstOrDefault (player => player.NetworkId == collectorId);
+    var pickup = GetParent().GetNodeOrNull <WeaponPickup> (pickupName);
+
+    if (collector == null || (collector.HeldOrRecentlyHeld & HeldWeapon.Blowgun) == 0 || pickup == null || pickup.IsQueuedForDeletion() || pickup.Weapon != HeldWeapon.PoisonDart)
+    {
+      ServerLog.Event (collectorId, $"dart ammo deny: [{pickupName}] is not a dart or the sender holds no blowgun");
+      return;
+    }
+
+    pickup.QueueFree(); // Despawns on every peer via the MultiplayerSpawner.
+    ServerLog.Event (collectorId, $"dart ammo: [{collector.DisplayName}] loaded a dart from [{pickupName}]");
+    if (collectorId == Multiplayer.GetUniqueId()) { collector.ConfirmDartAmmoSelf(); return; }
+    collector.RpcId (collectorId, Player.MethodName.ConfirmDartAmmo);
+  }
+
+  // Stepping on a LANDED (armed) dart with no blowgun in hand: it's gone from the
+  // ground & into you, as if it hit you (issues #236 & #248).
+  [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
+  private void RequestDartStep (string pickupName)
+  {
+    if (!Multiplayer.IsServer()) return;
+    var stepperId = SenderOrSelf();
+    var stepper = Players().FirstOrDefault (player => player.NetworkId == stepperId);
+    var pickup = GetParent().GetNodeOrNull <WeaponPickup> (pickupName);
+
+    if (stepper == null || stepper.SpawnArmor || stepper.Fallen || pickup == null || pickup.IsQueuedForDeletion() || pickup.Weapon != HeldWeapon.PoisonDart || !pickup.Armed)
+    {
+      ServerLog.Event (stepperId, $"dart step deny: [{pickupName}] is not an armed dart, or the sender is armored or down");
+      return;
+    }
+
+    pickup.QueueFree();
+    ServerLog.Event (stepperId, $"dart step: [{stepper.DisplayName}] stepped on a landed dart");
+    if (stepperId == Multiplayer.GetUniqueId()) { stepper.ConfirmDartStepSelf(); return; }
+    stepper.RpcId (stepperId, Player.MethodName.ConfirmDartStep);
   }
 
   // A slung dart connected (issue #194): consume the shooter's escrowed dart so it

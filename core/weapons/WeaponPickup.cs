@@ -136,6 +136,13 @@ public partial class WeaponPickup : Area3D
     // An armed mine LIES on the ground (issue #204): it spawns at the standard
     // pickup hover like every other pickup, which left the airplane bobbing in
     // mid-air instead of sitting where it came down, waiting to be stepped on.
+    if (IsLandedDart)
+    {
+      _visual.Position = Vector3.Down * MineRestDrop;
+      _visual.Rotation = new Vector3 (0.0f, _visual.Rotation.Y, Mathf.DegToRad (90.0f)); // On its side, stuck in the ground.
+      return;
+    }
+
     if (IsArmedMine)
     {
       _visual.Position = Vector3.Down * MineRestDrop;
@@ -195,12 +202,19 @@ public partial class WeaponPickup : Area3D
   {
     if (collector.IsLoadingAmmo) { _spawner.SendAmmoLoadRequest (Name); return; }
     if (IsArmedMine) { _spawner.SendMineTriggerRequest (Name); return; }
+    // Darts (issues #236 & #248): ammo for a blowgun holder; a landed one is a hazard
+    // to anyone else; a floating one is nothing to anyone else (IsEligibleCollector).
+    if (Weapon == HeldWeapon.PoisonDart && collector.HasBlowgun) { _spawner.SendDartAmmoRequest (Name); return; }
+    if (Weapon == HeldWeapon.PoisonDart) { _spawner.SendDartStepRequest (Name); return; }
     _spawner.SendPickupRequest (Name, collector.NetworkId);
   }
 
   // An airplane that came down from flight (issue #191). Anything else - including a
   // fresh spawn-point airplane - is an ordinary pickup you can put in slot 6 (#102).
   private bool IsArmedMine => Weapon == HeldWeapon.PaperAirplane && Armed;
+  // A landed dart lies flat on the ground like a mine (issue #248) - the visual that
+  // says 'hazard', vs. the floating spin that says 'pickup'.
+  private bool IsLandedDart => Weapon == HeldWeapon.PoisonDart && Armed;
   // Pickups spawn a hover height up so they're reachable; a mine drops back to the
   // surface it landed on (issue #204).
   private const float MineRestDrop = 0.85f;
@@ -231,7 +245,10 @@ public partial class WeaponPickup : Area3D
   {
     if (!player.IsMultiplayerAuthority() || player.Fallen) return false;
     if (player.IsLoadingAmmo) return true;
-    if (Weapon == HeldWeapon.PoisonDart) return false; // A fallen dart is ammo, never a hand weapon (issue #194).
+    // Darts (issues #236 & #248): a blowgun holder collects any ground dart as ammo; a
+    // LANDED (armed) dart is a hazard anyone else can step on; a floating one is
+    // nothing to anyone else - you walk through it.
+    if (Weapon == HeldWeapon.PoisonDart) return player.HasBlowgun || (Armed && !player.SpawnArmor);
     if (IsArmedMine) return !player.SpawnArmor && !player.Burning;
     return !player.Holds (Weapon);
   }

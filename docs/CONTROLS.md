@@ -27,7 +27,7 @@ Slot keys select what's in your hands. You spawn with fists **and bread** (bread
 | 5 | Slingshot | Hold left-click to draw, release to fling a stone. Longer draw = faster, flatter, harder (never a one-hit). A quick tap just relaxes the band - stones need a minimum draw, & a short cooldown separates shots. **Universal ammo**: see below |
 | 6 | Paper airplane | Left-click to throw. Locks onto whoever's under your crosshair & glides slowly after them; punch an incoming one (fists out) to catch it & throw it back. Only one exists in the whole game, & it is a personal hazard - see below |
 | 0 or B | Bread | Left-click to eat: a 3-second rooted ritual that heals you to full. One loaf per life - see below |
-| 8 | Blowgun | The stealth weapon - with a scope, because of course it has a scope. Left-click puffs a poison dart, right-click (hold) zooms. The shot is nearly silent: only players within a few feet of you hear it, & everyone else only hears a dart that flies close by them. Darts do no impact damage - they stick in & poison: every 5 seconds the victim loses 10% health PER embedded dart, & their health bar turns green. Bread heals as normal but does NOT remove darts. On a zap-out the darts fall beside the body for 5 seconds - slingshot players can load one as ammo (a slung dart poisons identically) |
+| 8 | Blowgun | The silenced sniper - with a scope, because of course. Right-click to look THROUGH the scope (mouse wheel zooms in and out, very far); the reticle drifts - more the further you zoom - and only settles for about a second between heartbeats: time the shot into the settled (green) window. Left-click puffs a poison dart: fast but visible, nearly no drop, very long range, no recoil. Darts do no impact damage - they stick in and poison: 10% health per dart every 5 seconds, health bar turns green; bread heals but doesn't remove darts. **The gun starts empty**: there are 10 darts in the whole level - find them. See "Darts" below |
 
 ### Slingshot universal ammo
 
@@ -88,6 +88,10 @@ The spawn box is a boxing ring: its walls are rubber ropes. Run, slide, or get p
 ## Headshots
 
 Every player has a floating sensor dome above the body. A laser bolt or a slingshot stone (or slung item) that hits the dome is a headshot: a flat 300 damage that ignores the difficulty handicap - one zaps an Expert or Intermediate outright, a Beginner takes exactly two. Punches, bananas, boomerangs, airplanes & darts don't care where they land. Your hitmarker rings higher on a dome hit.
+
+## Darts
+
+Ten darts exist in the level, no more, no less. A **floating, spinning** dart is a spawned pickup: harmless, and only a player holding the blowgun can collect it (walk over it). A dart **lying flat** on the ground has landed - off a zapped-out victim, or a miss that hit a wall - and it's a hazard: step on it without the blowgun and it poisons you as if it hit you; with the blowgun in hand you pick it up as ammo. Slingshot players can load either kind and fire it; a slung dart poisons the same. Drop or lose the blowgun and its darts go back into the level. Darts that fall off the stage respawn.
 
 ## Good to know
 
