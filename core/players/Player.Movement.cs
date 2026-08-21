@@ -222,7 +222,7 @@ public partial class Player
     if (_slideJumpCarrying) return; // Slide-jump air (issue #149): the slide's momentum owns the ride until touchdown.
     var speed = MoveSpeed();
     var inputDir = Input.GetVector ("move_left", "move_right", "move_forward", "move_back");
-    var inputDirection = (Transform.Basis * new Vector3 (inputDir.X, 0, inputDir.Y)).Normalized();
+    var inputDirection = Wobble ((Transform.Basis * new Vector3 (inputDir.X, 0, inputDir.Y)).Normalized()); // Poisoned players weave (issue #261).
 
     if (inputDirection != Vector3.Zero)
     {
