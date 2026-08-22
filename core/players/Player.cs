@@ -473,7 +473,9 @@ public partial class Player : CharacterBody3D
     Move (ref velocity);
     Velocity = velocity;
     _preMoveVelocity = velocity; // What we arrived with, for the ring ropes (issue #174).
-    if (!MoveAndSlide()) return;
+    var moved = MoveAndSlide();
+    UpdateFallDamage(); // Apex tracking & the landing bill (issue #263).
+    if (!moved) return;
     HandleCollisions();
   }
 
