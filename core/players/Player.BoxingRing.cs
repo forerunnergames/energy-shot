@@ -13,6 +13,11 @@ public partial class Player
   // scales with how fast you hit them.
   [Export] public float RopeRestitution = 1.3f;
   [Export] public float RopeShove = 9.0f;
+  // The chain killer (issue #276): restitution 1.3 + the shove grows every wall-to-
+  // wall rally ~1.9x per hit - 7 m/s walking becomes 150+ m/s in four bounces, then
+  // clean through a 0.3m wall or over the top into the void. The cap keeps any legit
+  // hit violently bouncy (20 m/s crosses the ring in ~0.6s) while the chain converges.
+  [Export] public float RopeExitSpeedMax = 20.0f;
   [Export] public float RopeShovePerImpactSpeed = 0.6f;
   [Export] public float RopeBounceSeconds = 0.45f;
   [Export] public float HeadBounceVelocity = 26.0f;
@@ -41,7 +46,9 @@ public partial class Player
     var impact = -_preMoveVelocity.Dot (normal);
     if (impact < MinRopeImpactSpeed) return false; // Leaning on it, not hitting it.
     var bounced = _preMoveVelocity.Bounce (normal) * RopeRestitution + normal * (RopeShove + impact * RopeShovePerImpactSpeed);
-    Velocity = new Vector3 (bounced.X, Velocity.Y, bounced.Z);
+    var flat = new Vector3 (bounced.X, 0.0f, bounced.Z);
+    if (flat.Length() > RopeExitSpeedMax) flat = flat.Normalized() * RopeExitSpeedMax; // The rally converges (issue #276).
+    Velocity = new Vector3 (flat.X, Velocity.Y, flat.Z);
     _stickyFlightSecondsLeft = Mathf.Max (_stickyFlightSecondsLeft, RopeBounceSeconds);
     return true;
   }
