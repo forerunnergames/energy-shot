@@ -27,7 +27,7 @@ Slot keys select what's in your hands. You spawn with fists **and bread** (bread
 | 5 | Slingshot | Hold left-click to draw, release to fling a stone. Longer draw = faster, flatter, harder (never a one-hit). A quick tap just relaxes the band - stones need a minimum draw, & a short cooldown separates shots. **Universal ammo**: see below |
 | 6 | Paper airplane | Left-click to throw. Locks onto whoever's under your crosshair & glides slowly after them; punch an incoming one (fists out) to catch it & throw it back. Only one exists in the whole game, & it is a personal hazard - see below |
 | 0 or B | Bread | Left-click to eat: a 3-second rooted ritual that heals you to full. One loaf per life - see below |
-| 8 | Blowgun | The silenced sniper - with a scope, because of course. Right-click to look THROUGH the scope (mouse wheel zooms in and out, very far); the reticle drifts - more the further you zoom - and only settles for about a second between heartbeats: time the shot into the settled (green) window. Left-click puffs a poison dart: fast but visible, nearly no drop, very long range, no recoil. Darts do no impact damage - they stick in and poison: 10% health per dart every 5 seconds, health bar turns green, your screen blurs and a green vignette pulses with every tick, and you walk drunk - the more darts, the worse; bread heals but doesn't remove darts. **The gun starts empty**: there are 10 darts in the whole level - find them; out of darts, left-click swings it like a club (punch reach and stun, twice a punch's damage, but it never knocks anything loose or steals). See "Darts" below |
+| 8 | Blowgun | The silenced sniper - with a scope, because of course. Right-click to look THROUGH the scope (mouse wheel zooms in and out, very far); a red laser-dot reticle drifts - more the further you zoom - and only settles for about a second between heartbeats: time the shot for when the hazy dot snaps tight with a white-hot core. Left-click puffs a poison dart: fast but visible, nearly no drop, very long range, no recoil. Darts do no impact damage - they stick in and poison: 10% health per dart every 5 seconds, health bar turns green, your screen blurs and a green vignette pulses with every tick, and you walk drunk - the more darts, the worse; bread heals but doesn't remove darts. **The gun starts empty**: there are 10 darts in the whole level - find them; out of darts, left-click swings it like a club (punch reach and stun, twice a punch's damage, but it never knocks anything loose or steals). See "Darts" below |
 
 ### Slingshot universal ammo
 
@@ -84,7 +84,7 @@ There is exactly **one** paper airplane in the arena. It's a slot-6 weapon like 
 
 ## The boxing ring
 
-The spawn box is a boxing ring: its walls are rubber ropes. Run, slide, or get punched into one and you bounce back the way you came with a big shove - the harder you hit, the harder it flings you; jump into the ropes and you can be thrown clean across the ring. Stand or jump on top of a rope and it trampolines you up. Land on top of another player's head and you spring high into the air. Spawn armor & the room's protection work exactly as before.
+The spawn box is a boxing ring: its walls are rubber ropes. Run, slide, or get punched into one and you bounce back the way you came with a big shove - the harder you hit, the harder it flings you; jump into the ropes and you can be thrown clean across the ring. Stand or jump on top of a rope and it trampolines you up - each bounce a little higher, up to a cap you reach after about ten in a row. Land on top of another player's head and you spring high into the air. Spawn armor & the room's protection work exactly as before.
 
 ## Headshots
 
@@ -93,6 +93,10 @@ Every player has a floating sensor dome above the body. A laser bolt or a slings
 ## Darts
 
 Ten darts exist in the level, no more, no less. A **floating, spinning** dart is a spawned pickup: harmless, and only a player holding the blowgun can collect it (walk over it). A dart **lying flat** on the ground has landed - off a zapped-out victim, or a miss that hit a wall - and it's a hazard: step on it without the blowgun and it poisons you as if it hit you; with the blowgun in hand you pick it up as ammo. Slingshot players can load either kind and fire it; a slung dart poisons the same. Drop or lose the blowgun and its darts go back into the level. Darts that fall off the stage respawn.
+
+## Fall damage
+
+Dropping more than about 10 m hurts: 5 health per extra metre, never an instant zap-out. The respawn drop-in from the spawn room is free while your spawn armor is up; stay up there dithering and the 30 m trip costs you.
 
 ## Good to know
 
