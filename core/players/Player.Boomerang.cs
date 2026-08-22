@@ -40,7 +40,7 @@ public partial class Player
   private void ThrowBoomerang()
   {
     CancelSpawnArmorIfFired();
-    var direction = -_camera.GlobalTransform.Basis.Z;
+    var direction = ShotDirection(); // Converged in third person (issue #338).
     var origin = _camera.GlobalPosition + direction * 0.9f;
     _liveBoomerang = SpawnBoomerang (origin, direction, isLive: true);
     Rpc (MethodName.SpawnVisualBoomerang, origin, direction);

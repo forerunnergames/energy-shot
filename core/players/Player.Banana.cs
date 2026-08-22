@@ -31,7 +31,7 @@ public partial class Player
   {
     CancelSpawnArmorIfFired();
     _bananaLauncher.StartCooldown();
-    var direction = -_camera.GlobalTransform.Basis.Z;
+    var direction = ShotDirection(); // Converged in third person (issue #338).
     var origin = _camera.GlobalPosition + direction * 0.9f;
     SpawnBanana (origin, direction, isLive: true);
     Rpc (MethodName.SpawnVisualBanana, origin, direction);

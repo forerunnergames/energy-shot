@@ -196,7 +196,7 @@ public partial class Player
     // The airplane defines its own ballistics (issue #191): fast, straight, & it
     // ignites whoever it hits instead of dealing the stone's draw-scaled damage.
     if (ammo == HeldWeapon.PaperAirplane) { speed = SlungAirplaneSpeed; gravity = 0.0f; }
-    var direction = -_camera.GlobalTransform.Basis.Z;
+    var direction = ShotDirection(); // Converged in third person (issue #338).
     var sweepStart = _camera.GlobalPosition; // First sweep covers camera->muzzle (issues #112 & #163).
     var origin = sweepStart + direction * MuzzleOffsetMeters;
     SpawnStone (origin, sweepStart, direction, speed, gravity, energy, isLive: true, ammo);
