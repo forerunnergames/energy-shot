@@ -187,7 +187,7 @@ public partial class Player
   {
     if (_cameraKickRemaining <= 0.0f) return;
     var recover = Mathf.Min (_cameraKickRemaining, CameraKickRecoverySpeed * (float)delta);
-    _camera.RotateX (-recover);
+    SetCameraPitch (_cameraPitch - recover); // Through the one writer (issue #322).
     _cameraKickRemaining -= recover;
   }
 
@@ -197,7 +197,7 @@ public partial class Player
     // Aim direction is captured before the camera kick so the kick is purely visual.
     var direction = -_camera.GlobalTransform.Basis.Z;
     var kick = energy * CameraKickRadians;
-    _camera.RotateX (kick);
+    SetCameraPitch (_cameraPitch + kick); // Through the one writer (issue #322).
     _cameraKickRemaining += kick;
     TryRocketBoost (direction, energy);
     var sweepStart = _camera.GlobalPosition;
