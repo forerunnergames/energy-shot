@@ -183,27 +183,12 @@ public partial class Player
     EmitSignal (SignalName.HealthChanged, Health);
   }
 
-  private ulong _lastKickMs;
-
-  // Recovery waits out a short pause after the last shot (issue #237), so a burst
-  // climbs instead of jolting & snapping back between rounds; then it settles fast.
   private void UpdateCameraKick (double delta)
   {
     if (_cameraKickRemaining <= 0.0f) return;
-    if (Time.GetTicksMsec() - _lastKickMs < (ulong)(RecoilRecoveryDelaySeconds * 1000.0f)) return;
     var recover = Mathf.Min (_cameraKickRemaining, CameraKickRecoverySpeed * (float)delta);
     _camera.RotateX (-recover);
     _cameraKickRemaining -= recover;
-  }
-
-  // One shot's worth of climb, capped so a long burst can't wrap you into the sky.
-  private void Kick (float radians)
-  {
-    var room = Mathf.Max (0.0f, MaxRecoilRadians - _cameraKickRemaining);
-    var applied = Mathf.Min (radians, room);
-    _camera.RotateX (applied);
-    _cameraKickRemaining += applied;
-    _lastKickMs = Time.GetTicksMsec();
   }
 
   private void OnWeaponShotFired (float energy, bool isFullAuto)
@@ -211,7 +196,9 @@ public partial class Player
     CancelSpawnArmorIfFired();
     // Aim direction is captured before the camera kick so the kick is purely visual.
     var direction = -_camera.GlobalTransform.Basis.Z;
-    Kick (isFullAuto ? FullAutoKickRadians : Mathf.Max (LaserTapKickMinRadians, energy * CameraKickRadians)); // Issue #237.
+    var kick = energy * CameraKickRadians;
+    _camera.RotateX (kick);
+    _cameraKickRemaining += kick;
     TryRocketBoost (direction, energy);
     var sweepStart = _camera.GlobalPosition;
     var origin = sweepStart + direction * MuzzleOffsetMeters;
