@@ -1,5 +1,6 @@
 using com.forerunnergames.energyshot.ui.hud;
 using com.forerunnergames.energyshot.weapons;
+using com.forerunnergames.energyshot.utilities;
 using Godot;
 
 namespace com.forerunnergames.energyshot.players;
@@ -35,6 +36,13 @@ public partial class Player
   private float _blowgunCooldownLeft;
   private float _unscopedFovDegrees;
   private bool _isScoped;
+  private bool _holdToScope;
+
+  public void RefreshScopeMode() => _holdToScope = Settings.HoldToScope; // Applies immediately from the pause menu (issue #290).
+
+  // Hold-vs-toggle scoping (issue #290), one pure decision: hold mode tracks the
+  // button exactly; toggle mode flips on each fresh press; losing the gun unscopes.
+  public static bool NextScoped (bool canScope, bool holdMode, bool pressed, bool justPressed, bool current) => canScope && (holdMode ? pressed : justPressed ? !current : current);
   private int _zoomStep;
   private float _scopeTime;
   private float _sinceBeat;
@@ -83,8 +91,8 @@ public partial class Player
   private void UpdateScope (float dt)
   {
     var canScope = _isInputEnabled && !Fallen && IsBlowgunSelected && HasBlowgun;
-    if (!canScope && _isScoped) SetScoped (false);
-    if (canScope && Input.IsActionJustPressed ("scope")) SetScoped (!_isScoped);
+    var next = NextScoped (canScope, _holdToScope, Input.IsActionPressed ("scope"), Input.IsActionJustPressed ("scope"), _isScoped);
+    if (next != _isScoped) SetScoped (next);
     if (!_isScoped) return;
     _scopeTime += dt;
     _sinceBeat += dt;
