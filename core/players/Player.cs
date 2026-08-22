@@ -217,7 +217,15 @@ public partial class Player : CharacterBody3D
   // 200 damage: one-hit-kills an Expert, bypassing the survivable clamp (issue #83).
   [Export] public float StickyBananaEnergy = 2.0f;
   [Export] public float CameraKickRadians = 0.06f;
-  [Export] public float CameraKickRecoverySpeed = 0.4f;
+  // The recoil model (issue #237): every gun climbs the crosshair, & the climb
+  // ACCUMULATES while you keep firing - recovery only begins after a pause. A laser
+  // tap has a floor so a quick shot still kicks; full-auto kicks small per shot but
+  // twenty of them stack; the banana launcher's own big kick rides the same ledger.
+  [Export] public float LaserTapKickMinRadians = 0.03f;
+  [Export] public float FullAutoKickRadians = 0.014f;
+  [Export] public float MaxRecoilRadians = 0.5f;
+  [Export] public float RecoilRecoveryDelaySeconds = 0.3f;
+  [Export] public float CameraKickRecoverySpeed = 1.2f;
   [Export] public float Speed = 7.0f;
   [Export] public float SlideSpeedMultiplier = 2.0f;
   // 7s -> 3.5s (issue #148, reversing the earlier lengthening): the duration cap is
