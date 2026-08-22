@@ -195,7 +195,7 @@ public partial class Player
   {
     CancelSpawnArmorIfFired();
     // Aim direction is captured before the camera kick so the kick is purely visual.
-    var direction = -_camera.GlobalTransform.Basis.Z;
+    var direction = ShotDirection(); // Converged in third person (issue #338).
     var kick = energy * CameraKickRadians;
     SetCameraPitch (_cameraPitch + kick); // Through the one writer (issue #322).
     _cameraKickRemaining += kick;
