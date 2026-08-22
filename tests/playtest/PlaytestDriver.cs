@@ -1574,9 +1574,11 @@ public partial class PlaytestDriver : Node
   private async Task RunChatPhases()
   {
     var chat = ChatBoxNode();
-    PressAction ("chat");
+    // A real physical T press (CodeRabbit): the chat action binds physical_keycode 84,
+    // & a synthetic action event would sidestep the very binding under test.
+    Input.ParseInputEvent (new InputEventKey { PhysicalKeycode = Key.T, Pressed = true });
+    Input.ParseInputEvent (new InputEventKey { PhysicalKeycode = Key.T, Pressed = false });
     await WaitUntil (() => chat.IsOpen && chat.Visible && chat.InputFocused, 10, "T opened the chat line - visible & focused (#188)");
-    ReleaseAction ("chat");
     chat.InputText = ChatMarker;
     Input.ParseInputEvent (new InputEventKey { Keycode = Key.Enter, Pressed = true });
     Input.ParseInputEvent (new InputEventKey { Keycode = Key.Enter, Pressed = false });
