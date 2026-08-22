@@ -15,7 +15,12 @@ public partial class BananaProjectile : Node3D
   [Export] public float GravityAcceleration = 24.0f;
   [Export] public float MaxLifetimeSeconds = 8.0f;
   [Export] public float FuseSeconds = 1.2f;
-  [Export] public float Restitution = 0.55f;
+  // Split bounce (issue #235, Caleb): the banana is a banana, not a rubber ball. The
+  // part of its speed going INTO a surface mostly dies (a little hop), while the part
+  // sliding ALONG it keeps most of its speed - so a straight-down landing plops & a
+  // glancing one skids.
+  [Export] public float Restitution = 0.18f;
+  [Export] public float SlideRetention = 0.85f;
   [Export] public float SpinRadiansPerSecond = 10.0f;
   private const float FlashRadius = 6.0f;
   private const float FlashSeconds = 0.4f;
@@ -94,7 +99,9 @@ public partial class BananaProjectile : Node3D
   {
     LightFuse();
     var normal = (Vector3)hit["normal"];
-    _velocity = _velocity.Bounce (normal) * Restitution;
+    var into = normal * _velocity.Dot (normal); // The component driving into the surface (negative along the normal).
+    var along = _velocity - into;
+    _velocity = along * SlideRetention - into * Restitution; // Flip & squash the plunge, keep the skid.
     GlobalPosition = (Vector3)hit["position"] + normal * SurfaceClearance;
   }
 

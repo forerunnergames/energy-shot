@@ -49,9 +49,19 @@ public partial class ChatBox : VBoxContainer
     if (IsOpen) return;
     _input.Clear();
     _input.Visible = true;
-    _input.GrabFocus();
+    // The T-does-nothing bug: this container starts hidden when no lines linger, & a
+    // hidden container can't hand focus to its child - the box opened invisibly &
+    // silently ate the keyboard. Show FIRST, then grab focus a frame later, once
+    // visibility has propagated.
+    Visible = true;
+    _input.CallDeferred (Control.MethodName.GrabFocus);
     EmitSignal (SignalName.Opened);
   }
+
+  // Playtest surface: the phase asserts what a player actually experiences.
+  public bool InputFocused => _input.HasFocus();
+  public string VisibleText => _label.Text;
+  public string InputText { get => _input.Text; set => _input.Text = value; }
 
   public void Close()
   {
