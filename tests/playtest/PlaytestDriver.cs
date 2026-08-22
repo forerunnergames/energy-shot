@@ -1580,8 +1580,9 @@ public partial class PlaytestDriver : Node
       {
         GD.Print ($"SlingAStone: selection was stomped to {Self.SelectedWeapon} - reselecting the slingshot (issue #272)");
         PressAction ("weapon_5");
-        await TryWaitUntil (() => Self.SelectedWeapon == SelectedWeapon.Slingshot, 5);
+        var reselected = await TryWaitUntil (() => Self.SelectedWeapon == SelectedWeapon.Slingshot, 5);
         ReleaseAction ("weapon_5");
+        if (!reselected) continue; // No slingshot in hand (lost to a death?) - a draw wait would just burn 15s (CodeRabbit).
       }
 
       _lastStone = null;
@@ -1590,8 +1591,10 @@ public partial class PlaytestDriver : Node
       // Diagnosis for issue #272: which link breaks - the press, the draw, or the fire.
       GD.Print ($"SlingAStone attempt {attempt}: pressed={Input.IsActionPressed ("shoot")} draw={Self.SlingshotDrawSeconds:0.00}/{targetDrawSeconds:0.00} selected={Self.SelectedWeapon} ammo={Self.SlingshotAmmo}");
       ReleaseAction ("shoot");
-      await TryWaitUntil (() => _lastStone != null, 3);
-      if (_lastStone != null) return _lastStone;
+      // Only OUR live stone counts (CodeRabbit): TrackStone also catches remote
+      // players' visual copies, which would false-pass the spawn assert.
+      await TryWaitUntil (() => _lastStone != null && IsInstanceValid (_lastStone) && _lastStone.Shooter == Self, 3);
+      if (_lastStone != null && IsInstanceValid (_lastStone) && _lastStone.Shooter == Self) return _lastStone;
       GD.Print ($"SlingAStone attempt {attempt}: released, no stone; draw now {Self.SlingshotDrawSeconds:0.00}");
     }
 
