@@ -61,6 +61,7 @@ public partial class Player
   private float _slingshotCooldownLeft;
   private SlingshotStone? _ammoStone;
   private float SlingshotDrawFraction => Mathf.Clamp (_slingshotDrawSeconds / SlingshotMaxDrawSeconds, 0.0f, 1.0f);
+  public float SlingshotDrawSeconds => _slingshotDrawSeconds; // The playtest reads real engine-time draw (issue #272).
   // Ammo only loads while the slingshot is actually out & empty (issue #190); a
   // loaded (or holstered) slingshot leaves normal pickup rules alone.
   // A slung item is still ours until it lands: the server's escrow holds it, so a
