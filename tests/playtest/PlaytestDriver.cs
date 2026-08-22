@@ -1369,6 +1369,7 @@ public partial class PlaytestDriver : Node
     // returns via its own fix PR with a green run as proof. LOUD, never silent.
     GD.Print ("QUARANTINED: punch-theft & headshot end-of-run phases skipped pending issue #312");
     await RunBlowgunPhase (victim);
+    await RunClubPhase();
     await RunDropPhase();
     await RunRingPhase();
   }
@@ -1577,6 +1578,45 @@ public partial class PlaytestDriver : Node
 
   // Drop on X (#242): the equipped laser flies out the way we look & lands as a
   // tossed pickup we no longer hold.
+  // The empty blowgun is a club (#269) - the equipped-empty blunt-hit cell of the
+  // coverage matrix (issue #316, Aaron's example gap: this cell shipped untested).
+  // The HOST is the target: it idles clean at its spawn, so the exact-damage assert
+  // can't be muddied by the victim's poison ticks (a tick & a club cost the same).
+  private async Task RunClubPhase()
+  {
+    var host = FindPlayer (HostName)!;
+    // Empty the gun the fun way: X-drop spills the darts (#236) & the tossed gun
+    // lands ahead, past the spill - re-collecting it walks AWAY from the loose darts.
+    Assert (Self.Holds (HeldWeapon.Blowgun) && Self.BlowgunDarts > 0, "blowgun in hand with darts to spill (#236/#316)");
+    PressAction ("weapon_8");
+    await Task.Delay (100);
+    ReleaseAction ("weapon_8");
+    var dropSpot = Self.GlobalPosition;
+    AimAt (dropSpot + new Vector3 (0.0f, 1.0f, -3.0f));
+    PressAction ("drop");
+    await Task.Delay (60);
+    ReleaseAction ("drop");
+    await WaitUntil (() => !Self.Holds (HeldWeapon.Blowgun) && Self.BlowgunDarts == 0, 10, "dropping the blowgun spilled its darts (#236)");
+    await WaitUntil (() => DroppedNear (HeldWeapon.Blowgun, dropSpot + new Vector3 (0.0f, 0.0f, -2.5f)) != null, 20, "the dropped blowgun landed ahead as a pickup (#242)");
+    await WaitUntil (() => WalkedTo (DroppedNear (HeldWeapon.Blowgun, dropSpot + new Vector3 (0.0f, 0.0f, -2.5f))?.GlobalPosition ?? Self.GlobalPosition), 20, "walked onto the dropped blowgun (#316)");
+    await WaitUntil (() => Self.Holds (HeldWeapon.Blowgun) && Self.BlowgunDarts == 0, 15, "re-collected the blowgun EMPTY (#316)");
+    PressAction ("weapon_8");
+    await Task.Delay (100);
+    ReleaseAction ("weapon_8");
+    Assert (Self.SelectedWeapon == SelectedWeapon.Blowgun, "empty blowgun equipped for the club swing (#269)");
+    // Into punch range of the clean host & swing.
+    Self.Position = host.GlobalPosition + new Vector3 (0.0f, 0.3f, 2.0f);
+    await Task.Delay (400);
+    AimAt (host.GlobalPosition + Vector3.Up);
+    var healthBefore = host.Health;
+    var clubDamage = Player.CalculateHealthDecrease (Self.ClubEnergy);
+    PressAction ("shoot");
+    await Task.Delay (60);
+    ReleaseAction ("shoot");
+    await WaitUntil (() => host.Health == healthBefore - clubDamage, 15, $"the club swing hit for exactly twice a punch (#269), expected -{clubDamage}");
+    Assert (Self.Holds (HeldWeapon.Blowgun), "the club swing never left our hands (#269)");
+  }
+
   private async Task RunDropPhase()
   {
     PressAction ("weapon_2");
