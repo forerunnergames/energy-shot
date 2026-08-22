@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using com.forerunnergames.energyshot.core.audio;
 using com.forerunnergames.energyshot.core.world;
 using com.forerunnergames.energyshot.players;
+using com.forerunnergames.energyshot.ui.hud.messages;
 using com.forerunnergames.energyshot.utilities;
 using com.forerunnergames.energyshot.weapons;
 using Godot;
@@ -71,6 +72,7 @@ public partial class PlaytestDriver : Node
     // ENet, dilating in-game time far behind the wall clock this driver waits on.
     Engine.MaxFps = 30;
     _world = GetNode <World> ("/root/World");
+    _world.ChatReceived += (_, _, text) => _chatSeen.Add (text); // Durable chat capture (issue #188): rendered lines prune after 9s.
     _world.AdminMessageReceived += message => _adminMessages.Add (message);
     _world.ChildEnteredTree += node => _boltsSpawned += node is LaserBolt ? 1 : 0;
     _world.ChildEnteredTree += node => _boomerangsSpawned += node is BoomerangProjectile ? 1 : 0;
@@ -671,6 +673,11 @@ public partial class PlaytestDriver : Node
     // Our forged admin RPC from the start of the run was dropped by the server:
     // it never echoed back here through any relay (#158).
     Assert (_adminMessages.All (message => !message.Contains ("FORGED")), "forged admin RPC was rejected (#158)");
+    // The shooter's chat line broadcast to every peer (issue #188): the victim is a
+    // pure receiver here, so this proves the full send -> server -> relay path. The
+    // capture is signal-driven (see _Ready) - the rendered line only lingers 9s, so
+    // polling the label would race the prune.
+    await WaitUntil (() => _chatSeen.Contains (ChatMarker), 240, "shooter's chat line reached us (#188)");
   }
 
   // The eater's half of the bread ritual (issues #209 & #192): bread is a real weapon
@@ -1185,6 +1192,7 @@ public partial class PlaytestDriver : Node
     // phase has already proved the previous one landed as a pickup: an interrupted
     // eat wastes the loaf, so it can't be the one the death drop is counting on.
     await RunBreadInterruptedPhase();
+    await RunChatPhases();
     // Fall penalty goes negative (issue #108): step off the world at score 0 & verify -1.
     Assert (Self.Score == 0, $"own score is 0 before the fall, got {Self.Score}");
     Self.Position = new Vector3 (120.0f, 5.0f, 120.0f); // Beyond the arena: nothing below but the kill boundary.
@@ -1557,6 +1565,28 @@ public partial class PlaytestDriver : Node
 
   // Draws (holding well past the minimum draw time, #163) & releases until a stone
   // spawns; retries absorb CI physics-time dilation eating into the cooldown & draw.
+  // Chat (issue #188): T opens a VISIBLE, FOCUSED line - the exact regression where a
+  // hidden container silently ate the keyboard - Enter sends, & the line reaches the
+  // other peers' chat boxes.
+  private const string ChatMarker = "playtest chat ping";
+  private readonly List <string> _chatSeen = new();
+
+  private async Task RunChatPhases()
+  {
+    var chat = ChatBoxNode();
+    PressAction ("chat");
+    await WaitUntil (() => chat.IsOpen && chat.Visible && chat.InputFocused, 10, "T opened the chat line - visible & focused (#188)");
+    ReleaseAction ("chat");
+    chat.InputText = ChatMarker;
+    Input.ParseInputEvent (new InputEventKey { Keycode = Key.Enter, Pressed = true });
+    Input.ParseInputEvent (new InputEventKey { Keycode = Key.Enter, Pressed = false });
+    await WaitUntil (() => !chat.IsOpen, 10, "Enter sent the line & closed the chat (#188)");
+    await WaitUntil (() => _chatSeen.Contains (ChatMarker), 20, "own chat line came back through the relay (#188)");
+    Assert (chat.VisibleText.Contains (ChatMarker), "own chat line rendered in own chat box (#188)");
+  }
+
+  private ChatBox ChatBoxNode() => GetNode <Node> ("/root/World/UI/Hud").GetChildren().OfType <ChatBox>().First();
+
   private async Task <SlingshotStone> SlingAStone (int drawMs, string description)
   {
     for (var attempt = 0; attempt < 5; ++attempt)
