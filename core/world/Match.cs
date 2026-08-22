@@ -53,9 +53,12 @@ public static class Match
 
   public static string BuildScoreboard (IReadOnlyList <RoundStats> stats, List <(List <string> Pool, string Name)> awards, System.Func <List <string>, string, string> titleFor, GameMode mode = GameMode.Zaps)
   {
-    var rows = stats.Select (s => $"[cell][color=#{s.ColorHex}]{EscapeBbcode (s.Name)}[/color][/cell][cell]{s.Zaps}[/cell][cell]{s.ZapOuts}[/cell][cell]{s.Assists}[/cell][cell]{s.Falls}[/cell]");
-    var table = $"[table=5][cell][b]Player[/b][/cell][cell][b]{ScoreColumnLabel (mode)}[/b][/cell][cell][b]Zap-outs[/b][/cell][cell][b]Assists[/b][/cell][cell][b]Falls[/b][/cell]{string.Concat (rows)}[/table]";
+    var rows = stats.Select (s => $"[cell][color=#{s.ColorHex}]{EscapeBbcode (s.Name)}[/color]      [/cell][cell]{s.Zaps}      [/cell][cell]{s.ZapOuts}      [/cell][cell]{s.Assists}      [/cell][cell]{s.Falls}[/cell]");
+    var table = $"[table=5][cell][b]Player[/b]      [/cell][cell][b]{ScoreColumnLabel (mode)}[/b]      [/cell][cell][b]Zap-outs[/b]      [/cell][cell][b]Assists[/b]      [/cell][cell][b]Falls[/b][/cell]{string.Concat (rows)}[/table]";
     var titles = string.Join ("\n", awards.Select (award => titleFor (award.Pool, EscapeBbcode (award.Name))));
-    return $"[center][b]ROUND OVER[/b]\n\n{table}\n\n{titles}[/center]";
+    // Padded cells (Aaron, 2026-08-22): the bare table squashed its headers. Award
+    // lines LEFT-align - the board label is already a centered block, & centering
+    // the text again made it ragged & hard to read.
+    return $"[center][b]ROUND OVER[/b][/center]\n\n{table}\n\n{titles}";
   }
 }
