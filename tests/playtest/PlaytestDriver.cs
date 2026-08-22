@@ -34,8 +34,8 @@ public partial class PlaytestDriver : Node
   // Death-drop coverage (issue #169): the victim carries the deterministic playtest
   // banana to this fixed spot to be zapped, so the drop lands metres clear of every
   // playtest pickup spot - a drop search next to one of those could match it instead.
-  private static readonly Vector3 KillSpot = new(4.0f, 31.0f, 0.0f);
-  private static readonly Vector3 SpawnRoomCenter = new(0.0f, 31.0f, 0.0f);
+  private static readonly Vector3 KillSpot = new(4.0f, 31.3f, 0.0f);
+  private static readonly Vector3 SpawnRoomCenter = new(0.0f, 31.3f, 0.0f);
   // Fixed marks for the airplane throw/catch (#102), out in the empty arena well
   // clear of the spawn room where the host idles: 8m apart, so the glider gets a
   // real flight & nobody else can wander into the throw's aim ray.
@@ -554,7 +554,7 @@ public partial class PlaytestDriver : Node
     // stones. Mid-wall, not the corner (#197): the deterministic pickups moved into
     // the corners, & this spot still keeps the wall at z=6 point-blank for the #163
     // phases while sitting 5.5m clear of every one of them.
-    Self.Position = new Vector3 (0.0f, 31.0f, 5.0f);
+    Self.Position = new Vector3 (0.0f, 31.3f, 5.0f);
     await Task.Delay (400);
     await EmptySlingshot();
     Assert (Self.SlingshotAmmo == HeldWeapon.None, "slingshot is empty for the stone phases (#190)");
@@ -588,7 +588,7 @@ public partial class PlaytestDriver : Node
     // Wall blocking (#163): point-blank into the spawn-room wall (the wall face is
     // about as close as the muzzle offset from here), so the first-frame camera
     // sweep is what stops the stone - it must never travel past the wall at z=6.
-    AimAt (new Vector3 (Self.GlobalPosition.X, 31.0f, 6.0f)); // Mid-height of the wall ahead.
+    AimAt (new Vector3 (Self.GlobalPosition.X, 31.3f, 6.0f)); // Mid-height of the wall ahead.
     var wallStone = await SlingAStone (drawMs: 1500, "wall-test stone (#163)");
     await TryWaitUntil (() => !IsInstanceValid (wallStone) || !wallStone.IsInsideTree(), 5);
     Assert (!IsInstanceValid (wallStone) || !wallStone.IsInsideTree(), "the wall stopped the stone (#163)");
@@ -758,12 +758,12 @@ public partial class PlaytestDriver : Node
   // simply auto-claim the pickup mid-ritual. From here every one of them is 5.5m off.
   private async Task TakeBreadEatingPosition()
   {
-    Self.Position = new Vector3 (0.0f, 31.0f, 5.0f);
+    Self.Position = new Vector3 (0.0f, 31.3f, 5.0f);
     await Task.Delay (400); // Settle onto the floor.
     PressAction ("weapon_1");
     await Task.Delay (100);
     ReleaseAction ("weapon_1");
-    AimAt (new Vector3 (0.0f, 31.0f, 6.0f)); // Mid-height of the wall ahead.
+    AimAt (new Vector3 (0.0f, 31.3f, 6.0f)); // Mid-height of the wall ahead.
 
     for (var attempt = 0; attempt < 12 && Self.Health >= Self.MaxHealth; ++attempt)
     {
@@ -1031,7 +1031,7 @@ public partial class PlaytestDriver : Node
     Assert (Self.SlingshotAmmo == HeldWeapon.None, "slingshot starts empty (#190)");
     // Approach the laser pickup straight down the empty -Z lane, so the only item we
     // can walk onto on the way is the one under test.
-    Self.Position = new Vector3 (WeaponSpawner.PlaytestLaserPosition.X, 31.0f, 0.5f);
+    Self.Position = new Vector3 (WeaponSpawner.PlaytestLaserPosition.X, 31.3f, 0.5f);
     await Task.Delay (400);
     // We already hold a laser, so a NORMAL pickup could never fire here: any load at
     // all proves the equipped slingshot changed what walking onto an item means.
@@ -1042,7 +1042,7 @@ public partial class PlaytestDriver : Node
     // Let the playtest spot restock BEFORE the landing check & then step off it, so
     // the only laser pickup that can appear afterwards is the one we sling.
     await WaitUntil (() => LaserPickupNames (WeaponSpawner.PlaytestLaserPosition).Any(), 20, "the playtest laser spot restocked (#72)");
-    Self.Position = new Vector3 (WeaponSpawner.PlaytestLaserPosition.X, 31.0f, 0.5f);
+    Self.Position = new Vector3 (WeaponSpawner.PlaytestLaserPosition.X, 31.3f, 0.5f);
     await Task.Delay (400);
     // Aimed down the empty -Z lane into the spawn-room floor, so the slung laser
     // comes to rest on real ground well clear of us (& can't be instantly reloaded).
@@ -1353,7 +1353,7 @@ public partial class PlaytestDriver : Node
   // can't auto-claim one (#128).
   private async Task WaitForTheShooterToClearTheCatchMark()
   {
-    Self.Position = new Vector3 (5.0f, 31.0f, -3.0f); // Clear of all four deterministic pickup spots.
+    Self.Position = new Vector3 (5.0f, 31.3f, -3.0f); // Clear of all four deterministic pickup spots.
     await Task.Delay (300); // Settle onto the floor.
     var wentDown = false;
 

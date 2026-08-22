@@ -243,6 +243,9 @@ public partial class Player
 
   private void HandleCollision (KinematicCollision3D collision)
   {
+    // Physics-explosion tripwire (issue #276 diagnosis): a solver depenetration blast
+    // reaches absurd speeds long before the boundary does; name the launcher.
+    if (_preMoveVelocity.Length() > 100.0f) GD.Print ($"{DisplayName}: EXPLOSIVE speed {_preMoveVelocity.Length():0} at {GlobalPosition}, collider {(collision.GetCollider() as Node)?.Name}");
     if (TryRopeBounce (collision) || TryHeadBounce (collision)) return; // The boxing ring (issue #174).
     if (collision.GetColliderShape() is not CollisionShape3D { Shape: WorldBoundaryShape3D }) return;
     RespawnFell();
@@ -300,7 +303,7 @@ public partial class Player
   private void RespawnFell()
   {
     if (Fallen) return; // A dead body drifting past the boundary mid-lie-down already has a respawn scheduled (issue #152).
-    GD.Print ($"{DisplayName}: fell out of the world at {GlobalPosition}, moving {Velocity}"); // Where & how fast (issue #276 diagnosis).
+    GD.Print ($"{DisplayName}: fell out of the world at {GlobalPosition}, moving {Velocity}, pre-move {_preMoveVelocity}"); // Where & how fast (issue #276 diagnosis).
     --Score; // Falling off the world costs a point.
     ++Falls; // Round stats (issue #153): self-inflicted, separately counted.
     ClearHeldWeapons(); // A drop below the world would be unreachable; the weapons respawn at spawn points instead (issue #72).
