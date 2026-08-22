@@ -30,8 +30,8 @@ public partial class Player
   // still trampolines huge; gentle steps just STAND on the rope.
   [Export] public float RopeTopMinTrampolineFallSpeed = 6.0f;
   [Export] public float RopeTopBouncePerFallSpeed = 0.85f;
-  // Each bounce climbs 10% higher than the last, but only up to here (issue #262):
-  // from the floor it takes about ten in a row to reach the cap, then no higher.
+  // The hardest single rebound (issue #262): dives cap here, & every rebound damps
+  // by RopeTopBouncePerFallSpeed, so chains only ever LOSE height (issue #276).
   [Export] public float RopeTopBounceMax = 34.0f;
   private const float MinRopeImpactSpeed = 1.0f;
   private Vector3 _preMoveVelocity;
