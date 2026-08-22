@@ -78,7 +78,10 @@ public partial class PlaytestDriver : Node
     _world.ChildEnteredTree += node => _stonesSpawned += node is SlingshotStone ? 1 : 0;
     _world.ChildEnteredTree += node => _dartsSpawned += node is BlowgunDart ? 1 : 0; // Issue #236.
     _world.ChildEnteredTree += node => _airplanesSpawned += node is PaperAirplaneProjectile ? 1 : 0;
-    _world.ChildEnteredTree += node => { if (node is SlingshotStone stone) TrackStone (stone); };
+    // Only OUR stones drive _lastStone (issue #272): remote visual copies used to
+    // overwrite it & the ownership predicate then starved - perfect draws, real
+    // fires, 'no stone'. Ownership is set at construction, so this check is safe here.
+    _world.ChildEnteredTree += node => { if (node is SlingshotStone stone && stone.Shooter == Self) TrackStone (stone); };
     var args = OS.GetCmdlineUserArgs();
     _role = ArgValue (args, "--playtest") ?? string.Empty;
     _address = ArgValue (args, "--address") ?? "127.0.0.1";
@@ -1874,10 +1877,8 @@ public partial class PlaytestDriver : Node
       // Diagnosis for issue #272: which link breaks - the press, the draw, or the fire.
       GD.Print ($"SlingAStone attempt {attempt}: pressed={Input.IsActionPressed ("shoot")} draw={Self.SlingshotDrawSeconds:0.00}/{targetDrawSeconds:0.00} selected={Self.SelectedWeapon} ammo={Self.SlingshotAmmo}");
       ReleaseAction ("shoot");
-      // Only OUR live stone counts (CodeRabbit): TrackStone also catches remote
-      // players' visual copies, which would false-pass the spawn assert.
-      await TryWaitUntil (() => _lastStone != null && IsInstanceValid (_lastStone) && _lastStone.Shooter == Self, 3);
-      if (_lastStone != null && IsInstanceValid (_lastStone) && _lastStone.Shooter == Self) return _lastStone;
+      await TryWaitUntil (() => _lastStone != null, 3); // TrackStone only records OUR stones now (issue #272).
+      if (_lastStone != null) return _lastStone;
       GD.Print ($"SlingAStone attempt {attempt}: released, no stone; draw now {Self.SlingshotDrawSeconds:0.00}");
     }
 
