@@ -100,6 +100,7 @@ public partial class WeaponPickup : Area3D
   public override void _Ready()
   {
     _visual = GetNode <Node3D> ("Visual");
+    CallDeferred (MethodName.CenterVisualChildren); // After spawn-sync setup (the busy-parent window).
     _laserVisual = GetNode <Node3D> ("Visual/Laser");
     _bananaVisual = GetNode <MeshInstance3D> ("Visual/Banana");
     _bananaVisual.Mesh = ResourceLoader.Load <Mesh> ("res://assets/weapons/Banana_Rifle.obj");
@@ -130,6 +131,37 @@ public partial class WeaponPickup : Area3D
     if (!IsInsideTree()) return;
     if (_armed && _armedLight == null) { _armedLight = new OmniLight3D { LightColor = ArmedRed, LightEnergy = 3.0f, OmniRange = 4.0f }; AddChild (_armedLight); return; }
     if (!_armed && _armedLight != null) { _armedLight.QueueFree(); _armedLight = null; }
+  }
+
+  // Spawn-mode items spin on their CENTER (issue #324, Aaron: the laser orbited a
+  // point) - a model whose meshes are offset from its node origin (the laser's GLB
+  // parts carry their grips at the origin) would otherwise orbit that origin. Each
+  // visual child shifts so its combined mesh AABB centers on the spin axis (x/z
+  // only; the bob owns y). Generic: any future offset model self-centers.
+  private void CenterVisualChildren()
+  {
+    foreach (var child in _visual.GetChildren().OfType <Node3D>())
+    {
+      var center = CombinedMeshCenter (child);
+      child.Position -= new Vector3 (center.X, 0.0f, center.Z);
+    }
+  }
+
+  private Vector3 CombinedMeshCenter (Node3D root)
+  {
+    var toVisual = _visual.GlobalTransform.AffineInverse();
+    var min = new Vector3 (float.MaxValue, float.MaxValue, float.MaxValue);
+    var max = new Vector3 (float.MinValue, float.MinValue, float.MinValue);
+    var found = false;
+
+    foreach (var mesh in root.FindChildren ("*", "MeshInstance3D", recursive: true, owned: false).OfType <MeshInstance3D>().Concat (root is MeshInstance3D self ? new[] { self } : System.Array.Empty <MeshInstance3D>()))
+    {
+      var aabb = mesh.GetAabb();
+      var toHere = toVisual * mesh.GlobalTransform;
+      for (var i = 0; i < 8; ++i) { var corner = toHere * aabb.GetEndpoint (i); min = min.Min (corner); max = max.Max (corner); found = true; }
+    }
+
+    return found ? (min + max) / 2.0f : Vector3.Zero;
   }
 
   // Cosmetic float & spin, animated locally on every peer around the replicated base position.
