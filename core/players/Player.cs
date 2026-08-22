@@ -247,7 +247,7 @@ public partial class Player : CharacterBody3D
   // past this, so stacked or full-draw hits can't launch victims sky-high.
   [Export] public float KnockbackUpPopCap = 6.0f;
   [Export] public int KillHealAmount = 50;
-  [Export] public float PunchKnockbackScale = 0.33f;
+  [Export] public float PunchKnockbackScale = 2.5f; // A real shove (issue #334, Aaron): 0.33 worked out to ~1 m/s - imperceptible; 2.5 puts a punched player into the ropes (~8 m/s).
   [Export] public float JumpVelocity = 20.0f;
   [Export] public Vector3 Gravity = new(0.0f, -50.0f, 0.0f);
   [Export] public float MinNameTagScale = 1.0f;
