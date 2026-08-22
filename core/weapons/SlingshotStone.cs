@@ -27,6 +27,16 @@ public partial class SlingshotStone : Node3D
   // spray cosmetic bolts so every peer sees (& fears) the same chaos.
   [Signal] public delegate void SpreeHitEventHandler (CharacterBody3D body, float energy, bool throughBarrier);
   [Export] public float SpreeIntervalSeconds = 0.15f;
+  // Every slung GUN sprays its own ammo in flight (issue #244): the launcher lobs
+  // bananas, a slung slingshot flings stones, the laser sprays bolts. A slung blowgun
+  // sprays nothing - losing it returned its darts to the level (the #236 economy).
+  [Export] public float BananaSpreeIntervalSeconds = 0.6f;
+  [Export] public float StoneSpreeIntervalSeconds = 0.3f;
+  [Export] public float StoneSpreeSpeed = 24.0f;
+  [Export] public float StoneSpreeEnergy = 0.3f;
+  [Signal] public delegate void SpreeBananaEventHandler (BananaProjectile banana);
+  [Signal] public delegate void SpreeStoneEventHandler (SlingshotStone stone);
+  private static readonly PackedScene BananaScene = ResourceLoader.Load <PackedScene> ("res://core/weapons/BananaProjectile.tscn");
   [Export] public float SpreeEnergy = 0.24f; // The full-auto per-shot energy (issue #218).
   private static readonly PackedScene BoltScene = ResourceLoader.Load <PackedScene> ("res://core/weapons/LaserBolt.tscn");
   private static readonly AudioStream SpreeShotSound = ResourceLoader.Load <AudioStream> ("res://assets/sounds/shoot2.mp3");
@@ -151,7 +161,7 @@ public partial class SlingshotStone : Node3D
     GravityAcceleration = gravity; // Draw-scaled (issue #163): full draws fly flatter arcs.
     _energy = energy;
     _isLive = isLive;
-    Shooter = shooter; // The playtest matches stones to the firer (CodeRabbit on #273): visual copies carry the REMOTE player's node.
+    Shooter = shooter; // The playtest matches stones to the firer (CodeRabbit on #273); the spree paths reuse it.
     _exclusions = new Godot.Collections.Array <Rid> { shooter.GetRid() };
     if (shooter is Player own) _exclusions.Add (own.HeadRid); // Your own dome is not a target (issue #179).
   }
@@ -161,7 +171,7 @@ public partial class SlingshotStone : Node3D
     var dt = (float)delta;
     _age += dt;
     if (_age > MaxLifetimeSeconds) { End (victim: null); return; }
-    if (Ammo == HeldWeapon.Laser) UpdateSpree (dt);
+    if (Sprays (Ammo)) UpdateSpree (dt); // Slung guns spray (issues #208 & #244).
     var from = _sweptFromStart ? GlobalPosition : _sweepStart;
     _sweptFromStart = true;
     _velocity.Y -= GravityAcceleration * dt;
@@ -194,8 +204,10 @@ public partial class SlingshotStone : Node3D
   {
     _spreeLeft -= dt;
     if (_spreeLeft > 0.0f) return;
-    _spreeLeft = SpreeIntervalSeconds;
     var direction = new Vector3 (GD.Randf() - 0.5f, GD.Randf() - 0.5f, GD.Randf() - 0.5f).Normalized();
+    if (Ammo == HeldWeapon.Banana) { _spreeLeft = BananaSpreeIntervalSeconds; SpreeBananaShot (direction); return; }
+    if (Ammo == HeldWeapon.Slingshot) { _spreeLeft = StoneSpreeIntervalSeconds; SpreeStoneShot (direction); return; }
+    _spreeLeft = SpreeIntervalSeconds;
     var bolt = BoltScene.Instantiate <LaserBolt>();
     GetParent().AddChild (bolt);
     bolt.Launch (GlobalPosition, GlobalPosition, direction, SpreeEnergy, _isLive, shooter: null);
@@ -205,6 +217,31 @@ public partial class SlingshotStone : Node3D
     pew.GlobalPosition = GlobalPosition;
     pew.Finished += pew.QueueFree;
     pew.Play();
+  }
+
+  // Which slung items spray: the guns with ammo of their own. Pure & unit-tested.
+  public static bool Sprays (HeldWeapon ammo) => ammo is HeldWeapon.Laser or HeldWeapon.Banana or HeldWeapon.Slingshot;
+
+  // A slung launcher lobs bananas (issue #244): live ones are wired by the thrower
+  // (Exploded / StuckToPlayer, attributed to them); every peer sees the cosmetic ones.
+  private void SpreeBananaShot (Vector3 direction)
+  {
+    if (Shooter == null) return;
+    var banana = BananaScene.Instantiate <BananaProjectile>();
+    GetParent().AddChild (banana);
+    banana.Launch (GlobalPosition, direction, _isLive, Shooter);
+    if (_isLive) EmitSignal (SignalName.SpreeBanana, banana);
+  }
+
+  // A slung slingshot flings plain stones (issue #244); a child stone carries no ammo,
+  // so it never sprays in turn.
+  private void SpreeStoneShot (Vector3 direction)
+  {
+    if (Shooter == null) return;
+    var stone = new SlingshotStone { Ammo = HeldWeapon.None };
+    GetParent().AddChild (stone);
+    stone.Launch (GlobalPosition, GlobalPosition, direction, StoneSpreeSpeed, GravityAcceleration, StoneSpreeEnergy, _isLive, Shooter);
+    if (_isLive) EmitSignal (SignalName.SpreeStone, stone);
   }
 
   // Bulk (issue #208): big things hit hard. Scales the draw-scaled energy & the

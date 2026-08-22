@@ -26,5 +26,12 @@ public class SlungBulkTest
   }
 
   [TestCase]
+  public void OnlyGunsWithTheirOwnAmmoSpray()
+  {
+    AssertBool (SlingshotStone.Sprays (HeldWeapon.Laser) && SlingshotStone.Sprays (HeldWeapon.Banana) && SlingshotStone.Sprays (HeldWeapon.Slingshot)).IsTrue(); // Issue #244.
+    AssertBool (SlingshotStone.Sprays (HeldWeapon.Blowgun) || SlingshotStone.Sprays (HeldWeapon.Bread) || SlingshotStone.Sprays (HeldWeapon.Boomerang) || SlingshotStone.Sprays (HeldWeapon.PaperAirplane)).IsFalse();
+  }
+
+  [TestCase]
   public void CapKeepsTheNeverOneHitPromise() => AssertFloat (Player.SlungBulkEnergyCap).IsLess (EnergyWeapon.FullChargeEnergyThreshold);
 }

@@ -226,6 +226,10 @@ public partial class Player
     // The berserk slung laser (issue #208) reports like full-auto fire from us; the
     // thrower stays immune to their own spray only because a self-zap would score.
     if (ammo == HeldWeapon.Laser) stone.SpreeHit += (body, hitEnergy, throughBarrier) => OnLaserHitPlayer (body, hitEnergy, throughBarrier, isFullAuto: true, isHeadshot: false);
+    // The other slung guns (issue #244): a slung launcher's bananas blast & stick as
+    // ours; a slung slingshot's stones thwack as ours.
+    if (ammo == HeldWeapon.Banana) stone.SpreeBanana += banana => { banana.Exploded += OnBananaExploded; banana.StuckToPlayer += OnBananaStuck; };
+    if (ammo == HeldWeapon.Slingshot) stone.SpreeStone += child => child.HitPlayer += (victim, hitEnergy, isHeadshot) => OnStoneHitPlayer (victim, hitEnergy, HeldWeapon.None, isHeadshot);
     if (ammo == HeldWeapon.None || IsCosmeticAmmo (ammo)) return;
     // Only the newest flight owns this player's server-side ammo escrow, so an older
     // stone still arcing somewhere can never land somebody else's item (issue #190).
@@ -291,12 +295,16 @@ public partial class Player
     victim.RpcId (victim.NetworkId, MethodName.ReceiveSlingshotHit, energy, DisplayName, (int)ammo, isHeadshot);
   }
 
+  [Signal] public delegate void BreadedEventHandler(); // Slung bread splats the screen (issue #247).
+
   [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
   private void ReceiveSlingshotHit (float energy, string slungByPlayerName, int ammo, bool isHeadshot)
   {
     if (!IsMultiplayerAuthority()) return;
     if (SpawnArmor) return;
     if (Fallen) return; // A body mid-death-sequence is scenery (issue #152).
+    EmitSignal (SignalName.Punched); // Any slung hit blurs the victim like a punch (issue #247).
+    if ((HeldWeapon)ammo == HeldWeapon.Bread) EmitSignal (SignalName.Breaded); // Crumbs everywhere (issue #247).
     GD.Print ($"{DisplayName}: I was thwacked by {slungByPlayerName}'s slingshot!");
     // Getting zapped out by a slung LOAF deserves its own line (issue #190).
     LastDamageKind = (HeldWeapon)ammo == HeldWeapon.None ? DamageKind.Slingshot : DamageKind.SlungItem; // Message context (issue #84).
