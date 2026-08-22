@@ -1441,7 +1441,10 @@ public partial class PlaytestDriver : Node
     // search ring missed it about half the time & starved this wait (issue #312,
     // the same geometry mismatch as the dart-ring fix in #311). 4m covers the toss
     // plus arc & victim drift.
-    if (hadBread) await WaitUntil (() => DroppedNear (HeldWeapon.Bread, victim.GlobalPosition, 4.0f) is { TossFrom: var toss } && toss != Vector3.Zero, 30, "already holding a loaf, the theft became a fly-out: a tossed pickup beside the victim (#193)");
+    // Anchored to the FIXED park spot (CodeRabbit): the victim teleports off-world
+    // for its next reset the moment the loaf leaves, & a search centered on its
+    // mutable position would chase it there & miss the pickup.
+    if (hadBread) await WaitUntil (() => DroppedNear (HeldWeapon.Bread, VictimParkSpot, 4.0f) is { TossFrom: var toss } && toss != Vector3.Zero, 30, "already holding a loaf, the theft became a fly-out: a tossed pickup beside the victim (#193)");
     else await WaitUntil (() => Self.HasBread, 30, "the stolen loaf went straight into our hands - the direct steal (#193)");
     Self.Position = ShooterParkSpot;
     await Task.Delay (300);
