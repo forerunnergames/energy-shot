@@ -112,6 +112,23 @@ public partial class Player
   public float ChaseViewArmLengthMeters => _thirdPersonArm?.GetHitLength() ?? 0.0f;
   private Vector3 CrosshairPoint() => _camera.GlobalPosition - _camera.GlobalTransform.Basis.Z * CrosshairDistanceMeters;
 
+  // Where a shot must GO (issue #338, Aaron: the laser missed the crosshair in third
+  // person). The chase rig only converges at one fixed range - everywhere else the
+  // head ray & the crosshair ray diverge. In third person, raycast the CHASE
+  // camera's center to the real aimed point & fire from the muzzle TOWARD it; in
+  // first person the head camera's forward is already truthful.
+  public Vector3 ShotDirection()
+  {
+    if (!_thirdPerson || _thirdPersonCamera == null) return -_camera.GlobalTransform.Basis.Z;
+    var from = _thirdPersonCamera.GlobalPosition;
+    var far = from + -_thirdPersonCamera.GlobalTransform.Basis.Z * 300.0f;
+    var query = PhysicsRayQueryParameters3D.Create (from, far);
+    query.Exclude = new Godot.Collections.Array <Rid> { GetRid() };
+    var hit = GetWorld3D().DirectSpaceState.IntersectRay (query);
+    var target = hit.Count > 0 ? (Vector3)hit["position"] : far;
+    return (target - _camera.GlobalPosition).Normalized();
+  }
+
   // Death view (issue #152): the same spring-arm rig from #119, stretched back & up
   // over the death spot so the victim can watch their killer emote on the body.
   private void EnterDeathView()
