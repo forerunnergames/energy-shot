@@ -463,7 +463,6 @@ public partial class Player : CharacterBody3D
     UpdateStickyFlight (delta);
     UpdateCameraKick (delta);
     UpdateScopeSway(); // The scoped view sways with the heartbeat (issue #279).
-    ClampCameraPitch(); // After every rotation writer, every frame (issue #322).
     UpdateCameraShake (delta);
     UpdateDeathView(); // Keeps the fallen body framed during the lie-down (issue #152).
     UpdateChaseViewAim(); // Re-aims the chase camera when wall clipping shortens the arm (issue #187).
@@ -490,20 +489,28 @@ public partial class Player : CharacterBody3D
     if (IsDischargingWeapon()) DischargeWeapon();
     if (@event is not InputEventMouseMotion motionEvent) return;
     RotateY (-motionEvent.Relative.X * MouseSensitivity);
-    _camera.RotateX (-motionEvent.Relative.Y * MouseSensitivity);
-    ClampCameraPitch();
+    SetCameraPitch (_cameraPitch - motionEvent.Relative.Y * MouseSensitivity);
   }
 
-  // The ONE pitch invariant (issue #322): every writer - mouse look, the camera
-  // kick & its recovery, the scope sway - lands inside the same bounds every frame.
-  // The clamp used to live only in the mouse handler, so effect-driven rotation
-  // between mouse events could wind past +/-90, where the euler readback flips
-  // (roll 180) & the view turns upside down. Roll pins to zero for the same reason.
-  // Third person can't pitch all the way up (issue #234): the chase arm hangs behind
-  // the head camera, so looking straight up swung it down into the floor.
-  private void ClampCameraPitch()
+  // The camera never reads its own eulers back (issue #322, round 2): v0.8.82's
+  // read-modify-write clamp hit gimbal lock at straight down - the readback flips
+  // yaw 180 & the whole view mirrored with the mouse feeling backwards. Pitch lives
+  // in ONE accumulator; every writer (mouse, kick, recovery, sway, the playtest's
+  // aim) goes through it, & ApplyCameraRotation is the only place the camera's
+  // rotation is ever assigned: clamped pitch just shy of the poles, sway yaw, zero
+  // roll. Third person keeps its lower ceiling (issue #234).
+  private float _cameraPitch;
+  private const float PitchLimitRadians = 1.5620697f; // 89.5 degrees: never touch the pole.
+
+  public void SetCameraPitch (float radians)
   {
-    var maxUp = _thirdPerson ? Mathf.DegToRad (ThirdPersonMaxPitchUpDegrees) : Mathf.Pi / 2.0f;
-    _camera.Rotation = new Vector3 (Mathf.Clamp (_camera.Rotation.X, -Mathf.Pi / 2.0f, maxUp), _camera.Rotation.Y, 0.0f);
+    _cameraPitch = Mathf.Clamp (radians, -PitchLimitRadians, PitchLimitRadians);
+    ApplyCameraRotation();
+  }
+
+  private void ApplyCameraRotation()
+  {
+    var maxUp = _thirdPerson ? Mathf.DegToRad (ThirdPersonMaxPitchUpDegrees) : PitchLimitRadians;
+    _camera.Rotation = new Vector3 (Mathf.Clamp (_cameraPitch + _swayPitch, -PitchLimitRadians, maxUp), _swayYaw, 0.0f);
   }
 }
