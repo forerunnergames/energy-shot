@@ -171,7 +171,7 @@ public partial class World : Node3D
   // the RPC itself - never from client-supplied text - & logs it. A length cap & a
   // light per-peer rate limit (2/s) keep it from becoming a spam channel.
   public const int MaxChatChars = 120;
-  private const ulong ChatMinIntervalMs = 500;
+  private const ulong ChatMinIntervalMs = 5000; // One line per 5 seconds (Aaron, 2026-08-22): 500ms allowed chat spam.
   private readonly System.Collections.Generic.Dictionary <long, ulong> _lastChatMs = new();
 
   public void SendChat (string text)
