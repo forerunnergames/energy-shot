@@ -28,6 +28,8 @@ jobs:
   # green-playtest-second, merge-third.
   approval-gate:
     runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read # The reviews API needs it explicitly (CodeRabbit).
     outputs:
       run: ${{ steps.check.outputs.run }}
     steps:
@@ -36,7 +38,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           if [ "${{ github.event_name }}" != "pull_request" ]; then echo "run=true" >> "$GITHUB_OUTPUT"; exit 0; fi
-          approved=$(gh api "repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/reviews" --jq '[.[] | select(.state=="APPROVED")] | length')
+          # Latest state per reviewer, all pages, dismissals excluded (CodeRabbit): a
+          # stale approval superseded by CHANGES_REQUESTED must not open the gate.
+          approved=$(gh api --paginate --slurp "repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/reviews" --jq 'add | map(select(.state=="APPROVED" or .state=="CHANGES_REQUESTED")) | group_by(.user.login) | map(last) | map(select(.state=="APPROVED")) | length')
           if [ "$approved" -gt 0 ]; then echo "run=true" >> "$GITHUB_OUTPUT"; else echo "run=false" >> "$GITHUB_OUTPUT"; echo "Playtest deferred: no approved review yet."; fi
 
   playtest:
