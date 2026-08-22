@@ -12,19 +12,13 @@ public partial class Player
   private HeadHitbox _head = null!;
   private MeshInstance3D _headMesh = null!;
 
-  public Rid HeadRid => _head.GetRid();
+  public Rid HeadRid => _head?.GetRid() ?? default; // No head while parked (#238): callers skip an invalid rid.
 
-  private void CreateHead()
-  {
-    _head = HeadHitbox.Create();
-    AddChild (_head);
-    // Same tinted material as the body (duplicated, so the color setters drive both).
-    _headMesh = new MeshInstance3D { Mesh = new SphereMesh { Radius = HeadHitbox.Radius, Height = HeadHitbox.Radius * 2.0f }, Position = HeadHitbox.LocalOffset };
-    _headMesh.SetSurfaceOverrideMaterial (0, (Material)_mesh.GetSurfaceOverrideMaterial (0).Duplicate());
-    AddChild (_headMesh);
-  }
+  // PARKED (Aaron, 2026-08-22): the floating ball is gone until the real head
+  // rework (#238) lands as a complete PR - the body is back to its pre-head look &
+  // headshots are dormant (no hitbox, so nothing ever reports one). The class &
+  // its constants stay so the code & tests keep compiling.
+  private void CreateHead() { }
 
-  // Your own dome would fill the view when you look up: hide it in first person,
-  // show it in third person & on every other peer's copy of you.
-  private void UpdateHeadVisibility() => _headMesh.Visible = !IsMultiplayerAuthority() || _thirdPerson;
+  private void UpdateHeadVisibility() { if (_headMesh != null) _headMesh.Visible = !IsMultiplayerAuthority() || _thirdPerson; }
 }
