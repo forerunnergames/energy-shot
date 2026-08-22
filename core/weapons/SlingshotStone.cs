@@ -165,7 +165,7 @@ public partial class SlingshotStone : Node3D
     _isLive = isLive;
     Shooter = shooter; // The playtest matches stones to the firer (CodeRabbit on #273); the spree paths reuse it.
     _exclusions = new Godot.Collections.Array <Rid> { shooter.GetRid() };
-    if (shooter is Player own) _exclusions.Add (own.HeadRid); // Your own dome is not a target (issue #179).
+    if (shooter is Player own && own.HeadRid.IsValid) _exclusions.Add (own.HeadRid); // Your own dome is not a target (issue #179); no head while parked (#238).
   }
 
   public override void _PhysicsProcess (double delta)
