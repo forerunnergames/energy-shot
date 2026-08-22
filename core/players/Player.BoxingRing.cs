@@ -23,10 +23,15 @@ public partial class Player
   [Export] public float HeadBounceVelocity = 26.0f;
   // The rope tops are trampolines too (issue #240): landing on one springs you up,
   // scaled by how fast you came down, & even a standing hop still bounces.
-  [Export] public float RopeTopBounceMin = 14.0f;
-  [Export] public float RopeTopBouncePerFallSpeed = 1.1f;
-  // Each bounce climbs 10% higher than the last, but only up to here (issue #262):
-  // from the floor it takes about ten in a row to reach the cap, then no higher.
+  // Converging trampoline (issue #276, round 2 - the VERTICAL rally): the shipped
+  // 1.1 gain + a 14 m/s floor meant anyone landing on a rope top looped at max
+  // bounce forever, eating fall damage per landing (~11.8m drops, six a row in CI).
+  // Damped bounces honor Aaron's ruling: chain-bouncing never gains height. A dive
+  // still trampolines huge; gentle steps just STAND on the rope.
+  [Export] public float RopeTopMinTrampolineFallSpeed = 6.0f;
+  [Export] public float RopeTopBouncePerFallSpeed = 0.85f;
+  // The hardest single rebound (issue #262): dives cap here, & every rebound damps
+  // by RopeTopBouncePerFallSpeed, so chains only ever LOSE height (issue #276).
   [Export] public float RopeTopBounceMax = 34.0f;
   private const float MinRopeImpactSpeed = 1.0f;
   private Vector3 _preMoveVelocity;
@@ -56,7 +61,8 @@ public partial class Player
   private bool TryRopeTopBounce()
   {
     var fallSpeed = Mathf.Max (0.0f, -_preMoveVelocity.Y);
-    Velocity = new Vector3 (Velocity.X, Mathf.Clamp (fallSpeed * RopeTopBouncePerFallSpeed, RopeTopBounceMin, RopeTopBounceMax), Velocity.Z);
+    if (fallSpeed < RopeTopMinTrampolineFallSpeed) return false; // A gentle landing STANDS on the rope - no self-feeding loop.
+    Velocity = new Vector3 (Velocity.X, Mathf.Min (fallSpeed * RopeTopBouncePerFallSpeed, RopeTopBounceMax), Velocity.Z);
     _jumpSound.Play();
     return true;
   }
