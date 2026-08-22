@@ -147,16 +147,15 @@ public partial class Player
   // auto-scales with zoom & the difficulty is exactly what the drifting dot was.
   public static Vector2 SwayRadians (Vector2 drift, float fovDegrees) => drift * (Mathf.DegToRad (fovDegrees) * ScopeView.RadiusFraction);
 
-  private Vector2 _appliedSway;
+  private float _swayPitch;
+  private float _swayYaw;
 
   private void UpdateScopeSway()
   {
     var target = _isScoped ? SwayRadians (ReticleDrift, _camera.Fov) : Vector2.Zero;
-    var rotation = _camera.Rotation;
-    rotation.X -= target.Y - _appliedSway.Y; // Screen-down drift pitches the view down.
-    rotation.Y -= target.X - _appliedSway.X; // Screen-right drift yaws the view right.
-    _camera.Rotation = rotation;
-    _appliedSway = target;
+    _swayPitch = -target.Y; // Screen-down drift pitches the view down.
+    _swayYaw = -target.X; // Screen-right drift yaws the view right.
+    ApplyCameraRotation(); // The one writer (issue #322): no euler readback, ever.
   }
 
   // Every peer flies a cosmetic copy (the SpawnVisualLaser pattern): the whoosh has
