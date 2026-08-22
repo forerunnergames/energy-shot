@@ -52,6 +52,7 @@ public partial class PlaytestDriver : Node
   private int _boltsSpawned;
   private int _boomerangsSpawned;
   private int _stonesSpawned;
+  private int _dartsSpawned;
   // Paper airplane flights seen locally (issue #102): the throw phase watches this
   // instead of the transient in-flight node, same trick as the boomerang count.
   private int _airplanesSpawned;
@@ -75,6 +76,7 @@ public partial class PlaytestDriver : Node
     _world.ChildEnteredTree += node => _boltsSpawned += node is LaserBolt ? 1 : 0;
     _world.ChildEnteredTree += node => _boomerangsSpawned += node is BoomerangProjectile ? 1 : 0;
     _world.ChildEnteredTree += node => _stonesSpawned += node is SlingshotStone ? 1 : 0;
+    _world.ChildEnteredTree += node => _dartsSpawned += node is BlowgunDart ? 1 : 0; // Issue #236.
     _world.ChildEnteredTree += node => _airplanesSpawned += node is PaperAirplaneProjectile ? 1 : 0;
     _world.ChildEnteredTree += node => { if (node is SlingshotStone stone) TrackStone (stone); };
     var args = OS.GetCmdlineUserArgs();
@@ -190,7 +192,11 @@ public partial class PlaytestDriver : Node
     // that follows - the shooter's ammo & airplane phases & the victim's catch and
     // landmine phases - & the sum of their per-step budgets already exceeds 180s. A
     // slow run that stays inside every inner budget must not fail out here.
-    await WaitUntil (() => _world.GetPlayers().Count() == 1, 600, "clients disconnected");
+    // One absolute deadline shared with the shell watchdog (CodeRabbit on #258): the
+    // watchdog kills at 600s from process launch, so the tail budget is whatever is
+    // left of 570 engine-seconds - a stall still fails by name, never by SIGKILL.
+    var tailBudgetSeconds = Mathf.Max (30, 570 - (int)(Time.GetTicksMsec() / 1000));
+    await WaitUntil (() => _world.GetPlayers().Count() == 1, tailBudgetSeconds, "clients disconnected");
     // The version line goes only to joining clients, never broadcast (#158), so the
     // host must never have seen one.
     Assert (_adminMessages.All (message => !message.Contains ("Running")), "version line was not broadcast to the host (#158)");
@@ -662,6 +668,7 @@ public partial class PlaytestDriver : Node
     // The toggle persists to the shared user settings (#119); restore the starting
     // view so a playtest run never flips the developer's real preference.
     await ToggleViewUntil (startedThirdPerson);
+    await RunEndOfRunShooterPhases (victim); // Today's features, end to end (issues #193, #179, #236, #242, #174).
 
     // Admin messages (issue #158), asserted here so the waits don't stall the
     // timing-sensitive phases above: the join-time version line reached only us
@@ -1252,6 +1259,7 @@ public partial class PlaytestDriver : Node
     // Give the shooter time to observe the handoff before the landmine scenario.
     await Task.Delay (3000);
     await RunLandminePhase();
+    await RunEndOfRunVictimPhases(); // The target half of the shooter's end-of-run phases.
     // The shooter's forged admin RPC must never have been relayed to us: the
     // server drops admin messages from any sender but peer 1 (#158).
     Assert (_adminMessages.All (message => !message.Contains ("FORGED")), "forged admin RPC never relayed to the victim (#158)");
@@ -1328,6 +1336,258 @@ public partial class PlaytestDriver : Node
   // with nobody under the crosshair, so the glide ends with no target - it comes down
   // ARMED as a grounded pickup, & walking onto it makes US the mine's one target.
   // Fastest beeping immediately, ignite about a second later, then the personal pop.
+  // ------------------------------------------------ end-of-run coverage (2026-08-21)
+  // The features shipped today, proven end to end with the victim parked in the spawn
+  // room after its landmine phase. The victim resets its life between sub-phases with
+  // a deliberate off-world fall (fresh 400 HP, fresh loaf, armor that expires), so
+  // every sub-phase starts from a known state & nothing depends on health left over.
+  private static readonly Vector3 VictimParkSpot = new(3.0f, 31.0f, 2.0f);
+  private static readonly Vector3 ShooterParkSpot = new(-2.0f, 31.0f, 2.0f);
+
+  private async Task RunEndOfRunShooterPhases (Player victim)
+  {
+    await RunPunchTheftPhase (victim);
+    await RunHeadshotPhase (victim);
+    await RunBlowgunPhase (victim);
+    await RunDropPhase();
+    await RunRingPhase();
+  }
+
+  private async Task RunEndOfRunVictimPhases()
+  {
+    await ResetLifeAndPark();
+    await BeTheTheftTarget();
+    await ResetLifeAndPark();
+    await BeTheHeadshotTarget();
+    await ResetLifeAndPark();
+    await BeThePoisonTarget();
+  }
+
+  // A fresh life on demand: the off-world fall respawns us (#108) with full health, a
+  // new loaf, & spawn armor; we wait the armor out so the shooter's hits count.
+  private async Task ResetLifeAndPark()
+  {
+    Self.Position = new Vector3 (120.0f, 5.0f, 120.0f);
+    await WaitUntil (() => Self.SpawnArmor && Self.Health == Self.MaxHealth && !Self.Fallen, 60, "reset life: respawned fresh for the next end-of-run phase");
+    Self.Position = VictimParkSpot;
+    await Task.Delay (400); // Settle onto the floor.
+    await WaitUntil (() => !Self.SpawnArmor, 30, "reset life: spawn armor expired, the shooter's hits count again");
+  }
+
+  // Punch theft (#193): stand with the loaf out; a landed punch (20%/swing) takes it.
+  // The shooter ate its own loaf long ago, so this is the DIRECT steal: our bread
+  // goes straight into the puncher's hands (the fly-out fallback is covered by the
+  // drop phase's tossed pickup & the drop-on-X phase).
+  private async Task BeTheTheftTarget()
+  {
+    // Punches cost 20 each & the theft is a 20% roll per landed punch, so a run of bad
+    // luck could wear us down first: re-reset whenever we're low & still holding on.
+    var deadline = Time.GetTicksMsec() + 180_000;
+
+    while (Self.HasBread && Time.GetTicksMsec() < deadline)
+    {
+      if (Self.Health <= 60) await ResetLifeAndPark();
+      if (Self.SelectedWeapon != SelectedWeapon.Bread) { PressAction ("weapon_0"); await Task.Delay (100); ReleaseAction ("weapon_0"); }
+      await Task.Delay (100);
+    }
+
+    Assert (!Self.HasBread, "a punch took the loaf out of our hands (#193)");
+  }
+
+  private async Task RunPunchTheftPhase (Player victim)
+  {
+    await WaitUntil (() => victim.SelectedWeapon == SelectedWeapon.Bread && !victim.SpawnArmor && FlatDistance (victim.GlobalPosition, VictimParkSpot) < 2.0f, 120, "victim parked with its loaf out for the theft phase (#193)");
+    var hadBread = Self.HasBread; // Ate it in the bread phase: expect the direct steal. Still holding one: expect the fly-out.
+
+    var deadline = Time.GetTicksMsec() + 150_000;
+
+    while (victim.Holds (HeldWeapon.Bread) && Time.GetTicksMsec() < deadline)
+    {
+      // The victim re-resets when low; swing only at a parked, unarmored, loaf-out target.
+      if (victim.Health <= 60 || victim.SpawnArmor || victim.SelectedWeapon != SelectedWeapon.Bread || FlatDistance (victim.GlobalPosition, VictimParkSpot) > 2.0f) { await Task.Delay (200); continue; }
+      Self.Position = victim.GlobalPosition + new Vector3 (0.0f, 0.0f, -1.5f);
+      await Task.Delay (120);
+      if (Self.GlobalPosition.DistanceTo (victim.GlobalPosition) > Self.PunchRange * 0.75f) continue;
+      PressAction ("weapon_1");
+      await Task.Delay (40);
+      ReleaseAction ("weapon_1");
+      AimAt (victim.GlobalPosition + Vector3.Up);
+      PressLeftClick();
+      await Task.Delay (60);
+      ReleaseLeftClick();
+      await Task.Delay (320);
+    }
+
+    Assert (!victim.Holds (HeldWeapon.Bread), "a punch took the victim's equipped loaf (#193)");
+    if (hadBread) await WaitUntil (() => DroppedNear (HeldWeapon.Bread, victim.GlobalPosition) is { TossFrom: var toss } && toss != Vector3.Zero, 30, "already holding a loaf, the theft became a fly-out: a tossed pickup beside the victim (#193)");
+    else await WaitUntil (() => Self.HasBread, 30, "the stolen loaf went straight into our hands - the direct steal (#193)");
+    Self.Position = ShooterParkSpot;
+    await Task.Delay (300);
+  }
+
+  // Headshots (#179): the first dome hit is a flat 300 - a 400-HP victim is left at 100.
+  private async Task BeTheHeadshotTarget()
+  {
+    var before = Self.Health;
+    await WaitUntil (() => Self.Health < before, 120, "took a hit in the headshot phase (#179)");
+    Assert (before - Self.Health == Player.HeadshotDamage, $"the dome hit cost exactly HeadshotDamage (#179): {before} -> {Self.Health}");
+  }
+
+  private async Task RunHeadshotPhase (Player victim)
+  {
+    await WaitUntil (() => victim.Health == victim.MaxHealth && !victim.SpawnArmor && FlatDistance (victim.GlobalPosition, VictimParkSpot) < 2.0f, 120, "victim parked at full health for the headshot phase (#179)");
+    Assert (Self.Holds (HeldWeapon.Laser), "still carrying the laser for the headshot phase (#179)");
+    PressAction ("weapon_2");
+    await Task.Delay (100);
+    ReleaseAction ("weapon_2");
+    Self.Position = victim.GlobalPosition + new Vector3 (0.0f, 0.0f, -4.0f);
+    await Task.Delay (300);
+    var before = victim.Health;
+
+    for (var attempt = 0; attempt < 10 && victim.Health == before; ++attempt)
+    {
+      AimAt (victim.GlobalPosition + HeadHitbox.LocalOffset); // Dead center of the dome.
+      await ChargeAndFire (0.1f); // A quick tap: far below the full-charge one-shot.
+      await Task.Delay (400);
+    }
+
+    await WaitUntil (() => victim.Health < before, 30, "the bolt landed on the victim (#179)");
+    // Fail fast on a body hit (CodeRabbit on #258): the first hit must be the dome's flat 300.
+    Assert (victim.Health == before - Player.HeadshotDamage, $"a dome hit cost the victim exactly {Player.HeadshotDamage} (#179): {before} -> {victim.Health}");
+    Self.Position = ShooterParkSpot;
+    await Task.Delay (300);
+  }
+
+  // The blowgun (#236): starts empty, loads by walking over a dart with the gun in
+  // hand, scopes through a real scope with a zoom ladder, & its dart poisons the
+  // victim - who then loses 10% a tick. A miss lands as an ARMED dart; stepping on it
+  // without the blowgun poisons you.
+  private async Task BeThePoisonTarget()
+  {
+    await WaitUntil (() => Self.PoisonDarts > 0, 180, "a blowgun dart stuck in us (#236)");
+    var before = Self.Health;
+    var tick = Mathf.RoundToInt (Self.MaxHealth * Self.PoisonTickFractionPerDart);
+    await WaitUntil (() => Self.Health <= before - tick, Self.PoisonTickSeconds + 4.0f, $"the poison ticked 10% ({tick}) within one tick period (#194/#236)");
+  }
+
+  private async Task RunBlowgunPhase (Player victim)
+  {
+    Self.Position = WeaponSpawner.PlaytestBlowgunPosition + Vector3.Up * 0.5f;
+    await Task.Delay (400);
+    await WaitUntil (() => Self.Holds (HeldWeapon.Blowgun), 30, "collected the playtest blowgun (#236)");
+    Assert (Self.SelectedWeapon == SelectedWeapon.Blowgun, "the blowgun auto-equipped into slot 8 (#128/#236)");
+    Assert (Self.BlowgunDarts == 0, "the blowgun starts EMPTY (#236)");
+    var dartsFiredBefore = _dartsSpawned;
+    PressAction ("shoot");
+    await Task.Delay (60);
+    ReleaseAction ("shoot");
+    await Task.Delay (300);
+    Assert (_dartsSpawned == dartsFiredBefore, "an empty blowgun fires nothing (#236)");
+    Self.Position = WeaponSpawner.PlaytestDartPosition + Vector3.Up * 0.5f;
+    await Task.Delay (400);
+    await WaitUntil (() => Self.BlowgunDarts >= 1, 30, "walking over a floating dart with the blowgun in hand loaded it as ammo (#236)");
+
+    // The scope: right click opens it, the wheel steps the zoom, cycling is suspended.
+    PressAction ("scope");
+    await Task.Delay (60);
+    ReleaseAction ("scope");
+    await WaitUntil (() => Self.IsScoped, 10, "right click opened the scope view (#236)");
+    Assert (Self.ZoomStep == 0, "the scope opens at its first zoom stop (#236)");
+    PressAction ("cycle_weapon_next");
+    await Task.Delay (60);
+    ReleaseAction ("cycle_weapon_next");
+    await WaitUntil (() => Self.ZoomStep == 1, 10, "the wheel stepped the scope in instead of cycling weapons (#236)");
+    Assert (Self.SelectedWeapon == SelectedWeapon.Blowgun, "weapon cycling stayed suspended while scoped (#236)");
+    await WaitUntil (() => Self.ReticleDrift != Vector2.Zero, 5, "the reticle drifts while scoped - aiming is never free (#236)"); // Polled: the wander can cross zero on any one frame.
+    PressAction ("scope");
+    await Task.Delay (60);
+    ReleaseAction ("scope");
+    await WaitUntil (() => !Self.IsScoped, 10, "right click closed the scope (#236)");
+
+    // Poison the parked victim with the loaded dart.
+    await WaitUntil (() => !victim.SpawnArmor && FlatDistance (victim.GlobalPosition, VictimParkSpot) < 2.0f && victim.PoisonDarts == 0 && victim.Health == victim.MaxHealth, 120, "victim parked & clean for the dart (#236)");
+    Self.Position = victim.GlobalPosition + new Vector3 (0.0f, 0.0f, -5.0f);
+    await Task.Delay (300);
+    var dartsBefore = Self.BlowgunDarts;
+
+    for (var attempt = 0; attempt < 10 && victim.PoisonDarts == 0; ++attempt)
+    {
+      if (Self.BlowgunDarts == 0) await Reload (victim.GlobalPosition + new Vector3 (0.0f, 0.0f, -5.0f));
+      AimAt (victim.GlobalPosition + Vector3.Up);
+      PressAction ("shoot");
+      await Task.Delay (60);
+      ReleaseAction ("shoot");
+      await Task.Delay (1700); // Outlast the 1.5s cooldown.
+    }
+
+    Assert (Self.BlowgunDarts < dartsBefore || dartsBefore == 0, "firing spent a dart (#236)");
+    await WaitUntil (() => victim.PoisonDarts >= 1, 30, "the dart stuck in the victim & the count replicated (#194/#236)");
+
+    // A miss lands armed; without the blowgun, stepping on it poisons us.
+    Self.Position = ShooterParkSpot;
+    await Task.Delay (300);
+    if (Self.BlowgunDarts == 0) await Reload (ShooterParkSpot);
+    var floorSpot = ShooterParkSpot + new Vector3 (0.0f, 0.0f, -3.0f);
+    AimAt (floorSpot);
+    PressAction ("shoot");
+    await Task.Delay (60);
+    ReleaseAction ("shoot");
+    await WaitUntil (() => DroppedNear (HeldWeapon.PoisonDart, floorSpot) is { Armed: true }, 30, "a dart that hit the floor landed as an ARMED ground dart (#236/#248)");
+    AimAt (ShooterParkSpot + new Vector3 (0.0f, 1.0f, 4.0f)); // Toss the gun AWAY from the dart, so it can't land inside the dart's claim reach (CodeRabbit on #258).
+    PressAction ("drop"); // Lose the blowgun so the dart is a hazard to us, not ammo (also covers #242 for slot 8).
+    await Task.Delay (60);
+    ReleaseAction ("drop");
+    await WaitUntil (() => !Self.HasBlowgun, 10, "X dropped the blowgun (#242)");
+    Assert (Self.BlowgunDarts == 0, "losing the blowgun returned its darts to the level (#236)");
+    var dart = DroppedNear (HeldWeapon.PoisonDart, floorSpot)!;
+    Self.Position = dart.GlobalPosition with { Y = ShooterParkSpot.Y };
+    await WaitUntil (() => Self.PoisonDarts >= 1, 30, "stepping on the landed dart without the blowgun poisoned us (#236/#248)");
+    Self.Position = ShooterParkSpot;
+    await Task.Delay (300);
+  }
+
+  // Walk over the restocking dart fixture, then come back.
+  private async Task Reload (Vector3 returnTo)
+  {
+    Self.Position = WeaponSpawner.PlaytestDartPosition + Vector3.Up * 0.5f;
+    await WaitUntil (() => Self.BlowgunDarts >= 1, 15, "reloaded from the dart fixture (#236)");
+    Self.Position = returnTo;
+    await Task.Delay (300);
+  }
+
+  // Drop on X (#242): the equipped laser flies out the way we look & lands as a
+  // tossed pickup we no longer hold.
+  private async Task RunDropPhase()
+  {
+    PressAction ("weapon_2");
+    await Task.Delay (100);
+    ReleaseAction ("weapon_2");
+    Assert (Self.SelectedWeapon == SelectedWeapon.Laser && Self.Holds (HeldWeapon.Laser), "laser in hand for the drop phase (#242)");
+    var ahead = ShooterParkSpot + new Vector3 (0.0f, 0.0f, -2.0f);
+    AimAt (ahead + Vector3.Up);
+    PressAction ("drop");
+    await Task.Delay (60);
+    ReleaseAction ("drop");
+    await WaitUntil (() => !Self.Holds (HeldWeapon.Laser), 10, "X dropped the laser (#242)");
+    Assert (Self.SelectedWeapon == SelectedWeapon.Fists, "dropping the equipped laser fell back to fists (#82/#242)");
+    await WaitUntil (() => DroppedNear (HeldWeapon.Laser, ahead) is { TossFrom: var toss } && toss != Vector3.Zero, 30, "the dropped laser landed ahead of us as a tossed pickup (#242)");
+  }
+
+  // The boxing ring (#174): running into a rope bounces us back out with a shove.
+  private async Task RunRingPhase()
+  {
+    Self.Position = new Vector3 (0.0f, 31.0f, -3.0f); // Facing the north rope at z=-6.
+    await Task.Delay (300);
+    AimAt (new Vector3 (0.0f, 32.0f, -6.0f));
+    Input.ActionPress ("move_forward");
+    var bounced = false;
+    for (var i = 0; i < 40 && !bounced; ++i) { await Task.Delay (50); bounced = Self.Velocity.Z > 2.0f; } // Moving -Z into the wall; a bounce flips it to +Z.
+    Input.ActionRelease ("move_forward");
+    Assert (bounced, "running into a ring rope bounced us back with a shove (#174)");
+    Self.Position = SpawnRoomCenter;
+    await Task.Delay (300);
+  }
+
   private async Task RunLandminePhase()
   {
     Assert (Self.Holds (HeldWeapon.PaperAirplane), "holding the airplane to arm the landmine with (#191)");
