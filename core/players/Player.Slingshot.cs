@@ -214,7 +214,7 @@ public partial class Player
   private void SpawnStone (Vector3 origin, Vector3 sweepStart, Vector3 direction, float speed, float gravity, float energy, bool isLive, HeldWeapon ammo)
   {
     PlaySlingshotThwack (origin);
-    var stone = new SlingshotStone { Ammo = ammo };
+    var stone = new SlingshotStone { Ammo = ammo, Shooter = this }; // Ownership rides in before AddChild (issue #272).
     GetParent().AddChild (stone);
     stone.Launch (origin, sweepStart, direction, speed, gravity, energy, isLive, this);
     if (!isLive) return;
