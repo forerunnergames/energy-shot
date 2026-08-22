@@ -250,4 +250,10 @@ public partial class MessageScroller : Control
     _messageHistory.Clear();
     UpdateMessageHistory();
   }
+
+  public void ApplyVisibilitySetting()
+  {
+    Visible = com.forerunnergames.energyshot.utilities.Settings.ShowMessages;
+    _messageHistoryContainer.Visible = false; // Never reveal a stuck Tab backdrop (Aaron's gray box).
+  }
 }

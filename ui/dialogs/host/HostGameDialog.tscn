@@ -22,69 +22,74 @@ anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
 offset_left = -753.0
-offset_top = -445.5
+offset_top = -972.0
 offset_right = 847.0
-offset_bottom = 454.5
+offset_bottom = 972.0
 grow_horizontal = 2
 grow_vertical = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_qj6s6")
 
-[node name="MarginContainer" type="MarginContainer" parent="PanelContainer"]
+[node name="ScrollContainer" type="ScrollContainer" parent="PanelContainer"]
 layout_mode = 2
+horizontal_scroll_mode = 0
 
-[node name="VBoxContainer" type="VBoxContainer" parent="PanelContainer/MarginContainer"]
+[node name="MarginContainer" type="MarginContainer" parent="PanelContainer/ScrollContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="VBoxContainer" type="VBoxContainer" parent="PanelContainer/ScrollContainer/MarginContainer"]
 layout_mode = 2
 theme_override_constants/separation = 50
 alignment = 1
 
-[node name="HBoxContainer" type="HBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer"]
+[node name="HBoxContainer" type="HBoxContainer" parent="PanelContainer/ScrollContainer/MarginContainer/VBoxContainer"]
 layout_mode = 2
 alignment = 1
 
-[node name="Title" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/HBoxContainer"]
+[node name="Title" type="Label" parent="PanelContainer/ScrollContainer/MarginContainer/VBoxContainer/HBoxContainer"]
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_font_sizes/font_size = 100
 text = "Hosting New Game"
 horizontal_alignment = 1
 
-[node name="MarginContainer" type="MarginContainer" parent="PanelContainer/MarginContainer/VBoxContainer/HBoxContainer"]
+[node name="MarginContainer" type="MarginContainer" parent="PanelContainer/ScrollContainer/MarginContainer/VBoxContainer/HBoxContainer"]
 layout_mode = 2
 theme_override_constants/margin_top = 10
 theme_override_constants/margin_right = 15
 theme_override_constants/margin_bottom = 20
 
-[node name="CloseButton" type="Button" parent="PanelContainer/MarginContainer/VBoxContainer/HBoxContainer/MarginContainer"]
+[node name="CloseButton" type="Button" parent="PanelContainer/ScrollContainer/MarginContainer/VBoxContainer/HBoxContainer/MarginContainer"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 50
 text = "  X  "
 
-[node name="HSeparator1" type="HSeparator" parent="PanelContainer/MarginContainer/VBoxContainer"]
+[node name="HSeparator1" type="HSeparator" parent="PanelContainer/ScrollContainer/MarginContainer/VBoxContainer"]
 layout_mode = 2
 
-[node name="TopText" type="VBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer"]
+[node name="TopText" type="VBoxContainer" parent="PanelContainer/ScrollContainer/MarginContainer/VBoxContainer"]
 layout_mode = 2
 
-[node name="Label1" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/TopText"]
+[node name="Label1" type="Label" parent="PanelContainer/ScrollContainer/MarginContainer/VBoxContainer/TopText"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 50
 text = "Player Name"
 horizontal_alignment = 1
 
-[node name="Label2" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/TopText"]
+[node name="Label2" type="Label" parent="PanelContainer/ScrollContainer/MarginContainer/VBoxContainer/TopText"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 20
 text = "(1 to16 letters & numbers, no spaces, no special characters)"
 horizontal_alignment = 1
 
-[node name="PlayerName" type="LineEdit" parent="PanelContainer/MarginContainer/VBoxContainer"]
+[node name="PlayerName" type="LineEdit" parent="PanelContainer/ScrollContainer/MarginContainer/VBoxContainer"]
 layout_mode = 2
 theme_override_colors/font_uneditable_color = Color(1, 1, 1, 1)
 theme_override_font_sizes/font_size = 100
 alignment = 1
 max_length = 20
 
-[node name="Difficulty" type="OptionButton" parent="PanelContainer/MarginContainer/VBoxContainer"]
+[node name="Difficulty" type="OptionButton" parent="PanelContainer/ScrollContainer/MarginContainer/VBoxContainer"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 90
 alignment = 1
@@ -97,18 +102,18 @@ popup/item_1/id = 1
 popup/item_2/text = "Expert (1x health)"
 popup/item_2/id = 2
 
-[node name="PlayerColor" type="OptionButton" parent="PanelContainer/MarginContainer/VBoxContainer"]
+[node name="PlayerColor" type="OptionButton" parent="PanelContainer/ScrollContainer/MarginContainer/VBoxContainer"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 90
 alignment = 1
 
-[node name="MaxPlayersLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer"]
+[node name="MaxPlayersLabel" type="Label" parent="PanelContainer/ScrollContainer/MarginContainer/VBoxContainer"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 50
 text = "Max Players"
 horizontal_alignment = 1
 
-[node name="MaxPlayers" type="SpinBox" parent="PanelContainer/MarginContainer/VBoxContainer"]
+[node name="MaxPlayers" type="SpinBox" parent="PanelContainer/ScrollContainer/MarginContainer/VBoxContainer"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 90
 min_value = 2.0
@@ -117,13 +122,13 @@ value = 12.0
 rounded = true
 alignment = 1
 
-[node name="GameModeLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer"]
+[node name="GameModeLabel" type="Label" parent="PanelContainer/ScrollContainer/MarginContainer/VBoxContainer"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 50
 text = "Game Mode"
 horizontal_alignment = 1
 
-[node name="GameMode" type="OptionButton" parent="PanelContainer/MarginContainer/VBoxContainer"]
+[node name="GameMode" type="OptionButton" parent="PanelContainer/ScrollContainer/MarginContainer/VBoxContainer"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 90
 alignment = 1
@@ -134,13 +139,13 @@ popup/item_0/id = 0
 popup/item_1/text = "King of the Hill"
 popup/item_1/id = 1
 
-[node name="RoundMinutesLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer"]
+[node name="RoundMinutesLabel" type="Label" parent="PanelContainer/ScrollContainer/MarginContainer/VBoxContainer"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 50
 text = "Round Minutes (0 = no limit)"
 horizontal_alignment = 1
 
-[node name="RoundMinutes" type="SpinBox" parent="PanelContainer/MarginContainer/VBoxContainer"]
+[node name="RoundMinutes" type="SpinBox" parent="PanelContainer/ScrollContainer/MarginContainer/VBoxContainer"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 90
 max_value = 60.0
@@ -148,13 +153,13 @@ value = 5.0
 rounded = true
 alignment = 1
 
-[node name="ZapLimitLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer"]
+[node name="ZapLimitLabel" type="Label" parent="PanelContainer/ScrollContainer/MarginContainer/VBoxContainer"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 50
 text = "First To (zaps, 0 = no limit)"
 horizontal_alignment = 1
 
-[node name="ZapLimit" type="SpinBox" parent="PanelContainer/MarginContainer/VBoxContainer"]
+[node name="ZapLimit" type="SpinBox" parent="PanelContainer/ScrollContainer/MarginContainer/VBoxContainer"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 90
 max_value = 200.0
@@ -162,13 +167,13 @@ value = 20.0
 rounded = true
 alignment = 1
 
-[node name="PasswordLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer"]
+[node name="PasswordLabel" type="Label" parent="PanelContainer/ScrollContainer/MarginContainer/VBoxContainer"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 50
 text = "Game Password (required; share it with your friends)"
 horizontal_alignment = 1
 
-[node name="Password" type="LineEdit" parent="PanelContainer/MarginContainer/VBoxContainer"]
+[node name="Password" type="LineEdit" parent="PanelContainer/ScrollContainer/MarginContainer/VBoxContainer"]
 layout_mode = 2
 theme_override_colors/font_uneditable_color = Color(1, 1, 1, 1)
 theme_override_font_sizes/font_size = 100
@@ -176,17 +181,17 @@ placeholder_text = "Enter Game Password"
 alignment = 1
 secret = true
 
-[node name="HSeparator2" type="HSeparator" parent="PanelContainer/MarginContainer/VBoxContainer"]
+[node name="HSeparator2" type="HSeparator" parent="PanelContainer/ScrollContainer/MarginContainer/VBoxContainer"]
 layout_mode = 2
 
-[node name="MiddleText" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer"]
+[node name="MiddleText" type="Label" parent="PanelContainer/ScrollContainer/MarginContainer/VBoxContainer"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 50
 text = "Finding your server address...
 Your server address is:"
 horizontal_alignment = 1
 
-[node name="ServerAddress" type="LineEdit" parent="PanelContainer/MarginContainer/VBoxContainer"]
+[node name="ServerAddress" type="LineEdit" parent="PanelContainer/ScrollContainer/MarginContainer/VBoxContainer"]
 layout_mode = 2
 theme_override_colors/font_uneditable_color = Color(1, 1, 1, 1)
 theme_override_font_sizes/font_size = 100
@@ -194,13 +199,13 @@ text = "127.0.0.1"
 alignment = 1
 editable = false
 
-[node name="BottomText" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer"]
+[node name="BottomText" type="Label" parent="PanelContainer/ScrollContainer/MarginContainer/VBoxContainer"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 50
 text = "Please share this with your friends so they can join your game!"
 horizontal_alignment = 1
 
-[node name="HostGameButton" type="Button" parent="PanelContainer/MarginContainer/VBoxContainer"]
+[node name="HostGameButton" type="Button" parent="PanelContainer/ScrollContainer/MarginContainer/VBoxContainer"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 100
 text = "Start Game"
