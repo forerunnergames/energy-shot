@@ -61,7 +61,7 @@ void fragment() {
     if (_player == null || !_player.IsScoped) return;
     var size = GetViewportRect().Size;
     var radius = Radius (size);
-    var reticle = size / 2.0f + _player.ReticleDrift * radius;
+    var reticle = size / 2.0f; // The dot stays centered; the CAMERA sways instead (issue #279).
     var settled = _player.IsScopeSettled;
     DrawArc (size / 2.0f, radius, 0.0f, Mathf.Tau, 96, Rim, 3.0f);
     // The laser dot: layered discs fake the bloom. Wandering it breathes wide &

@@ -462,6 +462,7 @@ public partial class Player : CharacterBody3D
     UpdateAirBoost();
     UpdateStickyFlight (delta);
     UpdateCameraKick (delta);
+    UpdateScopeSway(); // The scoped view sways with the heartbeat (issue #279).
     UpdateCameraShake (delta);
     UpdateDeathView(); // Keeps the fallen body framed during the lie-down (issue #152).
     UpdateChaseViewAim(); // Re-aims the chase camera when wall clipping shortens the arm (issue #187).
