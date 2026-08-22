@@ -32,7 +32,7 @@ public partial class BlowgunDart : Node3D
     AddChild (CreateDartVisual());
     // The fly-by whoosh (issue #194): positional & short-range - hearing it means the
     // dart is near YOU. Looped for the flight, like the boomerang's (issue #98).
-    var whoosh = new AudioStreamPlayer3D { Stream = ProceduralSounds.DartWhoosh(), UnitSize = 2.0f, MaxDistance = 7.0f, Autoplay = true };
+    var whoosh = new AudioStreamPlayer3D { Stream = ResourceLoader.Load <AudioStream> ("res://assets/sounds/dart-throw.mp3"), UnitSize = 2.0f, MaxDistance = 7.0f, Autoplay = true }; // Real dart whoosh (Aaron, 2026-08-22): Pixabay; still short-range.
     whoosh.Finished += () => whoosh.Play();
     AddChild (whoosh);
   }

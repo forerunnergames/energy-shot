@@ -132,9 +132,94 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 28, 11)
 use_collision = true
 size = Vector3(6, 0.5, 6)
 
+[node name="Building6" type="CSGBox3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 62, 1, -40)
+use_collision = true
+size = Vector3(5, 2, 5)
+
+[node name="Building7" type="CSGBox3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -58, 1, 45)
+use_collision = true
+size = Vector3(5, 2, 5)
+
+[node name="Building8" type="CSGBox3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 75, 1, 30)
+use_collision = true
+size = Vector3(5, 2, 5)
+
+[node name="Building9" type="CSGBox3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -70, 1, -60)
+use_collision = true
+size = Vector3(5, 2, 5)
+
+[node name="Building10" type="CSGBox3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 40, 1, 70)
+use_collision = true
+size = Vector3(5, 2, 5)
+
+[node name="Pillar7" type="CSGBox3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 55, 3, 60)
+use_collision = true
+size = Vector3(2, 6, 2)
+
+[node name="Pillar8" type="CSGBox3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -65, 3, -15)
+use_collision = true
+size = Vector3(2, 6, 2)
+
+[node name="Pillar9" type="CSGBox3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 80, 3, -70)
+use_collision = true
+size = Vector3(2, 6, 2)
+
+[node name="Pillar10" type="CSGBox3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -45, 3, 75)
+use_collision = true
+size = Vector3(2, 6, 2)
+
+[node name="Pillar11" type="CSGBox3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 12, 3, -75)
+use_collision = true
+size = Vector3(2, 6, 2)
+
+[node name="Pillar12" type="CSGBox3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -80, 3, 8)
+use_collision = true
+size = Vector3(2, 6, 2)
+
+[node name="Platform5" type="CSGBox3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 60, 5, -65)
+use_collision = true
+size = Vector3(8, 0.5, 8)
+
+[node name="Platform6" type="CSGBox3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -62, 7, 60)
+use_collision = true
+size = Vector3(8, 0.5, 8)
+
+[node name="Platform7" type="CSGBox3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 78, 9, -8)
+use_collision = true
+size = Vector3(8, 0.5, 8)
+
+[node name="Platform8" type="CSGBox3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -15, 6, 80)
+use_collision = true
+size = Vector3(8, 0.5, 8)
+
+[node name="HighPlatform1" type="CSGBox3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -60, 26, -60)
+use_collision = true
+size = Vector3(6, 0.5, 6)
+
+[node name="HighPlatform2" type="CSGBox3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 65, 30, 65)
+use_collision = true
+size = Vector3(6, 0.5, 6)
+
 [node name="Ground" type="CSGBox3D" parent="."]
 use_collision = true
-size = Vector3(100, 0.002, 100)
+size = Vector3(200, 0.002, 200)
 material = SubResource("StandardMaterial3D_bx300")
 
 [node name="SpawnRoom" type="Node3D" parent="."]

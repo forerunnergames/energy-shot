@@ -59,10 +59,10 @@ public partial class Player
     camera.AddChild (_blowgunHeld);
     _unscopedFovDegrees = camera.Fov;
     // Bystanders hear the puff only within a few feet (the stealth rule, issue #194)...
-    _blowgunShotSound = new AudioStreamPlayer3D { Stream = ProceduralSounds.DartPfft(), UnitSize = 1.2f, MaxDistance = 3.0f, MaxPolyphony = 3 };
+    _blowgunShotSound = new AudioStreamPlayer3D { Stream = ResourceLoader.Load <AudioStream> ("res://assets/sounds/blowgun-blow.mp3"), UnitSize = 1.2f, MaxDistance = 3.0f, MaxPolyphony = 3 }; // Real air blow (Aaron, 2026-08-22): Pixabay; the stealth radius stays.
     AddChild (_blowgunShotSound);
     // ...while the shooter always hears their own shot, locally (issue #236).
-    _blowgunOwnShotSound = new AudioStreamPlayer { Stream = ProceduralSounds.DartPfft(), MaxPolyphony = 3 };
+    _blowgunOwnShotSound = new AudioStreamPlayer { Stream = ResourceLoader.Load <AudioStream> ("res://assets/sounds/blowgun-blow.mp3"), MaxPolyphony = 3 };
     AddChild (_blowgunOwnShotSound);
     _heartbeatSound = new AudioStreamPlayer { Stream = ProceduralSounds.Heartbeat(), VolumeDb = -4.0f };
     AddChild (_heartbeatSound);
@@ -129,15 +129,26 @@ public partial class Player
     Rpc (MethodName.SpawnVisualDart, origin, sweepStart, direction);
   }
 
-  // Where the reticle points, drift included: the scope view's offset is turned back
-  // into a world ray through the camera, so what you see wander is what you hit.
-  private Vector3 AimDirection()
+  // The whole scoped view sways with the heartbeat (issue #279, thepro & Caleb):
+  // the drift rotates the CAMERA & the laser dot stays screen-centered, so where the
+  // dot points is where the dart goes - the aim ray is just the center ray now.
+  private Vector3 AimDirection() => -_camera.GlobalTransform.Basis.Z;
+
+  // The same wander that used to move the dot, as a camera rotation: a screen offset
+  // of drift * scope-radius equals drift * RadiusFraction of the FOV, so the sway
+  // auto-scales with zoom & the difficulty is exactly what the drifting dot was.
+  public static Vector2 SwayRadians (Vector2 drift, float fovDegrees) => drift * (Mathf.DegToRad (fovDegrees) * ScopeView.RadiusFraction);
+
+  private Vector2 _appliedSway;
+
+  private void UpdateScopeSway()
   {
-    if (!_isScoped) return -_camera.GlobalTransform.Basis.Z;
-    var viewport = GetViewport().GetVisibleRect().Size;
-    var radius = Mathf.Min (viewport.X, viewport.Y) * ScopeView.RadiusFraction; // The HUD's scope radius.
-    var screenPoint = viewport / 2.0f + ReticleDrift * radius;
-    return _camera.ProjectRayNormal (screenPoint);
+    var target = _isScoped ? SwayRadians (ReticleDrift, _camera.Fov) : Vector2.Zero;
+    var rotation = _camera.Rotation;
+    rotation.X -= target.Y - _appliedSway.Y; // Screen-down drift pitches the view down.
+    rotation.Y -= target.X - _appliedSway.X; // Screen-right drift yaws the view right.
+    _camera.Rotation = rotation;
+    _appliedSway = target;
   }
 
   // Every peer flies a cosmetic copy (the SpawnVisualLaser pattern): the whoosh has
