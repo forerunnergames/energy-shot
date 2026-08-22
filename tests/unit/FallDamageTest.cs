@@ -39,7 +39,7 @@ public class FallDamageTest
     // Aaron's ruling: each bounce gains height, reaching the ceiling around the
     // tenth jump - & a gentle landing (under the stand threshold) never bounces at
     // all, so the old passive forever-loop floor stays dead.
-    var speed = 12.0f; // A jump onto the rope.
+    var speed = 14.0f; // A solid jump onto the rope (14 x 1.1^10 = 36.3, capped).
     for (var i = 0; i < 10; ++i) speed = Mathf.Min (speed * player.RopeTopBouncePerFallSpeed, player.RopeTopBounceMax);
     AssertFloat (speed).IsEqual (player.RopeTopBounceMax); // The cap by the tenth bounce.
     AssertFloat (player.RopeTopMinTrampolineFallSpeed).IsGreater (0.0f); // The stand threshold exists: no minimum-bounce fuel.
