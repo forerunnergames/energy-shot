@@ -34,6 +34,7 @@ Slot keys select what's in your hands. You spawn with fists **and bread** (bread
 With the slingshot **out and empty**, walking onto any world item **loads it** instead of collecting it - another player's dropped laser, the banana launcher, the boomerang, even another slingshot, plus loose bread, banana chunks, and a grounded paper airplane. You can only ever load what's on the ground: your own equipped weapons stay in your hands.
 
 - One item at a time. While something is nocked, normal pickup rules apply again.
+- **Catch a live banana**: if a fired banana lands on you while you're actively DRAWING the slingshot, you catch it - nocked, fuse still ticking. Fire it straight back or it goes off in your pouch. Just holding the slingshot doesn't catch; you can catch your own.
 - Any slung hit blurs the victim's screen like a punch; slung **bread** also plasters them in brown crumbs (not banana goo - crumbs).
 - Slung items fly the same draw-scaled arc as a stone. Small things sting like a stone; **big things hit hard** - a slung gun deals roughly double the damage and knockback, the banana launcher triple (never a one-hit, even at full draw).
 - **Every slung gun goes berserk**: a slung laser sprays full-auto shots, a slung banana launcher lobs bananas, a slung slingshot flings stones - all in random directions as it tumbles, until it lands. Dangerous to everyone near its flight path. (A slung blowgun is always empty - its darts went back into the level when it left your hands.)

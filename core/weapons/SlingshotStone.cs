@@ -112,6 +112,7 @@ public partial class SlingshotStone : Node3D
     HeldWeapon.Bread => Scaled (Bread.CreateVisual(), 0.9f),
     HeldWeapon.PaperAirplane => Scaled (PaperAirplaneProjectile.CreateVisual(), 0.8f),
     HeldWeapon.BananaChunk => MeshVisual (null, BananaYellow, 1.0f),
+    HeldWeapon.BananaGrenade => MeshVisual ("res://assets/weapons/banana.obj", BananaYellow, 0.35f), // A caught live banana (issue #251).
     HeldWeapon.Blowgun => Scaled (BlowgunDart.CreateBlowgunVisual(), 0.55f), // A found blowgun is slingable like any ground item (issue #194).
     HeldWeapon.PoisonDart => Scaled (BlowgunDart.CreateDartVisual(), 1.0f), // Issue #194.
     _ => CreateStoneVisual()

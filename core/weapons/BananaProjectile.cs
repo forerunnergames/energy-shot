@@ -30,6 +30,12 @@ public partial class BananaProjectile : Node3D
   private const float SurfaceClearance = 0.3f;
   [Signal] public delegate void ExplodedEventHandler (Vector3 origin);
   [Signal] public delegate void StuckToPlayerEventHandler (Player victim, Vector3 hitPosition);
+  // Caught in a drawn slingshot (issue #251): the live copy reports it with the fuse
+  // time left; every copy (cosmetic ones too) vanishes, since the catcher's drawing
+  // state replicates & the catch is the same on every peer.
+  [Signal] public delegate void CaughtBySlingshotEventHandler (Player catcher, float fuseSecondsLeft);
+  private const float OwnCatchAfterSeconds = 0.4f; // Clear of the muzzle first; then your own slingshot can catch it.
+  private CharacterBody3D? _shooter;
   private static readonly Color BananaYellow = new(0.92f, 0.78f, 0.12f);
   private static readonly Color FlashColor = new(4.0f, 3.6f, 0.4f);
   private Vector3 _velocity;
@@ -52,8 +58,19 @@ public partial class BananaProjectile : Node3D
     GlobalPosition = origin;
     _velocity = direction.Normalized() * Speed;
     _isLive = isLive;
+    _shooter = shooter;
     _shooterRid = shooter.GetRid();
   }
+
+  // A caught grenade fired back (issue #251): the fuse is already lit & carries over.
+  public void LaunchLit (Vector3 origin, Vector3 direction, bool isLive, CharacterBody3D shooter, float fuseSecondsLeft)
+  {
+    Launch (origin, direction, isLive, shooter);
+    _fuseLit = true;
+    _fuseSecondsLeft = fuseSecondsLeft;
+  }
+
+  public float FuseSecondsLeft => _fuseLit ? _fuseSecondsLeft : FuseSeconds;
 
   public override void _PhysicsProcess (double delta)
   {
@@ -71,7 +88,9 @@ public partial class BananaProjectile : Node3D
     var from = GlobalPosition;
     _velocity.Y -= GravityAcceleration * dt;
     var to = from + _velocity * dt;
-    var query = PhysicsRayQueryParameters3D.Create (from, to, exclude: new Godot.Collections.Array <Rid> { _shooterRid });
+    // The shooter is excluded only until the banana has cleared the muzzle: after that
+    // it can come back down onto their own drawn slingshot (issue #251).
+    var query = PhysicsRayQueryParameters3D.Create (from, to, exclude: _age < OwnCatchAfterSeconds ? new Godot.Collections.Array <Rid> { _shooterRid } : new Godot.Collections.Array <Rid>());
     query.HitFromInside = true;
     var hit = GetWorld3D().DirectSpaceState.IntersectRay (query);
 
@@ -81,10 +100,12 @@ public partial class BananaProjectile : Node3D
       return;
     }
 
-    // A direct player hit doesn't explode - it sticks (issue #83): the live banana
-    // reports the victim & every peer swaps to the replicated stuck banana.
     if (hit["collider"].AsGodotObject() is CharacterBody3D body)
     {
+      if (TryCatch (body)) return;
+      if (body == _shooter) { GlobalPosition = to; return; } // Your own banana passes through you unless you're catching it.
+      // A direct player hit doesn't explode - it sticks (issue #83): the live banana
+      // reports the victim & every peer swaps to the replicated stuck banana.
       if (_isLive && body is Player victim) EmitSignal (SignalName.StuckToPlayer, victim, (Vector3)hit["position"]);
       QueueFree();
       return;
@@ -103,6 +124,21 @@ public partial class BananaProjectile : Node3D
     var along = _velocity - into;
     _velocity = along * SlideRetention - into * Restitution; // Flip & squash the plunge, keep the skid.
     GlobalPosition = (Vector3)hit["position"] + normal * SurfaceClearance;
+  }
+
+  // The catch (issue #251): only a slingshot being DRAWN at the moment of contact
+  // catches; merely holding one is not enough (thepro & Caleb's balance rule).
+  private bool TryCatch (CharacterBody3D body)
+  {
+    // The pouch must be ABLE to accept (CodeRabbit): DrawingSlingshot & SlingshotAmmo
+    // both replicate, so the projectile's peer sees the same emptiness the catcher's
+    // ReceiveBananaCatch guard will demand - an occupied pouch just gets hit normally
+    // instead of vanishing the banana. The catcher-side guard stays as the backstop
+    // for the sub-frame race.
+    if (body is not Player catcher || !catcher.DrawingSlingshot || catcher.SlingshotAmmo != HeldWeapon.None) return false;
+    if (_isLive) EmitSignal (SignalName.CaughtBySlingshot, catcher, FuseSecondsLeft);
+    QueueFree();
+    return true;
   }
 
   private void LightFuse()

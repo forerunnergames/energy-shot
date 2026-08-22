@@ -23,5 +23,6 @@ public enum HeldWeapon
   Bread = 32,
   BananaChunk = 64,
   Blowgun = 128,
-  PoisonDart = 256
+  PoisonDart = 256,
+  BananaGrenade = 512 // Ammo only (issue #251): a live banana caught in a slingshot, fuse still ticking.
 }

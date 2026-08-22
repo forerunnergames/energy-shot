@@ -141,6 +141,9 @@ properties/27/replication_mode = 2
 properties/28/path = NodePath(".:BlowgunDarts")
 properties/28/spawn = true
 properties/28/replication_mode = 2
+properties/29/path = NodePath(".:DrawingSlingshot")
+properties/29/spawn = true
+properties/29/replication_mode = 2
 
 [node name="Player" type="CharacterBody3D"]
 collision_layer = 2

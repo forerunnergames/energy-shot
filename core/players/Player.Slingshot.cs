@@ -72,7 +72,7 @@ public partial class Player
   // Playtest-observable (issue #190): true from the shot until the item comes to rest.
   public bool IsSlungItemInFlight => _ammoStone != null && IsInstanceValid (_ammoStone) && _ammoStone.IsInsideTree();
   // Cosmetic ammo (banana chunks) is scenery no cap tracks: it splatters & is gone.
-  private static bool IsCosmeticAmmo (HeldWeapon ammo) => ammo == HeldWeapon.BananaChunk;
+  private static bool IsCosmeticAmmo (HeldWeapon ammo) => ammo is HeldWeapon.BananaChunk or HeldWeapon.BananaGrenade; // Neither is a capped item (issues #190 & #251).
 
   // Called back by the server (WeaponSpawner.ConfirmAmmoLoad) once it has despawned
   // the claimed world item for everyone (issue #190).
@@ -146,6 +146,7 @@ public partial class Player
   // slingshot (or selection) mid-draw cancels cleanly.
   private void UpdateSlingshot (double delta)
   {
+    UpdateBananaCatch (delta); // The replicated drawing flag & the pouch fuse (issue #251).
     _slingshotCooldownLeft = Mathf.Max (0.0f, _slingshotCooldownLeft - (float)delta);
     var active = IsSlingshotSelected && HasSlingshot && _isInputEnabled;
     if (!active) { CancelSlingshotDraw(); return; }
@@ -188,6 +189,7 @@ public partial class Player
     CancelSpawnArmorIfFired();
     _slingshotCooldownLeft = SlingshotCooldownSeconds; // Fire-rate cap (issue #163).
     var ammo = SlingshotAmmo;
+    if (ammo == HeldWeapon.BananaGrenade) { FireGrenade (_camera.GlobalPosition + -_camera.GlobalTransform.Basis.Z * MuzzleOffsetMeters, -_camera.GlobalTransform.Basis.Z); return; } // The caught banana goes back (issue #251).
     var speed = Mathf.Lerp (SlingshotMinSpeed, SlingshotMaxSpeed, draw);
     var energy = Mathf.Lerp (SlingshotMinEnergy, SlingshotMaxEnergy, draw);
     var gravity = Mathf.Lerp (SlingshotMinDrawGravity, SlingshotMaxDrawGravity, draw); // Flatter arc at full draw (issue #163).
