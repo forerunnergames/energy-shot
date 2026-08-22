@@ -93,7 +93,7 @@ public partial class Player
   // inside the circle locks just as well as a close one.
   private Player? FindPlayerInsideLockRing()
   {
-    var aim = -_camera.GlobalTransform.Basis.Z;
+    var aim = ShotDirection(); // Converged in third person (issue #338).
     var cone = Mathf.DegToRad (LockConeDegrees);
     Player? best = null;
     var bestAngle = float.MaxValue;
@@ -118,7 +118,7 @@ public partial class Player
   {
     CancelSpawnArmorIfFired();
     var target = _lockedTarget; // Whoever was inside the ring at release (issue #211).
-    var direction = -_camera.GlobalTransform.Basis.Z;
+    var direction = ShotDirection(); // Converged in third person (issue #338).
     var origin = _camera.GlobalPosition + direction * MuzzleOffsetMeters;
     // The server registers the flight (CodeRabbit on #180): the single-use record a
     // later catch handoff must consume, so replays can't mint extra airplanes.
