@@ -1610,13 +1610,29 @@ public partial class PlaytestDriver : Node
     Self.Position = host.GlobalPosition + new Vector3 (0.0f, 0.3f, 2.0f);
     await Task.Delay (400);
     AimAt (host.GlobalPosition + Vector3.Up);
+    // The twice-a-punch spec proven EMPIRICALLY on the same target (the first run
+    // showed damage is difficulty-scaled - the host takes handicapped hits, so the
+    // unscaled formula asserted a number the engine never produces): punch once,
+    // record the real decrease, club, & demand exactly double.
     var healthBefore = host.Health;
-    var clubDamage = Player.CalculateHealthDecrease (Self.ClubEnergy);
-    Assert (clubDamage == 2 * Player.CalculateHealthDecrease (Self.PunchEnergy), $"the club's spec IS twice a punch (#269), club {clubDamage} vs punch {Player.CalculateHealthDecrease (Self.PunchEnergy)}"); // The relationship, not just the current tuning (CodeRabbit).
+    PressAction ("weapon_1");
+    await Task.Delay (100);
+    ReleaseAction ("weapon_1");
+    PressLeftClick();
+    await Task.Delay (60);
+    ReleaseLeftClick();
+    await WaitUntil (() => host.Health < healthBefore, 15, "the calibration punch landed on the host (#269)");
+    var punchDamage = healthBefore - host.Health;
+    PressAction ("weapon_8");
+    await Task.Delay (400); // Past the punch cooldown, back on the empty blowgun.
+    ReleaseAction ("weapon_8");
+    Assert (Self.SelectedWeapon == SelectedWeapon.Blowgun, "back on the empty blowgun after the calibration punch (#269)");
+    var healthBeforeClub = host.Health;
+    AimAt (host.GlobalPosition + Vector3.Up);
     PressAction ("shoot");
     await Task.Delay (60);
     ReleaseAction ("shoot");
-    await WaitUntil (() => host.Health == healthBefore - clubDamage, 15, $"the club swing hit for exactly twice a punch (#269), expected -{clubDamage}");
+    await WaitUntil (() => host.Health == healthBeforeClub - 2 * punchDamage, 15, $"the club swing hit for exactly twice the observed punch (#269), punch -{punchDamage}");
     Assert (Self.HasBlowgun, "the club swing never left our hands (#269)");
     Self.Position = ShooterParkSpot;
     await Task.Delay (300);
