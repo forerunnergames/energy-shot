@@ -945,13 +945,17 @@ public partial class PlaytestDriver : Node
     await JumpOutOfSlide();
     Assert (!Self.Sliding, "jump ended the slide (#149)");
     ReleaseAction ("slide");
-    Assert (Self.SlideReadyFraction >= 1.0f, "slide-jump canceled the slide cooldown (#149)");
+    // The spec FLIPPED (Aaron, 2026-08-22): slide-jumping used to skip the cooldown
+    // & chain forever - now every slide exit starts the same clock, so the jump
+    // keeps its momentum but the NEXT slide waits like any other.
+    Assert (Self.SlideReadyFraction < 1.0f, "slide-jump started the slide cooldown - no more infinite chains (#149 revised)");
     var airSpeed = new Vector3 (Self.Velocity.X, 0.0f, Self.Velocity.Z).Length();
     Assert (airSpeed >= Self.Speed * Self.SlideSpeedMultiplier - 0.5f, $"slide momentum carried into the air (#149), speed {airSpeed:0.0}");
     await WaitUntil (() => Self.IsOnFloor(), 10, "landed from the slide-jump (#149)");
     PressAction ("slide");
-    await WaitUntil (() => Self.Sliding, 10, "chained slide started with no cooldown (#149)");
-    Assert (Self.CurrentSlideSpeed > Self.Speed * Self.SlideSpeedMultiplier + 0.1f, $"chained slide runs faster than base (#149), speed {Self.CurrentSlideSpeed:0.0}");
+    await Task.Delay (400);
+    Assert (!Self.Sliding, "the re-slide was DENIED inside the cooldown (#149 revised)");
+    ReleaseAction ("slide");
     Assert (Self.CurrentSlideSpeed <= Self.Speed * Self.SlideSpeedMultiplier * Self.MaxChainedSlideSpeedScale + 0.01f, $"chained slide speed capped (#149), speed {Self.CurrentSlideSpeed:0.0}");
     ReleaseAction ("slide");
     Input.ActionRelease ("move_forward");
