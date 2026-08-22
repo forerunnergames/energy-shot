@@ -76,8 +76,8 @@ public partial class Player
     _breadHeld.RotationDegrees = BreadRestRotation;
     GetNode <Node3D> ("Camera3D").AddChild (_breadHeld);
     // Positional munching (issue #192): the crunch plays on the EATER's node on every
-    // peer, so anyone nearby hears the snacking. Reuses the code-generated munch from
-    // issue #160 - no downloaded audio - & extra voices let bites overlap (issue #182).
+    // peer, so anyone nearby hears the snacking. A packaged Pixabay recording (Aaron,
+    // 2026-08-22) replaced the code-generated munch; extra voices let bites overlap (issue #182).
     _munchSound = new AudioStreamPlayer3D { Stream = ResourceLoader.Load <AudioStream> ("res://assets/sounds/bread-munch.mp3"), MaxPolyphony = 3, UnitSize = 12.0f }; // Real munching (Aaron, 2026-08-22): Pixabay, no attribution required.
     AddChild (_munchSound);
   }
