@@ -37,7 +37,6 @@ public partial class SlingshotStone : Node3D
   [Signal] public delegate void SpreeBananaEventHandler (BananaProjectile banana);
   [Signal] public delegate void SpreeStoneEventHandler (SlingshotStone stone);
   private static readonly PackedScene BananaScene = ResourceLoader.Load <PackedScene> ("res://core/weapons/BananaProjectile.tscn");
-  private CharacterBody3D? _shooter;
   [Export] public float SpreeEnergy = 0.24f; // The full-auto per-shot energy (issue #218).
   private static readonly PackedScene BoltScene = ResourceLoader.Load <PackedScene> ("res://core/weapons/LaserBolt.tscn");
   private static readonly AudioStream SpreeShotSound = ResourceLoader.Load <AudioStream> ("res://assets/sounds/shoot2.mp3");
@@ -61,6 +60,7 @@ public partial class SlingshotStone : Node3D
   private float _energy;
   private float _age;
   private bool _isLive;
+  public CharacterBody3D? Shooter { get; private set; }
   private Godot.Collections.Array <Rid> _exclusions = new();
 
   // Shared look for the world pickup & the held model (issue #99): a simple Y-frame
@@ -160,7 +160,7 @@ public partial class SlingshotStone : Node3D
     GravityAcceleration = gravity; // Draw-scaled (issue #163): full draws fly flatter arcs.
     _energy = energy;
     _isLive = isLive;
-    _shooter = shooter;
+    Shooter = shooter; // The playtest matches stones to the firer (CodeRabbit on #273); the spree paths reuse it.
     _exclusions = new Godot.Collections.Array <Rid> { shooter.GetRid() };
     if (shooter is Player own) _exclusions.Add (own.HeadRid); // Your own dome is not a target (issue #179).
   }
@@ -225,10 +225,10 @@ public partial class SlingshotStone : Node3D
   // (Exploded / StuckToPlayer, attributed to them); every peer sees the cosmetic ones.
   private void SpreeBananaShot (Vector3 direction)
   {
-    if (_shooter == null) return;
+    if (Shooter == null) return;
     var banana = BananaScene.Instantiate <BananaProjectile>();
     GetParent().AddChild (banana);
-    banana.Launch (GlobalPosition, direction, _isLive, _shooter);
+    banana.Launch (GlobalPosition, direction, _isLive, Shooter);
     if (_isLive) EmitSignal (SignalName.SpreeBanana, banana);
   }
 
@@ -236,10 +236,10 @@ public partial class SlingshotStone : Node3D
   // so it never sprays in turn.
   private void SpreeStoneShot (Vector3 direction)
   {
-    if (_shooter == null) return;
+    if (Shooter == null) return;
     var stone = new SlingshotStone { Ammo = HeldWeapon.None };
     GetParent().AddChild (stone);
-    stone.Launch (GlobalPosition, GlobalPosition, direction, StoneSpreeSpeed, GravityAcceleration, StoneSpreeEnergy, _isLive, _shooter);
+    stone.Launch (GlobalPosition, GlobalPosition, direction, StoneSpreeSpeed, GravityAcceleration, StoneSpreeEnergy, _isLive, Shooter);
     if (_isLive) EmitSignal (SignalName.SpreeStone, stone);
   }
 
