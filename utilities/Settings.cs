@@ -97,6 +97,14 @@ public static class Settings
     set => Set ("hold_to_crouch", value);
   }
 
+  // Scope as hold-while-pressed instead of the default toggle (issue #290): the
+  // blowgun today, every scoped weapon tomorrow.
+  public static bool HoldToScope
+  {
+    get => GetBool ("hold_to_scope", false);
+    set => Set ("hold_to_scope", value);
+  }
+
   // Mini music player visibility (issue #137): hiding it never stops the music.
   public static bool ShowMusicPlayer
   {
