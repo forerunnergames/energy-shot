@@ -56,10 +56,10 @@ public partial class Player
     camera.AddChild (_blowgunHeld);
     _unscopedFovDegrees = camera.Fov;
     // Bystanders hear the puff only within a few feet (the stealth rule, issue #194)...
-    _blowgunShotSound = new AudioStreamPlayer3D { Stream = ProceduralSounds.DartPfft(), UnitSize = 1.2f, MaxDistance = 3.0f, MaxPolyphony = 3 };
+    _blowgunShotSound = new AudioStreamPlayer3D { Stream = ResourceLoader.Load <AudioStream> ("res://assets/sounds/blowgun-blow.mp3"), UnitSize = 1.2f, MaxDistance = 3.0f, MaxPolyphony = 3 }; // Real air blow (Aaron, 2026-08-22): Pixabay; the stealth radius stays.
     AddChild (_blowgunShotSound);
     // ...while the shooter always hears their own shot, locally (issue #236).
-    _blowgunOwnShotSound = new AudioStreamPlayer { Stream = ProceduralSounds.DartPfft(), MaxPolyphony = 3 };
+    _blowgunOwnShotSound = new AudioStreamPlayer { Stream = ResourceLoader.Load <AudioStream> ("res://assets/sounds/blowgun-blow.mp3"), MaxPolyphony = 3 };
     AddChild (_blowgunOwnShotSound);
     _heartbeatSound = new AudioStreamPlayer { Stream = ProceduralSounds.Heartbeat(), VolumeDb = -4.0f };
     AddChild (_heartbeatSound);
