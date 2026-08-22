@@ -1388,7 +1388,10 @@ public partial class PlaytestDriver : Node
     // park + (0,0,-2), & the open slingshot loaded THAT en route - a full pouch
     // can't collect, so the mine rightly popped. Field-relevant: a loaded pouch
     // walks onto mines like anyone else (#286 covers EMPTY pouches only).
-    var lane = ShooterParkSpot + new Vector3 (3.0f, 0.0f, 0.0f);
+    // Round 3's lesson: gliders HOME - a lane 2m from the parked victim got the
+    // throw locked onto them instead of landing. The west lane is 8m from the
+    // victim & 3m from the drop-phase litter.
+    var lane = ShooterParkSpot + new Vector3 (-3.0f, 0.0f, 0.0f);
     Self.Position = lane;
     await Task.Delay (300);
     PressAction ("weapon_6");
