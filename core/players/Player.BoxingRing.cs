@@ -23,13 +23,13 @@ public partial class Player
   [Export] public float HeadBounceVelocity = 26.0f;
   // The rope tops are trampolines too (issue #240): landing on one springs you up,
   // scaled by how fast you came down, & even a standing hop still bounces.
-  // Converging trampoline (issue #276, round 2 - the VERTICAL rally): the shipped
-  // 1.1 gain + a 14 m/s floor meant anyone landing on a rope top looped at max
-  // bounce forever, eating fall damage per landing (~11.8m drops, six a row in CI).
-  // Damped bounces honor Aaron's ruling: chain-bouncing never gains height. A dive
-  // still trampolines huge; gentle steps just STAND on the rope.
+  // Growing trampoline, capped (Aaron, 2026-08-22: bouncing SHOULD gain height each
+  // jump - about ten jumps to the ceiling, like the original - the overcorrection
+  // was killing the fun). Each bounce returns 1.1x the landing speed up to the cap;
+  // what stays dead is the old 14 m/s FLOOR, which let a passive body loop forever -
+  // gentle landings (under the stand threshold) simply stand on the rope.
   [Export] public float RopeTopMinTrampolineFallSpeed = 6.0f;
-  [Export] public float RopeTopBouncePerFallSpeed = 0.85f;
+  [Export] public float RopeTopBouncePerFallSpeed = 1.1f;
   // The hardest single rebound (issue #262): dives cap here, & every rebound damps
   // by RopeTopBouncePerFallSpeed, so chains only ever LOSE height (issue #276).
   [Export] public float RopeTopBounceMax = 34.0f;
