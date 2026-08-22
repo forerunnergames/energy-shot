@@ -51,7 +51,10 @@ public partial class Player
   private void CreateBlowgunHeld()
   {
     _blowgunHeld = BlowgunDart.CreateBlowgunVisual();
-    _blowgunHeld.Position = new Vector3 (0.32f, -0.22f, -0.55f);
+    // Outside the body capsule (issue #303, Escendrix): x 0.32 sat inside the 0.5m
+    // radius, so in third person the body mesh swallowed the whole gun. Same shelf as
+    // the slingshot now - visible from every angle, still framed right in first person.
+    _blowgunHeld.Position = new Vector3 (0.5f, -0.35f, -0.75f);
     var camera = GetNode <Camera3D> ("Camera3D"); // Fetched directly: held-model creators run before _Ready assigns _camera.
     camera.AddChild (_blowgunHeld);
     _unscopedFovDegrees = camera.Fov;
