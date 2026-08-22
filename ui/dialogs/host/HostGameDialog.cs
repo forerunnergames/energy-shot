@@ -32,23 +32,23 @@ public partial class HostGameDialog : Control
 
   public override void _Ready()
   {
-    _closeButton = GetNode <Button> ("PanelContainer/MarginContainer/VBoxContainer/HBoxContainer/MarginContainer/CloseButton");
-    _hostGameButton = GetNode <Button> ("PanelContainer/MarginContainer/VBoxContainer/HostGameButton");
-    _playerName = GetNode <LineEdit> ("PanelContainer/MarginContainer/VBoxContainer/PlayerName");
-    _difficulty = GetNode <OptionButton> ("PanelContainer/MarginContainer/VBoxContainer/Difficulty");
+    _closeButton = GetNode <Button> ("PanelContainer/ScrollContainer/MarginContainer/VBoxContainer/HBoxContainer/MarginContainer/CloseButton");
+    _hostGameButton = GetNode <Button> ("PanelContainer/ScrollContainer/MarginContainer/VBoxContainer/HostGameButton");
+    _playerName = GetNode <LineEdit> ("PanelContainer/ScrollContainer/MarginContainer/VBoxContainer/PlayerName");
+    _difficulty = GetNode <OptionButton> ("PanelContainer/ScrollContainer/MarginContainer/VBoxContainer/Difficulty");
     // The dropdown's popup items don't inherit the button's font size override.
     _difficulty.GetPopup().AddThemeFontSizeOverride ("font_size", 90);
-    _playerColor = GetNode <OptionButton> ("PanelContainer/MarginContainer/VBoxContainer/PlayerColor");
+    _playerColor = GetNode <OptionButton> ("PanelContainer/ScrollContainer/MarginContainer/VBoxContainer/PlayerColor");
     _playerColor.GetPopup().AddThemeFontSizeOverride ("font_size", 90);
     PlayerColors.Populate (_playerColor); // Selectable body color (issue #43).
-    _maxPlayers = GetNode <SpinBox> ("PanelContainer/MarginContainer/VBoxContainer/MaxPlayers");
-    _gameMode = GetNode <OptionButton> ("PanelContainer/MarginContainer/VBoxContainer/GameMode");
-    _roundMinutes = GetNode <SpinBox> ("PanelContainer/MarginContainer/VBoxContainer/RoundMinutes");
-    _zapLimit = GetNode <SpinBox> ("PanelContainer/MarginContainer/VBoxContainer/ZapLimit");
-    _password = GetNode <LineEdit> ("PanelContainer/MarginContainer/VBoxContainer/Password");
-    _serverAddress = GetNode <LineEdit> ("PanelContainer/MarginContainer/VBoxContainer/ServerAddress");
-    _middleText = GetNode <Label> ("PanelContainer/MarginContainer/VBoxContainer/MiddleText");
-    _bottomText = GetNode <Label> ("PanelContainer/MarginContainer/VBoxContainer/BottomText");
+    _maxPlayers = GetNode <SpinBox> ("PanelContainer/ScrollContainer/MarginContainer/VBoxContainer/MaxPlayers");
+    _gameMode = GetNode <OptionButton> ("PanelContainer/ScrollContainer/MarginContainer/VBoxContainer/GameMode");
+    _roundMinutes = GetNode <SpinBox> ("PanelContainer/ScrollContainer/MarginContainer/VBoxContainer/RoundMinutes");
+    _zapLimit = GetNode <SpinBox> ("PanelContainer/ScrollContainer/MarginContainer/VBoxContainer/ZapLimit");
+    _password = GetNode <LineEdit> ("PanelContainer/ScrollContainer/MarginContainer/VBoxContainer/Password");
+    _serverAddress = GetNode <LineEdit> ("PanelContainer/ScrollContainer/MarginContainer/VBoxContainer/ServerAddress");
+    _middleText = GetNode <Label> ("PanelContainer/ScrollContainer/MarginContainer/VBoxContainer/MiddleText");
+    _bottomText = GetNode <Label> ("PanelContainer/ScrollContainer/MarginContainer/VBoxContainer/BottomText");
     _hostGameButton.Disabled = true;
     _playerName.TextChanged += OnPlayerNameTextChanged;
     _password.TextChanged += OnPasswordTextChanged;
