@@ -10,8 +10,8 @@ namespace com.forerunnergames.energyshot.players;
 public partial class HeadHitbox : Area3D
 {
   public const uint Layer = 1u << 7; // Layer 8: nothing else lives there.
-  public const float Radius = 0.3f;
-  public static readonly Vector3 LocalOffset = new(0.0f, 2.45f, 0.0f); // Hovering just above the 2m capsule.
+  public const float Radius = 0.45f; // Bigger (Aaron, 2026-08-22): a real melon, not a marble.
+  public static readonly Vector3 LocalOffset = new(0.0f, 2.25f, 0.0f); // SEATED on the 2m capsule (slight neck overlap), not hovering above it.
 
   public Player Player => (Player)GetParent();
 

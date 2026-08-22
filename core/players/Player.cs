@@ -435,6 +435,7 @@ public partial class Player : CharacterBody3D
     UpdatePuppetTags();
     UpdateCrosshairTint();
     ClearStaleArmorDisplay();
+    UpdateHeadPose(); // Every peer, every frame: the head rides the body mesh (issue #238).
   }
 
   public override void _PhysicsProcess (double delta)

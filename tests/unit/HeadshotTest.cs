@@ -25,5 +25,9 @@ public class HeadshotTest
   }
 
   [TestCase]
-  public void HeadHitboxSitsAboveTheBody() => AssertFloat (HeadHitbox.LocalOffset.Y - HeadHitbox.Radius).IsGreater (2.0f);
+  public void HeadSeatsOnTheBody()
+  {
+    AssertFloat (HeadHitbox.LocalOffset.Y).IsGreater (2.0f); // Center above the capsule top...
+    AssertFloat (HeadHitbox.LocalOffset.Y - HeadHitbox.Radius).IsLess (2.0f); // ...but SEATED (overlapping), never hovering (issue #238).
+  }
 }
