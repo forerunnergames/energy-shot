@@ -24,4 +24,13 @@ public class PoisonFeelTest
 
   [TestCase]
   public void SwayCapsAtFourDarts() => AssertFloat (Player.WobbleAngle (0.3f, 9, 0.25f, 0.9f)).IsEqual (Player.WobbleAngle (0.3f, 4, 0.25f, 0.9f));
+
+  // Issue #277: any embedded dart flips the wheel entirely; a clean body steers true.
+  [TestCase]
+  public void PoisonInvertsSteering()
+  {
+    AssertObject (Player.PoisonSteer (new Vector2 (1.0f, -0.5f), 1)).IsEqual (new Vector2 (-1.0f, 0.5f));
+    AssertObject (Player.PoisonSteer (new Vector2 (1.0f, -0.5f), 3)).IsEqual (new Vector2 (-1.0f, 0.5f));
+    AssertObject (Player.PoisonSteer (new Vector2 (1.0f, -0.5f), 0)).IsEqual (new Vector2 (1.0f, -0.5f));
+  }
 }
