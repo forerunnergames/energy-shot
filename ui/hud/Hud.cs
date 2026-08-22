@@ -293,6 +293,16 @@ public partial class Hud : Control
     toggle.AddThemeFontSizeOverride ("font_size", 40);
     toggle.Toggled += OnHoldToCrouchToggled;
     container.AddChild (toggle);
+    var scopeToggle = new CheckButton { Text = "Hold to scope", ButtonPressed = Settings.HoldToScope }; // Issue #290, right beside its crouch twin.
+    scopeToggle.AddThemeFontSizeOverride ("font_size", 40);
+    scopeToggle.Toggled += OnHoldToScopeToggled;
+    container.AddChild (scopeToggle);
+  }
+
+  private static void OnHoldToScopeToggled (bool isEnabled)
+  {
+    Settings.HoldToScope = isEnabled;
+    Player.Local?.RefreshScopeMode(); // Applies immediately, not just next launch (issue #290).
   }
 
   private static void OnHoldToCrouchToggled (bool isEnabled)
