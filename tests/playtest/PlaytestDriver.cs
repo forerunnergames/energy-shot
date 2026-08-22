@@ -1369,6 +1369,48 @@ public partial class PlaytestDriver : Node
     await RunBlowgunPhase (victim);
     await RunDropPhase();
     await RunRingPhase();
+    await RunArmedMineLoadPhase();
+  }
+
+  // Aaron's report (issue #325): an OPEN slingshot - selected, never drawn - must
+  // safely collect an ARMED landed airplane as ammo (the #286 ruling). The phase
+  // manufactures the mine deliberately: throw the airplane into the floor ahead,
+  // let it come down armed, then walk over it with the empty slingshot out.
+  private async Task RunArmedMineLoadPhase()
+  {
+    if (!Self.Holds (HeldWeapon.PaperAirplane))
+    {
+      Self.Position = WeaponSpawner.PlaytestAirplanePosition + Vector3.Up * 0.5f;
+      await WaitUntil (() => Self.Holds (HeldWeapon.PaperAirplane), 30, "collected the airplane for the mine-load phase (#325)");
+    }
+
+    Self.Position = ShooterParkSpot;
+    await Task.Delay (300);
+    PressAction ("weapon_6");
+    await Task.Delay (100);
+    ReleaseAction ("weapon_6");
+    Assert (Self.SelectedWeapon == SelectedWeapon.PaperAirplane, "airplane equipped for the mine-load phase (#325)");
+    var landingZone = ShooterParkSpot + new Vector3 (0.0f, 0.0f, -4.0f);
+    AimAt (new Vector3 (landingZone.X, 30.25f, landingZone.Z)); // Into the deck: a short flight & a fast come-down.
+    PressLeftClick();
+    await Task.Delay (60);
+    ReleaseLeftClick();
+    await WaitUntil (() => DroppedNear (HeldWeapon.PaperAirplane, landingZone, 8.0f) is { Armed: true }, 45, "the thrown airplane came down ARMED nearby (#191/#325)");
+    var mine = DroppedNear (HeldWeapon.PaperAirplane, landingZone, 8.0f)!;
+    // The OPEN slingshot: selected, empty, & pointedly never drawn.
+    PressAction ("weapon_5");
+    await Task.Delay (100);
+    ReleaseAction ("weapon_5");
+    Assert (Self.SelectedWeapon == SelectedWeapon.Slingshot && Self.SlingshotAmmo == HeldWeapon.None, "open EMPTY slingshot out for the armed pickup (#325)");
+    var healthBefore = Self.Health;
+    await WaitUntil (() => WalkedTo (mine.GlobalPosition), 20, "walked onto the armed airplane with the slingshot out (#325)");
+    await WaitUntil (() => Self.SlingshotAmmo == HeldWeapon.PaperAirplane, 20, "the OPEN slingshot loaded the ARMED airplane as ammo - no detonation (#286/#325)");
+    Assert (Self.Health == healthBefore, $"loading the mine cost no health (#325), was {healthBefore} now {Self.Health}");
+    // Leave nothing nocked for whatever follows: fire it into the deck & let the caps recycle it.
+    AimAt (new Vector3 (ShooterParkSpot.X, 30.25f, ShooterParkSpot.Z - 3.0f));
+    await SlingAStone (drawMs: 300, "cleared the nocked airplane (#325)");
+    Self.Position = ShooterParkSpot;
+    await Task.Delay (300);
   }
 
   private async Task RunEndOfRunVictimPhases()
