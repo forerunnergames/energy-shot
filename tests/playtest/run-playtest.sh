@@ -79,7 +79,7 @@ sleep 3
 SHOOTER=$!
 
 # Watchdog: kill everything if the scenario hangs.
-( sleep 300; kill $HOST $VICTIM $SHOOTER 2>/dev/null ) &
+( sleep 600; kill $HOST $VICTIM $SHOOTER 2>/dev/null ) &   # 600s hard stop; the host tail derives its budget from the same deadline (570s minus its own elapsed time), so a stall fails by name first (CodeRabbit on #258)
 WATCHDOG=$!
 
 FAIL=0
