@@ -50,6 +50,7 @@ public partial class SlingshotStone : Node3D
   private float _energy;
   private float _age;
   private bool _isLive;
+  public CharacterBody3D? Shooter { get; private set; }
   private Godot.Collections.Array <Rid> _exclusions = new();
 
   // Shared look for the world pickup & the held model (issue #99): a simple Y-frame
@@ -149,6 +150,7 @@ public partial class SlingshotStone : Node3D
     GravityAcceleration = gravity; // Draw-scaled (issue #163): full draws fly flatter arcs.
     _energy = energy;
     _isLive = isLive;
+    Shooter = shooter; // The playtest matches stones to the firer (CodeRabbit on #273): visual copies carry the REMOTE player's node.
     _exclusions = new Godot.Collections.Array <Rid> { shooter.GetRid() };
     if (shooter is Player own) _exclusions.Add (own.HeadRid); // Your own dome is not a target (issue #179).
   }
