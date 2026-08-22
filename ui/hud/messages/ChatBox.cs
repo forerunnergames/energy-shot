@@ -17,7 +17,7 @@ public partial class ChatBox : VBoxContainer
   public const int MaxChars = 120;
   private const float LingerSeconds = 9.0f;
   private const int MaxLines = 6;
-  private const float WidthPixels = 520.0f;
+  private const float WidthPixels = 900.0f; // Wider with the readable font (Aaron, 2026-08-22).
   private readonly List <(string Bbcode, ulong ExpiresAtMs)> _lines = new();
   private RichTextLabel _label = null!;
   private LineEdit _input = null!;
@@ -29,7 +29,9 @@ public partial class ChatBox : VBoxContainer
     MouseFilter = MouseFilterEnum.Ignore;
     CustomMinimumSize = new Vector2 (WidthPixels, 0.0f);
     _label = new RichTextLabel { BbcodeEnabled = true, FitContent = true, ScrollActive = false, MouseFilter = MouseFilterEnum.Ignore, CustomMinimumSize = new Vector2 (WidthPixels, 0.0f) };
+    _label.AddThemeFontSizeOverride ("normal_font_size", 34); // Readable at the 4K design size (Aaron: insanely tiny on Mac).
     _input = new LineEdit { Visible = false, MaxLength = MaxChars, PlaceholderText = "Say something (Enter sends, Esc cancels)", CustomMinimumSize = new Vector2 (WidthPixels, 0.0f) };
+    _input.AddThemeFontSizeOverride ("font_size", 34);
     _input.TextSubmitted += OnSubmitted;
     _input.GuiInput += OnInputLineEvent;
     AddChild (_label);
