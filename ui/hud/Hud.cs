@@ -134,6 +134,7 @@ public partial class Hud : Control
     _world = GetNode <World> ("/root/World");
     _healthBar = GetNode <ProgressBar> ("VBoxContainer/Health/ProgressBar");
     _messageScroller = GetNode <MessageScroller> ("MessageScroller");
+    _messageScroller.Visible = Settings.ShowMessages; // Issue #297.
     _scoreLabel = GetNode <Label> ("VBoxContainer/Score/Label");
     _leaderboardEntries = GetNode <RichTextLabel> ("Leaderboard/MarginContainer/VBoxContainer/Entries");
     _vignette = (ShaderMaterial)GetNode <ColorRect> ("Vignette").Material;
@@ -169,6 +170,7 @@ public partial class Hud : Control
     _quitDialog.Confirmed += () => EmitSignal (SignalName.GameQuit);
     _quitDialog.Canceled += CancelQuit;
     _quitDialog.Closed += CancelQuit;
+    CreateSettingsDialog(); // Issue #297.
     _world.NewGameStarted += OnNewGameStarted;
     _world.PlayerJoinedGame += OnPlayerJoinedGame;
     _world.PlayerLeftGame += OnPlayerLeftGame;
@@ -189,7 +191,6 @@ public partial class Hud : Control
     _world.ServerShutDown += OnServerShutDown;
     CreateDeathOverlay();
     CreateTargetRing();
-    AddCrouchModeToggleToPauseDialog();
   }
 
   // Paper airplane warning ring (issue #191): built in code like the death overlay,
@@ -283,32 +284,58 @@ public partial class Hud : Control
 
   private void OnRoundStarted() => _roundOverlay.Visible = false;
 
-  // Crouch toggle-vs-hold (issue #147), persisted & offered in the pause (quit)
-  // dialog - the only in-game UI with a visible mouse - like the music toggle (#137).
-  private void AddCrouchModeToggleToPauseDialog()
+  // The Settings dialog (issue #297): the pause dialog gains a SETTINGS button &
+  // every persisted preference lives in one place, in the same custom dialog style
+  // (the ConfirmationDialog2 skeleton the host/join dialogs share). Toggles apply
+  // immediately; volume sliders follow with the audio-bus work (issue #301).
+  private ConfirmationDialog2 _settingsDialog = null!;
+
+  private void CreateSettingsDialog()
   {
-    var container = GetNodeOrNull <BoxContainer> ("QuitDialog/VBoxContainer/HBoxContainer");
-    if (container == null) { GD.PushWarning ("Pause-dialog container missing: the hold-to-crouch toggle (issue #147) was not added."); return; }
-    var toggle = new CheckButton { Text = "Hold to crouch", ButtonPressed = Settings.HoldToCrouch };
+    _settingsDialog = ResourceLoader.Load <PackedScene> ("res://ui/dialogs/confirm/ConfirmationDialog2.tscn").Instantiate <ConfirmationDialog2>();
+    AddChild (_settingsDialog);
+    _settingsDialog.GetNode <Label> ("VBoxContainer/Title/Label").Text = "Settings";
+    _settingsDialog.GetNode <Control> ("VBoxContainer/MarginContainer").Visible = false; // No OK/CANCEL: the X closes.
+    _settingsDialog.Closed += CloseSettings;
+    var rows = _settingsDialog.GetNode <BoxContainer> ("VBoxContainer/HBoxContainer");
+    rows.Alignment = BoxContainer.AlignmentMode.Center;
+    var column = new VBoxContainer();
+    column.AddThemeConstantOverride ("separation", 24);
+    rows.AddChild (column);
+    column.AddChild (SettingToggle ("Hold to crouch", Settings.HoldToCrouch, isEnabled => { Settings.HoldToCrouch = isEnabled; Player.Local?.RefreshCrouchMode(); }));
+    column.AddChild (SettingToggle ("Hold to scope", Settings.HoldToScope, isEnabled => { Settings.HoldToScope = isEnabled; Player.Local?.RefreshScopeMode(); }));
+    column.AddChild (SettingToggle ("Show music player", Settings.ShowMusicPlayer, isEnabled => { Settings.ShowMusicPlayer = isEnabled; GetNode <MusicPlayer> ("MusicPlayer").ApplyVisibilitySetting(); }));
+    column.AddChild (SettingToggle ("Show chat", Settings.ShowChat, isEnabled => Settings.ShowChat = isEnabled));
+    column.AddChild (SettingToggle ("Show game messages", Settings.ShowMessages, isEnabled => { Settings.ShowMessages = isEnabled; _messageScroller.Visible = isEnabled; }));
+    _settingsDialog.Hide();
+    // The pause dialog's middle row hosts the way in.
+    var pauseRow = _quitDialog.GetNode <BoxContainer> ("VBoxContainer/HBoxContainer");
+    pauseRow.Alignment = BoxContainer.AlignmentMode.Center;
+    var settingsButton = new Button { Text = " SETTINGS " };
+    settingsButton.AddThemeFontSizeOverride ("font_size", 50);
+    settingsButton.Pressed += OpenSettings;
+    pauseRow.AddChild (settingsButton);
+  }
+
+  private static CheckButton SettingToggle (string text, bool initial, System.Action <bool> apply)
+  {
+    var toggle = new CheckButton { Text = text, ButtonPressed = initial };
     toggle.AddThemeFontSizeOverride ("font_size", 40);
-    toggle.Toggled += OnHoldToCrouchToggled;
-    container.AddChild (toggle);
-    var scopeToggle = new CheckButton { Text = "Hold to scope", ButtonPressed = Settings.HoldToScope }; // Issue #290, right beside its crouch twin.
-    scopeToggle.AddThemeFontSizeOverride ("font_size", 40);
-    scopeToggle.Toggled += OnHoldToScopeToggled;
-    container.AddChild (scopeToggle);
+    toggle.Toggled += isEnabled => apply (isEnabled);
+    return toggle;
   }
 
-  private static void OnHoldToScopeToggled (bool isEnabled)
+  private void OpenSettings()
   {
-    Settings.HoldToScope = isEnabled;
-    Player.Local?.RefreshScopeMode(); // Applies immediately, not just next launch (issue #290).
+    _quitDialog.Hide();
+    _settingsDialog.Show(); // The mouse is already visible: we came from the pause dialog.
   }
 
-  private static void OnHoldToCrouchToggled (bool isEnabled)
+  private void CloseSettings()
   {
-    Settings.HoldToCrouch = isEnabled;
-    Player.Local?.RefreshCrouchMode(); // Applies immediately, not just next launch (issue #147).
+    _settingsDialog.Hide();
+    Input.MouseMode = Input.MouseModeEnum.Captured;
+    EmitSignal (SignalName.GameResumed);
   }
 
   public override void _UnhandledInput (InputEvent @event)
@@ -316,6 +343,7 @@ public partial class Hud : Control
     if (_chatBox.IsOpen) return; // The chat line owns the keyboard (issue #188): Esc cancels it, not the game.
     if (@event.IsActionPressed ("chat") && Visible && !_quitDialog.Visible) { _chatBox.Open(); return; }
     if (!Input.IsActionJustPressed ("quit")) return;
+    if (_settingsDialog.Visible) { CloseSettings(); return; } // Esc backs out of Settings first (issue #297).
     ToggleQuitDialog();
   }
 

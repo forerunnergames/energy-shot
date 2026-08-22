@@ -105,6 +105,21 @@ public static class Settings
     set => Set ("hold_to_scope", value);
   }
 
+  // Chat box visibility (issue #297): hiding it never blocks receiving - lines
+  // still land in the Tab history; T just won't open the input line.
+  public static bool ShowChat
+  {
+    get => GetBool ("show_chat", true);
+    set => Set ("show_chat", value);
+  }
+
+  // The auto message feed's visibility (issue #297).
+  public static bool ShowMessages
+  {
+    get => GetBool ("show_messages", true);
+    set => Set ("show_messages", value);
+  }
+
   // Mini music player visibility (issue #137): hiding it never stops the music.
   public static bool ShowMusicPlayer
   {
