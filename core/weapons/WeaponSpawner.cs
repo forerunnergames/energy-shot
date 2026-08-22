@@ -66,6 +66,10 @@ public partial class WeaponSpawner : Node3D
   // it seconds after spawning), & a stray banana in someone's hands would make the
   // death-drop phase's claim assert meaningless.
   public static readonly Vector3 PlaytestBananaPosition = new(0.0f, 0.9f, -40.0f);
+  // The blowgun takes the last free corner & a floating dart sits beside it (issue
+  // #236): darts are harmless to anyone without the blowgun, so no auto-claim risk.
+  public static readonly Vector3 PlaytestBlowgunPosition = new(5.5f, 31.1f, -5.5f);
+  public static readonly Vector3 PlaytestDartPosition = new(3.0f, 31.1f, -5.5f);
   // The landmine phase (#191) needs no fixed spot of its own: the driver arms one by
   // throwing the airplane into the floor, & it comes down armed wherever it lands.
   private const float OccupiedRadius = 1.0f;
@@ -239,6 +243,11 @@ public partial class WeaponSpawner : Node3D
   // precedence when contested); a shared candidate list keeps them from stacking.
   private void SpawnSpecialsIfMissing (List <WeaponPickup> pickups, List <Player> players, List <Vector3> freePoints)
   {
+    // In playtest mode the deterministic fixtures (EnsurePlaytestPickups) are the ONLY
+    // spawn path for every special - a random spawn here would go unseen by the stale
+    // pickups snapshot, slip past the fixture cap checks, & mint doubles of capped
+    // items or leave a fixture spot empty (CodeRabbit on #258, extending #180).
+    if (_isPlaytest) return;
     var candidates = new List <Vector3> (freePoints);
     if (IsFree (_bananaPoint, pickups)) candidates.Add (_bananaPoint);
     if (candidates.Count > 0 && Count (HeldWeapon.Banana, pickups, players) < MaxBananas) Spawn (HeldWeapon.Banana, TakeRandom (candidates), expires: false);
@@ -252,7 +261,7 @@ public partial class WeaponSpawner : Node3D
     // In playtest mode the deterministic spawn-room pickup (EnsurePlaytestPickups) is
     // the airplane's ONLY spawn path, or the two paths together could mint a second
     // one (CodeRabbit on #180).
-    if (!_isPlaytest && candidates.Count > 0 && Count (HeldWeapon.PaperAirplane, pickups, players) < MaxPaperAirplanes) Spawn (HeldWeapon.PaperAirplane, TakeRandom (candidates), expires: false);
+    if (candidates.Count > 0 && Count (HeldWeapon.PaperAirplane, pickups, players) < MaxPaperAirplanes) Spawn (HeldWeapon.PaperAirplane, TakeRandom (candidates), expires: false);
   }
 
   // Playtest-only (#72 & #98): keeps deterministic pickups available in the spawn
@@ -269,6 +278,8 @@ public partial class WeaponSpawner : Node3D
     // Same cap guard for the banana (CodeRabbit on #180): respawning it here while
     // someone already carries one would put two in a level capped at one.
     if (Count (HeldWeapon.Banana, pickups, players) < MaxBananas) EnsurePlaytestPickup (HeldWeapon.Banana, PlaytestBananaPosition, pickups); // Issue #169.
+    if (Count (HeldWeapon.Blowgun, pickups, players) < MaxBlowguns) EnsurePlaytestPickup (HeldWeapon.Blowgun, PlaytestBlowgunPosition, pickups); // Cap-guarded like the banana (CodeRabbit on #258).
+    EnsurePlaytestPickup (HeldWeapon.PoisonDart, PlaytestDartPosition, pickups); // A floating (unarmed) dart: ammo for a blowgun holder (issue #236).
   }
 
   private void EnsurePlaytestPickup (HeldWeapon type, Vector3 position, List <WeaponPickup> pickups)
