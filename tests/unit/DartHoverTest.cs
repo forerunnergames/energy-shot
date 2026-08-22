@@ -10,7 +10,11 @@ namespace com.forerunnergames.energyshot;
 public class DartHoverTest
 {
   [TestCase]
-  public void SpawnedDartHoversWellOffTheFloor() => AssertFloat (WeaponPickup.HoverBaseline (HeldWeapon.PoisonDart, armed: false)).IsGreater (0.4f);
+  public void SpawnedDartHoversClearOfTheFloor()
+  {
+    AssertFloat (WeaponPickup.HoverBaseline (HeldWeapon.PoisonDart, armed: false)).IsGreater (0.25f); // Clearly floating...
+    AssertFloat (WeaponPickup.HoverBaseline (HeldWeapon.PoisonDart, armed: false)).IsLess (0.5f); // ...never moon-walking (Aaron: don't overcorrect).
+  }
 
   [TestCase]
   public void ArmedDartGetsNoHover() => AssertFloat (WeaponPickup.HoverBaseline (HeldWeapon.PoisonDart, armed: true)).IsEqual (0.0f);
