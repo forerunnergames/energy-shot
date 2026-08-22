@@ -45,6 +45,14 @@ public partial class HostGameDialog : Control
     _gameMode = GetNode <OptionButton> ("PanelContainer/ScrollContainer/MarginContainer/VBoxContainer/GameMode");
     _roundMinutes = GetNode <SpinBox> ("PanelContainer/ScrollContainer/MarginContainer/VBoxContainer/RoundMinutes");
     _zapLimit = GetNode <SpinBox> ("PanelContainer/ScrollContainer/MarginContainer/VBoxContainer/ZapLimit");
+    // A SpinBox's text lives in its INTERNAL LineEdit, which ignores the SpinBox
+    // node's font override (Aaron, 2026-08-22: the type-a-number fields were
+    // insanely tiny on Mac) - push the size where the text actually renders.
+    foreach (var spinBox in new[] { _maxPlayers, _roundMinutes, _zapLimit })
+    {
+      spinBox.GetLineEdit().AddThemeFontSizeOverride ("font_size", 90);
+      spinBox.CustomMinimumSize = new Vector2 (0.0f, 120.0f);
+    }
     _password = GetNode <LineEdit> ("PanelContainer/ScrollContainer/MarginContainer/VBoxContainer/Password");
     _serverAddress = GetNode <LineEdit> ("PanelContainer/ScrollContainer/MarginContainer/VBoxContainer/ServerAddress");
     _middleText = GetNode <Label> ("PanelContainer/ScrollContainer/MarginContainer/VBoxContainer/MiddleText");
