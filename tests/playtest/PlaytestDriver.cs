@@ -123,6 +123,10 @@ public partial class PlaytestDriver : Node
       }
 
       GD.Print ($"PLAYTEST PASS [{_role}]");
+      // The verdict rides BOTH streams (2x on 2026-08-22 a green victim's buffered
+      // stdout tail vanished at quit & the run failed as 'never finished'): stderr
+      // is unbuffered - it's why FAIL lines always land - so PASS echoes there too.
+      GD.PrintErr ($"PLAYTEST PASS [{_role}]");
       await Task.Delay (500); // Let final packets flush before quitting.
       GetTree().Quit (0);
     }
