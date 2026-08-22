@@ -1365,7 +1365,7 @@ public partial class PlaytestDriver : Node
   private async Task RunEndOfRunShooterPhases (Player victim)
   {
     await RunPunchTheftPhase (victim); // Un-quarantined (issue #312): the fly-out search-ring fix in this PR.
-    await RunHeadshotPhase (victim); // Un-quarantined (issue #312): it only ever starved behind the theft phase.
+    GD.Print ("QUARANTINED: the headshot phase sleeps with the parked head (Aaron, 2026-08-22; returns with issue #238)");
     await RunBlowgunPhase (victim);
     await RunClubPhase();
     await RunDropPhase();
@@ -1376,8 +1376,6 @@ public partial class PlaytestDriver : Node
   {
     await ResetLifeAndPark();
     await BeTheTheftTarget();
-    await ResetLifeAndPark();
-    await BeTheHeadshotTarget();
     await ResetLifeAndPark();
     await BeThePoisonTarget();
   }

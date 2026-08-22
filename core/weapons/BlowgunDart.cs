@@ -44,7 +44,7 @@ public partial class BlowgunDart : Node3D
     _velocity = direction.Normalized() * speed;
     _isLive = isLive;
     _exclusions = new Godot.Collections.Array <Rid> { shooter.GetRid() };
-    if (shooter is Player own) _exclusions.Add (own.HeadRid);
+    if (shooter is Player own && own.HeadRid.IsValid) _exclusions.Add (own.HeadRid); // No head while parked (#238).
     Orient();
   }
 
