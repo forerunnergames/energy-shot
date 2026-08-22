@@ -17,6 +17,12 @@ public partial class MainMenu : Control
 
   public override void _Ready()
   {
+#if GODOT_WINDOWS
+    // The Windows fullscreen fix (issue #302), ported from another Forerunner title:
+    // Windows needs the mode FORCED at boot - ugly but proven; without it the window
+    // comes up in a state players can't play in.
+    DisplayServer.WindowSetMode (DisplayServer.WindowMode.ExclusiveFullscreen);
+#endif
     _world = GetNode <World> ("/root/World");
     _hostButton = GetNode <Button> ("PanelContainer/MarginContainer/VBoxContainer/Buttons/VBoxContainer/HostButton");
     _joinButton = GetNode <Button> ("PanelContainer/MarginContainer/VBoxContainer/Buttons/VBoxContainer/JoinButton");

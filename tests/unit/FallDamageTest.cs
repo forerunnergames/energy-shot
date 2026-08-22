@@ -33,11 +33,13 @@ public class FallDamageTest
   public void ADropIsNeverAnInstantZap() => AssertFloat (Player.MaxFallEnergy).IsLess (com.forerunnergames.energyshot.weapons.EnergyWeapon.FullChargeEnergyThreshold);
 
   [TestCase]
-  public void TenBouncesReachTheCap()
+  public void TrampolineChainsConvergeToStanding()
   {
     var player = AutoFree (new Player())!;
-    var speed = player.RopeTopBounceMin;
-    for (var i = 0; i < 10; ++i) speed = Mathf.Clamp (speed * player.RopeTopBouncePerFallSpeed, player.RopeTopBounceMin, player.RopeTopBounceMax);
-    AssertFloat (speed).IsEqual (player.RopeTopBounceMax);
+    // The chain must CONVERGE below the stand threshold (issue #276): damped bounces
+    // honor the no-height-gain ruling & a trampoline loop starves instead of feeding.
+    var speed = player.RopeTopBounceMax;
+    for (var i = 0; i < 20; ++i) speed = speed >= player.RopeTopMinTrampolineFallSpeed ? Mathf.Min (speed * player.RopeTopBouncePerFallSpeed, player.RopeTopBounceMax) : 0.0f;
+    AssertFloat (speed).IsEqual (0.0f); // Even a max bounce settles to standing within 20 landings.
   }
 }
