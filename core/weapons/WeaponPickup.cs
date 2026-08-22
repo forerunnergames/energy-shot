@@ -85,7 +85,7 @@ public partial class WeaponPickup : Area3D
   // No spawned item touches the floor (issue #278, thepro): floating & spinning
   // means safe & pickupable, flat on the ground means a landed hazard. A dart-sized
   // mesh needs real height for the difference to read; everything else already does.
-  public const float DartHoverMeters = 0.6f;
+  public const float DartHoverMeters = 0.35f; // Trimmed (Aaron, 2026-08-22): 0.6 overshot - clearly floating, not moon-walking.
   public static float HoverBaseline (HeldWeapon weapon, bool armed) => weapon == HeldWeapon.PoisonDart && !armed ? DartHoverMeters : 0.0f;
 
   // How fast an armed airplane's warning light blinks while it waits (issue #191).
