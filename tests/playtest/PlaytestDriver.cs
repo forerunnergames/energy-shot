@@ -1190,9 +1190,32 @@ public partial class PlaytestDriver : Node
     // eat wastes the loaf, so it can't be the one the death drop is counting on.
     await RunBreadInterruptedPhase();
     // Fall penalty goes negative (issue #108): step off the world at score 0 & verify -1.
+    // Start the LONG full-auto cooldown first & prove it's running (CodeRabbit on
+    // #299): the sub-second cooldowns can't stay provably active across a multi-
+    // second fall, but this one can - making the post-respawn assert definitive for
+    // the shared one-line reset mechanism.
+    // Only a laser-holder can start the burst - the victim reaches this shared path
+    // empty-handed, so the provable-cooldown proof is the laser-holder's job & the
+    // skip is loud, never silent.
+    var provesFullAuto = Self.Holds (HeldWeapon.Laser);
+    if (provesFullAuto)
+    {
+      PressAction ("weapon_2");
+      await Task.Delay (150);
+      ReleaseAction ("weapon_2");
+      PressAction ("ability");
+      await Task.Delay (200);
+      ReleaseAction ("ability");
+      await WaitUntil (() => Self.FullAutoReadyFraction < 1.0f, 10, "full-auto burst started its long cooldown (#299)");
+    }
+    else GD.Print ("no laser in hand: the provable-cooldown proof runs on the laser-holding role (#299)");
+
     Assert (Self.Score == 0, $"own score is 0 before the fall, got {Self.Score}");
     Self.Position = new Vector3 (120.0f, 5.0f, 120.0f); // Beyond the arena: nothing below but the kill boundary.
     await WaitUntil (() => Self.Score == -1, 60, "fall at score 0 dropped own score to -1");
+    // Cooldowns reset with the life (issue #299): the punches & shots this run has
+    // been spamming must all read ready the moment we respawn.
+    Assert (Self.PunchReadyFraction >= 1.0f && Self.FullAutoReadyFraction >= 1.0f && Self.SlideReadyFraction >= 1.0f, provesFullAuto ? "respawn reset every action cooldown (#299), incl. the provably-mid-cooldown full-auto" : "respawn reset every action cooldown (#299)");
     // Respawned from the fall; the shooter's paper airplane phase needs us standing
     // in the spawn room (#102).
     await WaitUntil (() => Self.GlobalPosition.Y > 20.0f, 30, "respawned in the spawn room after the fall");

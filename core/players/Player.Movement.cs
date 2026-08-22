@@ -333,9 +333,17 @@ public partial class Player
     _stickyFlightSecondsLeft = 0.0f; // A new life isn't still banana-launched (issue #83).
     ActivateSpawnArmor();
     // Fresh lives start standing & slide-ready: no lingering pose, no cooldown carryover (#104).
+    // EVERY action cooldown resets with the life (issue #299, Aaron): the slide one
+    // always did; the rest join it - a respawn owes nothing from the last life.
     Sliding = false;
     _slideSecondsLeft = 0.0f;
     _slideCooldownLeft = 0.0f;
+    _punchCooldownLeft = 0.0f;
+    _fullAutoCooldownLeft = 0.0f;
+    _blowgunCooldownLeft = 0.0f;
+    _slingshotCooldownLeft = 0.0f;
+    CancelSlingshotDraw(); // A draw held through a zap-out never fires into the new life.
+    _bananaLauncher.ResetCooldown();
     _slideJumpCarrying = false; // No chain carry into a new life (issue #149).
     _slideChainWindowLeft = 0.0f;
     Crouching = false;
