@@ -12,9 +12,40 @@ on:
   pull_request:
     branches:
       - '**'
+  workflow_dispatch:
+
+# A force-push storm during review supersedes older runs: cancel them.
+concurrency:
+  group: playtest-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # The slow playtest waits for CodeRabbit (Aaron, 2026-08-22): review back-&-forth
+  # pushes skip it; once the PR carries an APPROVED review, every push runs it - &
+  # after the approval the ops box reruns the skipped run, which re-evaluates this
+  # gate. Pushes to main & manual dispatch always run. NOTE: a skipped required
+  # check counts as satisfied, so the merge discipline stays approval-first,
+  # green-playtest-second, merge-third.
+  approval-gate:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read # The reviews API needs it explicitly (CodeRabbit).
+    outputs:
+      run: ${{ steps.check.outputs.run }}
+    steps:
+      - id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "${{ github.event_name }}" != "pull_request" ]; then echo "run=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          # Latest state per reviewer, all pages, dismissals excluded (CodeRabbit): a
+          # stale approval superseded by CHANGES_REQUESTED must not open the gate.
+          approved=$(gh api --paginate "repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/reviews" | jq -s 'add | map(select(.state=="APPROVED" or .state=="CHANGES_REQUESTED")) | group_by(.user.login) | map(last) | map(select(.state=="APPROVED")) | length')
+          if [ "$approved" -gt 0 ]; then echo "run=true" >> "$GITHUB_OUTPUT"; else echo "run=false" >> "$GITHUB_OUTPUT"; echo "Playtest deferred: no approved review yet."; fi
+
   playtest:
+    needs: approval-gate
+    if: needs.approval-gate.outputs.run == 'true'
     runs-on: ubuntu-latest
 
     steps:
