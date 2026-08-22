@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using Godot;
+using utilities = com.forerunnergames.energyshot.utilities;
 
 namespace com.forerunnergames.energyshot.ui.hud.messages;
 
@@ -41,11 +42,12 @@ public partial class ChatBox : VBoxContainer
     var now = Time.GetTicksMsec();
     var pruned = _lines.RemoveAll (line => line.ExpiresAtMs <= now);
     if (pruned > 0) Render();
-    Visible = _lines.Count > 0 || IsOpen;
+    Visible = utilities.Settings.ShowChat && (_lines.Count > 0 || IsOpen); // Hidden chat still receives (issue #297): Tab history keeps every line.
   }
 
   public void Open()
   {
+    if (!utilities.Settings.ShowChat) return; // A hidden box never eats the keyboard (issue #297).
     if (IsOpen) return;
     _input.Clear();
     _input.Visible = true;
