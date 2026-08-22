@@ -886,7 +886,7 @@ public partial class PlaytestDriver : Node
 
   // The nearest live pickup of a type around a spot, measured flat: the drop grounds
   // onto whatever lies below, so its height is the one thing this search must not assume.
-  private WeaponPickup? DroppedNear (HeldWeapon type, Vector3 spot) => _world.GetChildren().OfType <WeaponPickup>().FirstOrDefault (pickup => pickup.Weapon == type && !pickup.IsQueuedForDeletion() && FlatDistance (pickup.GlobalPosition, spot) < DropSearchRadius);
+  private WeaponPickup? DroppedNear (HeldWeapon type, Vector3 spot, float radius = DropSearchRadius) => _world.GetChildren().OfType <WeaponPickup>().FirstOrDefault (pickup => pickup.Weapon == type && !pickup.IsQueuedForDeletion() && FlatDistance (pickup.GlobalPosition, spot) < radius);
   private static float FlatDistance (Vector3 a, Vector3 b) => new Vector2 (a.X - b.X, a.Z - b.Z).Length();
 
   // Movement & death-feel batch (#171/#147/#148/#149/#150): crouch un-stick, the
@@ -1364,10 +1364,8 @@ public partial class PlaytestDriver : Node
 
   private async Task RunEndOfRunShooterPhases (Player victim)
   {
-    // QUARANTINED (issue #312): the punch-theft & headshot phases skip-merged in
-    // #258 & have never gone green on CI - they starved main's whole tail. Each
-    // returns via its own fix PR with a green run as proof. LOUD, never silent.
-    GD.Print ("QUARANTINED: punch-theft & headshot end-of-run phases skipped pending issue #312");
+    await RunPunchTheftPhase (victim); // Un-quarantined (issue #312): the fly-out search-ring fix in this PR.
+    await RunHeadshotPhase (victim); // Un-quarantined (issue #312): it only ever starved behind the theft phase.
     await RunBlowgunPhase (victim);
     await RunDropPhase();
     await RunRingPhase();
@@ -1375,7 +1373,10 @@ public partial class PlaytestDriver : Node
 
   private async Task RunEndOfRunVictimPhases()
   {
-    GD.Print ("QUARANTINED: theft-target & headshot-target end-of-run phases skipped pending issue #312");
+    await ResetLifeAndPark();
+    await BeTheTheftTarget();
+    await ResetLifeAndPark();
+    await BeTheHeadshotTarget();
     await ResetLifeAndPark();
     await BeThePoisonTarget();
   }
@@ -1436,7 +1437,14 @@ public partial class PlaytestDriver : Node
     }
 
     Assert (!victim.Holds (HeldWeapon.Bread), "a punch took the victim's equipped loaf (#193)");
-    if (hadBread) await WaitUntil (() => DroppedNear (HeldWeapon.Bread, victim.GlobalPosition) is { TossFrom: var toss } && toss != Vector3.Zero, 30, "already holding a loaf, the theft became a fly-out: a tossed pickup beside the victim (#193)");
+    // The fly-out lands 1.5-2.5m from the victim (SpawnTossed) - the default 2m
+    // search ring missed it about half the time & starved this wait (issue #312,
+    // the same geometry mismatch as the dart-ring fix in #311). 4m covers the toss
+    // plus arc & victim drift.
+    // Anchored to the FIXED park spot (CodeRabbit): the victim teleports off-world
+    // for its next reset the moment the loaf leaves, & a search centered on its
+    // mutable position would chase it there & miss the pickup.
+    if (hadBread) await WaitUntil (() => DroppedNear (HeldWeapon.Bread, VictimParkSpot, 4.0f) is { TossFrom: var toss } && toss != Vector3.Zero, 30, "already holding a loaf, the theft became a fly-out: a tossed pickup beside the victim (#193)");
     else await WaitUntil (() => Self.HasBread, 30, "the stolen loaf went straight into our hands - the direct steal (#193)");
     Self.Position = ShooterParkSpot;
     await Task.Delay (300);
