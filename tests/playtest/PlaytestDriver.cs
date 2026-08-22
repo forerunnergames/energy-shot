@@ -1384,13 +1384,18 @@ public partial class PlaytestDriver : Node
       await WaitUntil (() => Self.Holds (HeldWeapon.PaperAirplane), 30, "collected the airplane for the mine-load phase (#325)");
     }
 
-    Self.Position = ShooterParkSpot;
+    // A CLEAN lane (the first run's lesson): the drop phase leaves its laser at
+    // park + (0,0,-2), & the open slingshot loaded THAT en route - a full pouch
+    // can't collect, so the mine rightly popped. Field-relevant: a loaded pouch
+    // walks onto mines like anyone else (#286 covers EMPTY pouches only).
+    var lane = ShooterParkSpot + new Vector3 (3.0f, 0.0f, 0.0f);
+    Self.Position = lane;
     await Task.Delay (300);
     PressAction ("weapon_6");
     await Task.Delay (100);
     ReleaseAction ("weapon_6");
     Assert (Self.SelectedWeapon == SelectedWeapon.PaperAirplane, "airplane equipped for the mine-load phase (#325)");
-    var landingZone = ShooterParkSpot + new Vector3 (0.0f, 0.0f, -4.0f);
+    var landingZone = lane + new Vector3 (0.0f, 0.0f, -4.0f);
     AimAt (new Vector3 (landingZone.X, 30.25f, landingZone.Z)); // Into the deck: a short flight & a fast come-down.
     PressLeftClick();
     await Task.Delay (60);
@@ -1403,6 +1408,7 @@ public partial class PlaytestDriver : Node
     ReleaseAction ("weapon_5");
     Assert (Self.SelectedWeapon == SelectedWeapon.Slingshot && Self.SlingshotAmmo == HeldWeapon.None, "open EMPTY slingshot out for the armed pickup (#325)");
     var healthBefore = Self.Health;
+    Assert (Self.SlingshotAmmo == HeldWeapon.None, "the pouch is still EMPTY at the mine's edge (#325) - nothing auto-loaded en route");
     await WaitUntil (() => WalkedTo (mine.GlobalPosition), 20, "walked onto the armed airplane with the slingshot out (#325)");
     await WaitUntil (() => Self.SlingshotAmmo == HeldWeapon.PaperAirplane, 20, "the OPEN slingshot loaded the ARMED airplane as ammo - no detonation (#286/#325)");
     Assert (Self.Health == healthBefore, $"loading the mine cost no health (#325), was {healthBefore} now {Self.Health}");
