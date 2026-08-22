@@ -1604,6 +1604,7 @@ public partial class PlaytestDriver : Node
     AimAt (host.GlobalPosition + Vector3.Up);
     var healthBefore = host.Health;
     var clubDamage = Player.CalculateHealthDecrease (Self.ClubEnergy);
+    Assert (clubDamage == 2 * Player.CalculateHealthDecrease (Self.PunchEnergy), $"the club's spec IS twice a punch (#269), club {clubDamage} vs punch {Player.CalculateHealthDecrease (Self.PunchEnergy)}"); // The relationship, not just the current tuning (CodeRabbit).
     PressAction ("shoot");
     await Task.Delay (60);
     ReleaseAction ("shoot");
