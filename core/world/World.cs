@@ -86,6 +86,7 @@ public partial class World : Node3D
   public override void _Ready()
   {
     DressTheRing(); // The spawn box is a boxing ring (issue #174).
+    BackstopTheRing(); // Nobody tunnels out of it (issue #276).
     _onServerDisconnectedCallable = Callable.From (OnServerDisconnected);
     _playerScene = ResourceLoader.Load <PackedScene> ("res://core/players/Player.tscn");
     _networkManager = GetNode <NetworkManager> ("NetworkManager");
@@ -123,6 +124,30 @@ public partial class World : Node3D
   {
     var rope = new StandardMaterial3D { AlbedoColor = new Color (0.85f, 0.1f, 0.12f), Roughness = 0.4f };
     foreach (var wall in GetNode <Node3D> ("SpawnRoom").GetChildren().OfType <CsgBox3D>().Where (box => box.Name.ToString().StartsWith ("Wall"))) wall.Material = rope;
+  }
+
+  // The rope walls are only 0.3m thick, & a chained slide or a hard rope bounce moves
+  // up to ~1m per physics tick - one tick can step clean past a wall & drop a player
+  // 30m to the arena (issue #276, thepro). Invisible 2m backstops hug each wall's
+  // outer face (corners sealed, rope height only - over-the-top exits stay open) &
+  // count as ropes in Player.IsRope, so even a tunneled player just bounces.
+  public const float BackstopThicknessMeters = 2.0f;
+
+  private void BackstopTheRing()
+  {
+    var room = GetNode <Node3D> ("SpawnRoom");
+    var reach = 6.0f + 0.15f + BackstopThicknessMeters / 2.0f; // Wall outer face + half a backstop.
+    AddBackstop (room, "WallBackstopNorth", new Vector3 (0.0f, 1.0f, -reach), new Vector3 (16.0f, 1.5f, BackstopThicknessMeters));
+    AddBackstop (room, "WallBackstopSouth", new Vector3 (0.0f, 1.0f, reach), new Vector3 (16.0f, 1.5f, BackstopThicknessMeters));
+    AddBackstop (room, "WallBackstopEast", new Vector3 (reach, 1.0f, 0.0f), new Vector3 (BackstopThicknessMeters, 1.5f, 16.0f));
+    AddBackstop (room, "WallBackstopWest", new Vector3 (-reach, 1.0f, 0.0f), new Vector3 (BackstopThicknessMeters, 1.5f, 16.0f));
+  }
+
+  private static void AddBackstop (Node3D room, string name, Vector3 position, Vector3 size)
+  {
+    var body = new StaticBody3D { Name = name, Position = position };
+    body.AddChild (new CollisionShape3D { Shape = new BoxShape3D { Size = size } });
+    room.AddChild (body);
   }
 
   // Admin announcements (issue #158): only active with --admin-message-file; no
