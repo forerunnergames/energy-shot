@@ -41,47 +41,19 @@ public partial class BoomerangProjectile : Node3D
   private Rid _throwerRid;
   private Vector3 CatchPoint() => _thrower!.GlobalPosition + Vector3.Up * 1.2f;
 
-  // Shared look for the projectile, the world pickup, & the held model (issue #98):
-  // two bright crossed arms built from primitive boxes. Fresh materials per call so
-  // the first-person overlay tweak (issue #124) can't bleed into pickups.
-  // A curved boomerang (issue #245): a smooth swept V traced along a quadratic Bezier
-  // from one rounded tip through the elbow to the other, built from short capsules so
-  // every edge is round - no boxes, no hard angles. Shared by projectile, held model,
-  // pickup, & the slingshot nock.
+  // Shared look for the projectile, the world pickup, the held model, & the slingshot
+  // nock (issue #98): the classic hard-angled V of two bright crossed box arms.
+  // (Aaron, 2026-08-22: reverted the curved #245/#257 rework - the old look was way
+  // better; #257's pitch ceiling stays.) Fresh materials per call so the first-person
+  // overlay tweak (issue #124) can't bleed into pickups.
   public static Node3D CreateVisual()
   {
     var material = new StandardMaterial3D { AlbedoColor = BoomerangOrange, EmissionEnabled = true, Emission = BoomerangOrange * 0.6f, Roughness = 0.4f };
     var visual = new Node3D();
-    var tipA = new Vector3 (0.62f, 0.0f, 0.0f);
-    var elbow = new Vector3 (-0.08f, 0.0f, -0.08f);
-    var tipB = new Vector3 (0.0f, 0.0f, 0.62f);
-    const int segments = 10;
-    var previous = Bezier (tipA, elbow, tipB, 0.0f);
-
-    for (var i = 1; i <= segments; ++i)
-    {
-      var point = Bezier (tipA, elbow, tipB, (float)i / segments);
-      var along = point - previous;
-      var taper = 0.085f - 0.03f * Mathf.Abs ((float)i / segments - 0.5f) * 2.0f; // Fat elbow, slimmer tips.
-      var capsule = new MeshInstance3D { Mesh = new CapsuleMesh { Radius = taper, Height = along.Length() + taper * 2.0f }, MaterialOverride = material, Position = (previous + point) / 2.0f };
-      capsule.Basis = AlongY (along); // A capsule stands along Y; lay it along the segment (no LookAt: not in the tree yet).
-      visual.AddChild (capsule);
-      previous = point;
-    }
-
+    visual.AddChild (new MeshInstance3D { Mesh = new BoxMesh { Size = new Vector3 (0.85f, 0.06f, 0.18f) }, MaterialOverride = material, Position = new Vector3 (0.28f, 0.0f, 0.0f) });
+    visual.AddChild (new MeshInstance3D { Mesh = new BoxMesh { Size = new Vector3 (0.18f, 0.06f, 0.85f) }, MaterialOverride = material, Position = new Vector3 (0.0f, 0.0f, 0.28f) });
     return visual;
   }
-
-  private static Basis AlongY (Vector3 direction)
-  {
-    var y = direction.Normalized();
-    var x = Vector3.Up.Cross (y);
-    if (x.LengthSquared() < 0.001f) x = Vector3.Right;
-    x = x.Normalized();
-    return new Basis (x, y, x.Cross (y));
-  }
-
-  private static Vector3 Bezier (Vector3 a, Vector3 control, Vector3 b, float t) => a * (1.0f - t) * (1.0f - t) + control * 2.0f * (1.0f - t) * t + b * t * t;
 
   public override void _Ready()
   {
