@@ -34,8 +34,8 @@ public partial class PlaytestDriver : Node
   // Death-drop coverage (issue #169): the victim carries the deterministic playtest
   // banana to this fixed spot to be zapped, so the drop lands metres clear of every
   // playtest pickup spot - a drop search next to one of those could match it instead.
-  private static readonly Vector3 KillSpot = new(4.0f, 31.0f, 0.0f);
-  private static readonly Vector3 SpawnRoomCenter = new(0.0f, 31.0f, 0.0f);
+  private static readonly Vector3 KillSpot = new(4.0f, 31.3f, 0.0f);
+  private static readonly Vector3 SpawnRoomCenter = new(0.0f, 31.3f, 0.0f);
   // Fixed marks for the airplane throw/catch (#102), out in the empty arena well
   // clear of the spawn room where the host idles: 8m apart, so the glider gets a
   // real flight & nobody else can wander into the throw's aim ray.
@@ -560,7 +560,7 @@ public partial class PlaytestDriver : Node
     // stones. Mid-wall, not the corner (#197): the deterministic pickups moved into
     // the corners, & this spot still keeps the wall at z=6 point-blank for the #163
     // phases while sitting 5.5m clear of every one of them.
-    Self.Position = new Vector3 (0.0f, 31.0f, 5.0f);
+    Self.Position = new Vector3 (0.0f, 31.3f, 5.0f);
     await Task.Delay (400);
     await EmptySlingshot();
     Assert (Self.SlingshotAmmo == HeldWeapon.None, "slingshot is empty for the stone phases (#190)");
@@ -594,7 +594,7 @@ public partial class PlaytestDriver : Node
     // Wall blocking (#163): point-blank into the spawn-room wall (the wall face is
     // about as close as the muzzle offset from here), so the first-frame camera
     // sweep is what stops the stone - it must never travel past the wall at z=6.
-    AimAt (new Vector3 (Self.GlobalPosition.X, 31.0f, 6.0f)); // Mid-height of the wall ahead.
+    AimAt (new Vector3 (Self.GlobalPosition.X, 31.3f, 6.0f)); // Mid-height of the wall ahead.
     var wallStone = await SlingAStone (drawMs: 1500, "wall-test stone (#163)");
     await TryWaitUntil (() => !IsInstanceValid (wallStone) || !wallStone.IsInsideTree(), 5);
     Assert (!IsInstanceValid (wallStone) || !wallStone.IsInsideTree(), "the wall stopped the stone (#163)");
@@ -765,12 +765,12 @@ public partial class PlaytestDriver : Node
   // simply auto-claim the pickup mid-ritual. From here every one of them is 5.5m off.
   private async Task TakeBreadEatingPosition()
   {
-    Self.Position = new Vector3 (0.0f, 31.0f, 5.0f);
+    Self.Position = new Vector3 (0.0f, 31.3f, 5.0f);
     await Task.Delay (400); // Settle onto the floor.
     PressAction ("weapon_1");
     await Task.Delay (100);
     ReleaseAction ("weapon_1");
-    AimAt (new Vector3 (0.0f, 31.0f, 6.0f)); // Mid-height of the wall ahead.
+    AimAt (new Vector3 (0.0f, 31.3f, 6.0f)); // Mid-height of the wall ahead.
 
     for (var attempt = 0; attempt < 12 && Self.Health >= Self.MaxHealth; ++attempt)
     {
@@ -1038,7 +1038,7 @@ public partial class PlaytestDriver : Node
     Assert (Self.SlingshotAmmo == HeldWeapon.None, "slingshot starts empty (#190)");
     // Approach the laser pickup straight down the empty -Z lane, so the only item we
     // can walk onto on the way is the one under test.
-    Self.Position = new Vector3 (WeaponSpawner.PlaytestLaserPosition.X, 31.0f, 0.5f);
+    Self.Position = new Vector3 (WeaponSpawner.PlaytestLaserPosition.X, 31.3f, 0.5f);
     await Task.Delay (400);
     // We already hold a laser, so a NORMAL pickup could never fire here: any load at
     // all proves the equipped slingshot changed what walking onto an item means.
@@ -1049,14 +1049,18 @@ public partial class PlaytestDriver : Node
     // Let the playtest spot restock BEFORE the landing check & then step off it, so
     // the only laser pickup that can appear afterwards is the one we sling.
     await WaitUntil (() => LaserPickupNames (WeaponSpawner.PlaytestLaserPosition).Any(), 20, "the playtest laser spot restocked (#72)");
-    Self.Position = new Vector3 (WeaponSpawner.PlaytestLaserPosition.X, 31.0f, 0.5f);
+    Self.Position = new Vector3 (WeaponSpawner.PlaytestLaserPosition.X, 31.3f, 0.5f);
     await Task.Delay (400);
     // Aimed down the empty -Z lane into the spawn-room floor, so the slung laser
     // comes to rest on real ground well clear of us (& can't be instantly reloaded).
     AimAt (Self.GlobalPosition + new Vector3 (0.0f, -1.0f, -6.0f));
     var lasersBefore = LaserPickupNames();
     var ammoStonesBefore = _stonesSpawned;
-    await SlingAStone (drawMs: 900, "loaded-ammo shot (#190)");
+    // A soft lob, NOT a full draw (issue #272): now that the draw is engine-time
+    // honest, a 900ms draw punches the stone clean through the paper-thin spawn-room
+    // slab & it falls off-world - the server correctly skips the landing ("no ground
+    // beneath") & returns the laser via the caps, & the landed-pickup wait times out.
+    await SlingAStone (drawMs: 300, "loaded-ammo shot (#190)");
     Assert (_stonesSpawned > ammoStonesBefore, "fired the loaded laser out of the slingshot (#190)");
     await WaitUntil (() => Self.SlingshotAmmo == HeldWeapon.None, 10, "firing emptied the slingshot (#190)");
     // Nothing may vanish: the slung laser has to come back as an ordinary pickup.
@@ -1632,7 +1636,7 @@ public partial class PlaytestDriver : Node
   // can't auto-claim one (#128).
   private async Task WaitForTheShooterToClearTheCatchMark()
   {
-    Self.Position = new Vector3 (5.0f, 31.0f, -3.0f); // Clear of all four deterministic pickup spots.
+    Self.Position = new Vector3 (5.0f, 31.3f, -3.0f); // Clear of all four deterministic pickup spots.
     await Task.Delay (300); // Settle onto the floor.
     var wentDown = false;
 
@@ -1842,14 +1846,39 @@ public partial class PlaytestDriver : Node
   // spawns; retries absorb CI physics-time dilation eating into the cooldown & draw.
   private async Task <SlingshotStone> SlingAStone (int drawMs, string description)
   {
+    // Wait on OBSERVED draw, never wall time (issue #272): draw accumulates in
+    // physics ticks, & a starved CI runner fits under 0.2s of engine time into a
+    // 900ms wall-clock hold - the release lands sub-minimum & silently fires
+    // nothing, every retry alike. Reading the player's own draw clock instead
+    // makes the hold immune to frame starvation.
+    var targetDrawSeconds = Mathf.Min (drawMs / 1000.0f, Self.SlingshotMaxDrawSeconds);
+
     for (var attempt = 0; attempt < 5; ++attempt)
     {
+      // A pickup grant can land mid-phase & auto-equip itself (#128 is by design) -
+      // an airplane did exactly that in CI & the shoot press THREW it, dropping the
+      // shooter to fists for every retry (issue #272). Re-assert the selection, so a
+      // selection stomp costs one loud reselect instead of the whole phase.
+      if (Self.SelectedWeapon != SelectedWeapon.Slingshot)
+      {
+        GD.Print ($"SlingAStone: selection was stomped to {Self.SelectedWeapon} - reselecting the slingshot (issue #272)");
+        PressAction ("weapon_5");
+        var reselected = await TryWaitUntil (() => Self.SelectedWeapon == SelectedWeapon.Slingshot, 5);
+        ReleaseAction ("weapon_5");
+        if (!reselected) continue; // No slingshot in hand (lost to a death?) - a draw wait would just burn 15s (CodeRabbit).
+      }
+
       _lastStone = null;
       PressAction ("shoot");
-      await Task.Delay (drawMs);
+      await TryWaitUntil (() => Self.SlingshotDrawSeconds >= targetDrawSeconds, 15);
+      // Diagnosis for issue #272: which link breaks - the press, the draw, or the fire.
+      GD.Print ($"SlingAStone attempt {attempt}: pressed={Input.IsActionPressed ("shoot")} draw={Self.SlingshotDrawSeconds:0.00}/{targetDrawSeconds:0.00} selected={Self.SelectedWeapon} ammo={Self.SlingshotAmmo}");
       ReleaseAction ("shoot");
-      await TryWaitUntil (() => _lastStone != null, 2);
-      if (_lastStone != null) return _lastStone;
+      // Only OUR live stone counts (CodeRabbit): TrackStone also catches remote
+      // players' visual copies, which would false-pass the spawn assert.
+      await TryWaitUntil (() => _lastStone != null && IsInstanceValid (_lastStone) && _lastStone.Shooter == Self, 3);
+      if (_lastStone != null && IsInstanceValid (_lastStone) && _lastStone.Shooter == Self) return _lastStone;
+      GD.Print ($"SlingAStone attempt {attempt}: released, no stone; draw now {Self.SlingshotDrawSeconds:0.00}");
     }
 
     throw new Exception ($"no stone spawned: {description}");
