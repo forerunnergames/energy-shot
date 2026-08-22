@@ -25,9 +25,9 @@ public class HeadshotTest
   }
 
   [TestCase]
-  public void HeadSeatsOnTheBody()
+  public void HeadFloatsCloseAboveTheBody()
   {
-    AssertFloat (HeadHitbox.LocalOffset.Y).IsGreater (2.0f); // Center above the capsule top...
-    AssertFloat (HeadHitbox.LocalOffset.Y - HeadHitbox.Radius).IsLess (2.0f); // ...but SEATED (overlapping), never hovering (issue #238).
+    AssertFloat (HeadHitbox.LocalOffset.Y - HeadHitbox.Radius).IsGreater (2.0f); // A real gap: never touching (Aaron)...
+    AssertFloat (HeadHitbox.LocalOffset.Y - HeadHitbox.Radius - 2.0f).IsLess (0.1f); // ...but CLOSE - a sliver, not the old hover (issue #238).
   }
 }

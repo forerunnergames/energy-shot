@@ -11,7 +11,7 @@ public partial class HeadHitbox : Area3D
 {
   public const uint Layer = 1u << 7; // Layer 8: nothing else lives there.
   public const float Radius = 0.45f; // Bigger (Aaron, 2026-08-22): a real melon, not a marble.
-  public static readonly Vector3 LocalOffset = new(0.0f, 2.25f, 0.0f); // SEATED on the 2m capsule (slight neck overlap), not hovering above it.
+  public static readonly Vector3 LocalOffset = new(0.0f, 2.5f, 0.0f); // CLOSE above the 2m capsule - a 0.05 gap (Aaron: closer than the old float, but never touching).
 
   public Player Player => (Player)GetParent();
 

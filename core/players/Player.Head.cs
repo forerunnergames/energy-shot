@@ -32,7 +32,7 @@ public partial class Player
   {
     if (_head == null) return;
     const float bodyHalfHeight = 1.0f; // The 2m capsule about its center.
-    var seat = HeadHitbox.LocalOffset.Y - 2.0f; // 0.25: how far the head center rises above the capsule top (radius 0.45 - 0.2 of neck overlap).
+    var seat = HeadHitbox.LocalOffset.Y - 2.0f; // 0.5: head center above the capsule top - radius 0.45 + a 0.05 hover gap (Aaron: close, never touching).
     var center = _mesh.Position + _mesh.Basis.Y.Normalized() * (bodyHalfHeight * _mesh.Scale.Y + seat);
     _head.Position = center;
     _headMesh.Position = center;
