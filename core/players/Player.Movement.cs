@@ -300,6 +300,7 @@ public partial class Player
   private void RespawnFell()
   {
     if (Fallen) return; // A dead body drifting past the boundary mid-lie-down already has a respawn scheduled (issue #152).
+    GD.Print ($"{DisplayName}: fell out of the world at {GlobalPosition}, moving {Velocity}"); // Where & how fast (issue #276 diagnosis).
     --Score; // Falling off the world costs a point.
     ++Falls; // Round stats (issue #153): self-inflicted, separately counted.
     ClearHeldWeapons(); // A drop below the world would be unreachable; the weapons respawn at spawn points instead (issue #72).
