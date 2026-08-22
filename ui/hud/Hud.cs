@@ -247,21 +247,24 @@ public partial class Hud : Control
   // a round runs & a full-screen scoreboard between rounds. Neither captures input.
   private void CreateRoundUi()
   {
+    // The clock & mode ride ABOVE the leaderboard (Aaron, 2026-08-22): the old
+    // top-center label overlapped the in-game message feed.
     _roundClock = new Label { HorizontalAlignment = HorizontalAlignment.Center, MouseFilter = MouseFilterEnum.Ignore, Visible = false };
     _roundClock.AddThemeFontSizeOverride ("font_size", 40);
-    _roundClock.SetAnchorsPreset (LayoutPreset.CenterTop);
-    _roundClock.OffsetTop = 12.0f;
-    AddChild (_roundClock);
+    var leaderboardColumn = GetNode <BoxContainer> ("Leaderboard/MarginContainer/VBoxContainer");
+    leaderboardColumn.AddChild (_roundClock);
+    leaderboardColumn.MoveChild (_roundClock, 0);
     _roundOverlay = new ColorRect { Color = new Color (0.0f, 0.0f, 0.0f, 0.7f), MouseFilter = MouseFilterEnum.Ignore, Visible = false };
     _roundOverlay.SetAnchorsPreset (LayoutPreset.FullRect);
     AddChild (_roundOverlay);
     _roundBoard = new RichTextLabel { BbcodeEnabled = true, FitContent = true, ScrollActive = false, MouseFilter = MouseFilterEnum.Ignore };
-    _roundBoard.AddThemeFontSizeOverride ("normal_font_size", 40);
-    _roundBoard.AddThemeFontSizeOverride ("bold_font_size", 44);
+    // Twice the old size (Aaron, 2026-08-22): the between-rounds screen read tiny.
+    _roundBoard.AddThemeFontSizeOverride ("normal_font_size", 72);
+    _roundBoard.AddThemeFontSizeOverride ("bold_font_size", 80);
     _roundBoard.SetAnchorsPreset (LayoutPreset.Center);
     _roundBoard.GrowHorizontal = GrowDirection.Both;
     _roundBoard.GrowVertical = GrowDirection.Both;
-    _roundBoard.CustomMinimumSize = new Vector2 (1100.0f, 0.0f);
+    _roundBoard.CustomMinimumSize = new Vector2 (2200.0f, 0.0f);
     _roundOverlay.AddChild (_roundBoard);
   }
 
