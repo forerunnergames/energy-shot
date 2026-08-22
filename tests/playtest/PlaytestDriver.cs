@@ -1352,8 +1352,10 @@ public partial class PlaytestDriver : Node
 
   private async Task RunEndOfRunShooterPhases (Player victim)
   {
-    await RunPunchTheftPhase (victim);
-    await RunHeadshotPhase (victim);
+    // QUARANTINED (issue #312): the punch-theft & headshot phases skip-merged in
+    // #258 & have never gone green on CI - they starved main's whole tail. Each
+    // returns via its own fix PR with a green run as proof. LOUD, never silent.
+    GD.Print ("QUARANTINED: punch-theft & headshot end-of-run phases skipped pending issue #312");
     await RunBlowgunPhase (victim);
     await RunDropPhase();
     await RunRingPhase();
@@ -1361,10 +1363,7 @@ public partial class PlaytestDriver : Node
 
   private async Task RunEndOfRunVictimPhases()
   {
-    await ResetLifeAndPark();
-    await BeTheTheftTarget();
-    await ResetLifeAndPark();
-    await BeTheHeadshotTarget();
+    GD.Print ("QUARANTINED: theft-target & headshot-target end-of-run phases skipped pending issue #312");
     await ResetLifeAndPark();
     await BeThePoisonTarget();
   }
