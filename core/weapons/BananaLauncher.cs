@@ -14,6 +14,7 @@ public partial class BananaLauncher : Node3D
   public bool CanFire => _cooldownLeft <= 0.0f;
   // 0..1 readiness (1 = ready) for the HUD cooldown bar (issue #70).
   public float CooldownFraction => 1.0f - _cooldownLeft / CooldownSeconds;
+  public void ResetCooldown() => _cooldownLeft = 0.0f; // Fresh lives start ready (issue #299).
   public void StartCooldown() => _cooldownLeft = CooldownSeconds;
   // Real grenade-launcher thump (issue #83): positional, so every peer hears it from
   // the shooter's location via the visual-banana path.
