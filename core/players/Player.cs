@@ -414,6 +414,7 @@ public partial class Player : CharacterBody3D
     _standingCameraHeight = _camera.Position.Y;
     _isInputEnabled = true;
     _holdToCrouch = Settings.HoldToCrouch; // Toggle-vs-hold crouch preference (issue #147).
+    _holdToScope = Settings.HoldToScope; // Toggle-vs-hold scope preference (issue #290).
     Input.MouseMode = Input.MouseModeEnum.Captured;
     Position = CalculateRandomSpawnPosition();
     SetBreadHeld (isHeld: true); // The starting loaf rides the HeldWeapon mask (issue #190).
