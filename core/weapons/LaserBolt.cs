@@ -55,7 +55,7 @@ public partial class LaserBolt : Node3D
     _energy = energy;
     _isLive = isLive;
     _exclusions = shooter == null ? new Godot.Collections.Array <Rid>() : new Godot.Collections.Array <Rid> { shooter.GetRid() };
-    if (shooter is Player own) _exclusions.Add (own.HeadRid); // Your own dome is not a target (issue #179).
+    if (shooter is Player own && own.HeadRid.IsValid) _exclusions.Add (own.HeadRid); // No head while parked (#238). // Your own dome is not a target (issue #179).
     Orient();
     ApplyEnergyVisuals();
   }
