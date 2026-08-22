@@ -35,7 +35,6 @@ public partial class MusicPlayer : Control
     _music.TrackChanged += OnTrackChanged;
     _music.VoteCountsChanged += OnVoteCountsChanged;
     _music.OwnVoteChanged += OnOwnVoteChanged;
-    AddShowToggleToPauseDialog();
     OnVoteCountsChanged (0, 0);
     _panel.Visible = false; // Nothing to show until the first track starts.
   }
@@ -92,23 +91,6 @@ public partial class MusicPlayer : Control
     GetNodeOrNull <MessageScroller> ("../MessageScroller")?.AddMessage ("Vote on the music: . up / , down", MessageScroller.MessageImportance.High);
   }
 
-  // The pause (quit) dialog is the only in-game UI with a visible mouse, so the
-  // persisted "Show music player" toggle lives there; added in code to keep the
-  // Hud scene edits minimal (issue #137).
-  private void AddShowToggleToPauseDialog()
-  {
-    var container = GetNodeOrNull <BoxContainer> ("../QuitDialog/VBoxContainer/HBoxContainer");
-    if (container == null) return;
-    var toggle = new CheckButton { Text = "Show music player", ButtonPressed = Settings.ShowMusicPlayer };
-    toggle.AddThemeFontSizeOverride ("font_size", 40);
-    toggle.Toggled += OnShowToggled;
-    container.Alignment = BoxContainer.AlignmentMode.Center;
-    container.AddChild (toggle);
-  }
-
-  private void OnShowToggled (bool isEnabled)
-  {
-    Settings.ShowMusicPlayer = isEnabled;
-    _panel.Visible = isEnabled && _title.Text.Length > 0;
-  }
+  // The central Settings dialog (issue #297) owns the toggle now; it calls this.
+  public void ApplyVisibilitySetting() => _panel.Visible = Settings.ShowMusicPlayer && _title.Text.Length > 0;
 }
