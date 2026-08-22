@@ -1409,7 +1409,12 @@ public partial class PlaytestDriver : Node
     Assert (Self.SelectedWeapon == SelectedWeapon.Slingshot && Self.SlingshotAmmo == HeldWeapon.None, "open EMPTY slingshot out for the armed pickup (#325)");
     var healthBefore = Self.Health;
     Assert (Self.SlingshotAmmo == HeldWeapon.None, "the pouch is still EMPTY at the mine's edge (#325) - nothing auto-loaded en route");
-    await WaitUntil (() => WalkedTo (mine.GlobalPosition), 20, "walked onto the armed airplane with the slingshot out (#325)");
+    // The load fires at claim range (~2m) & FREES the pickup before the walk's 0.8m
+    // arrival check (round 2's lesson - the load SUCCEEDED while the walk-wait
+    // chased a freed node): capture the spot, walk toward it, & the LOAD is the
+    // arrival condition.
+    var mineSpot = mine.GlobalPosition;
+    await WaitUntil (() => Self.SlingshotAmmo == HeldWeapon.PaperAirplane || WalkedTo (mineSpot), 20, "walked at the armed airplane with the slingshot out (#325)");
     await WaitUntil (() => Self.SlingshotAmmo == HeldWeapon.PaperAirplane, 20, "the OPEN slingshot loaded the ARMED airplane as ammo - no detonation (#286/#325)");
     Assert (Self.Health == healthBefore, $"loading the mine cost no health (#325), was {healthBefore} now {Self.Health}");
     // Leave nothing nocked for whatever follows: fire it into the deck & let the caps recycle it.
