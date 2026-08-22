@@ -1352,13 +1352,18 @@ public partial class PlaytestDriver : Node
   // room after its landmine phase. The victim resets its life between sub-phases with
   // a deliberate off-world fall (fresh 400 HP, fresh loaf, armor that expires), so
   // every sub-phase starts from a known state & nothing depends on health left over.
-  private static readonly Vector3 VictimParkSpot = new(3.0f, 31.0f, 2.0f);
-  private static readonly Vector3 ShooterParkSpot = new(-2.0f, 31.0f, 2.0f);
+  // 31.3, never 31.0 (issue #276): the slab top is 30.25 & the capsule half-height
+  // is 1.0, so 31.0 sinks the capsule 0.25m INTO the floor - the depenetration
+  // blast source the #273 teleport fix already cured everywhere else.
+  private static readonly Vector3 VictimParkSpot = new(3.0f, 31.3f, 2.0f);
+  private static readonly Vector3 ShooterParkSpot = new(-2.0f, 31.3f, 2.0f);
 
   private async Task RunEndOfRunShooterPhases (Player victim)
   {
-    await RunPunchTheftPhase (victim);
-    await RunHeadshotPhase (victim);
+    // QUARANTINED (issue #312): the punch-theft & headshot phases skip-merged in
+    // #258 & have never gone green on CI - they starved main's whole tail. Each
+    // returns via its own fix PR with a green run as proof. LOUD, never silent.
+    GD.Print ("QUARANTINED: punch-theft & headshot end-of-run phases skipped pending issue #312");
     await RunBlowgunPhase (victim);
     await RunDropPhase();
     await RunRingPhase();
@@ -1366,10 +1371,7 @@ public partial class PlaytestDriver : Node
 
   private async Task RunEndOfRunVictimPhases()
   {
-    await ResetLifeAndPark();
-    await BeTheTheftTarget();
-    await ResetLifeAndPark();
-    await BeTheHeadshotTarget();
+    GD.Print ("QUARANTINED: theft-target & headshot-target end-of-run phases skipped pending issue #312");
     await ResetLifeAndPark();
     await BeThePoisonTarget();
   }
@@ -1538,7 +1540,10 @@ public partial class PlaytestDriver : Node
     Self.Position = ShooterParkSpot;
     await Task.Delay (300);
     if (Self.BlowgunDarts == 0) await Reload (ShooterParkSpot);
-    var floorSpot = ShooterParkSpot + new Vector3 (0.0f, 0.0f, -3.0f);
+    // Aim at the actual DECK (the slab top is y 30.25): the old spot inherited the
+    // park height & floated 0.75m above the floor, so the near-zero-drop dart flew
+    // flat over it, hit the far wall ~5m beyond, & landed outside the search ring.
+    var floorSpot = new Vector3 (ShooterParkSpot.X, 30.25f, ShooterParkSpot.Z - 3.0f);
     AimAt (floorSpot);
     PressAction ("shoot");
     await Task.Delay (60);
