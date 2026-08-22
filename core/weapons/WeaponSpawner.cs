@@ -138,8 +138,9 @@ public partial class WeaponSpawner : Node3D
   {
     _rng.Randomize();
     _pickupScene = ResourceLoader.Load <PackedScene> ("res://core/weapons/WeaponPickup.tscn");
-    // Laser spawn points: on top of the 5 low buildings; banana: the high platform.
-    for (var i = 1; i <= 5; ++i) _laserPoints.Add (TopOf (GetNode <CsgBox3D> ($"../Building{i}"), PickupHoverHeight));
+    // Laser spawn points: on top of EVERY low building - new buildings become spawn
+    // points automatically (issue #293); banana: the high platform.
+    for (var i = 1; GetNodeOrNull <CsgBox3D> ($"../Building{i}") is { } building; ++i) _laserPoints.Add (TopOf (building, PickupHoverHeight));
     _bananaPoint = TopOf (GetNode <CsgBox3D> ("../BananaPlatform"), PickupHoverHeight);
     _isPlaytest = OS.GetCmdlineUserArgs().Contains ("--playtest");
   }
@@ -231,7 +232,7 @@ public partial class WeaponSpawner : Node3D
     var missing = MaxDarts - CountDarts (pickups, players);
     for (var i = 0; i < missing; ++i)
     {
-      var target = new Vector3 (_rng.RandfRange (-35.0f, 35.0f), 0.0f, _rng.RandfRange (-35.0f, 35.0f));
+      var target = new Vector3 (_rng.RandfRange (-85.0f, 85.0f), 0.0f, _rng.RandfRange (-85.0f, 85.0f)); // The doubled floor (issue #293), with an edge margin.
       if (!TryFindGround (target, out var spot)) continue;
       Spawn (HeldWeapon.PoisonDart, spot, expires: false);
     }

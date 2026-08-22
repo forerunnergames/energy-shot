@@ -82,6 +82,12 @@ public partial class WeaponPickup : Area3D
   private OmniLight3D? _armedLight;
   private bool _armed;
   private WeaponSpawner _spawner = null!;
+  // No spawned item touches the floor (issue #278, thepro): floating & spinning
+  // means safe & pickupable, flat on the ground means a landed hazard. A dart-sized
+  // mesh needs real height for the difference to read; everything else already does.
+  public const float DartHoverMeters = 0.6f;
+  public static float HoverBaseline (HeldWeapon weapon, bool armed) => weapon == HeldWeapon.PoisonDart && !armed ? DartHoverMeters : 0.0f;
+
   // How fast an armed airplane's warning light blinks while it waits (issue #191).
   private const float ArmedBlinksPerSecond = 1.4f;
   private static readonly Color ArmedRed = new(1.0f, 0.15f, 0.12f);
@@ -151,7 +157,7 @@ public partial class WeaponPickup : Area3D
     }
 
     _visual.RotateY (Mathf.Tau * RotationsPerSecond * (float)delta);
-    _visual.Position = Vector3.Up * (BobHeight * Mathf.Sin (Mathf.Tau * BobsPerSecond * _ageSeconds));
+    _visual.Position = Vector3.Up * (HoverBaseline (Weapon, Armed) + BobHeight * Mathf.Sin (Mathf.Tau * BobsPerSecond * _ageSeconds));
     // An armed airplane winks at everyone while it waits (issue #191).
     if (_armedLight != null) _armedLight.Visible = Mathf.PosMod (_ageSeconds * ArmedBlinksPerSecond, 1.0f) < 0.5f;
   }
