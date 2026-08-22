@@ -1851,6 +1851,7 @@ public partial class PlaytestDriver : Node
     if (flatTarget.DistanceSquaredTo (self.GlobalPosition) > 0.01f) self.LookAt (flatTarget, Vector3.Up); // -Z (forward) faces the target.
     var camera = self.GetNode <Camera3D> ("Camera3D");
     if (!target.IsEqualApprox (camera.GlobalPosition)) camera.LookAt (target, Vector3.Up);
+    self.SetCameraPitch (camera.Rotation.X); // Sync the one-writer accumulator (issue #322), or the next frame stomps this aim.
   }
 
   private async Task ChargeAndFire (float chargeSeconds)
