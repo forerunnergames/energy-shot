@@ -105,7 +105,9 @@ public partial class SlingshotStone : Node3D
   // own shared visual, shrunk to projectile size. None = the plain stone.
   public static Node3D CreateAmmoVisual (HeldWeapon ammo) => ammo switch
   {
-    HeldWeapon.Laser => MeshVisual ("res://assets/weapons/weapon-energy.obj", new Color (0.7f, 0.75f, 0.85f), 0.25f),
+    // The textured GLB the pickup & held views use (issue #284): the raw OBJ + a
+    // flat override nocked an all-white gun standing on end.
+    HeldWeapon.Laser => Scaled (ResourceLoader.Load <PackedScene> ("res://assets/weapons/weapon-energy-handle.glb").Instantiate <Node3D>(), 0.25f),
     HeldWeapon.Banana => MeshVisual ("res://assets/weapons/Banana_Rifle.obj", BananaYellow, 0.35f),
     HeldWeapon.Boomerang => Scaled (BoomerangProjectile.CreateVisual(), 0.6f),
     HeldWeapon.Slingshot => Scaled (CreateSlingshotVisual(), 0.6f),
