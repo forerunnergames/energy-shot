@@ -50,7 +50,7 @@ public partial class SlingshotStone : Node3D
   private float _energy;
   private float _age;
   private bool _isLive;
-  public CharacterBody3D? Shooter { get; private set; }
+  public CharacterBody3D? Shooter { get; set; } // Set at CONSTRUCTION (issue #272): TrackStone fires on AddChild, before Launch runs.
   private Godot.Collections.Array <Rid> _exclusions = new();
 
   // Shared look for the world pickup & the held model (issue #99): a simple Y-frame
