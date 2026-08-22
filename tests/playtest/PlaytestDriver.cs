@@ -1189,6 +1189,9 @@ public partial class PlaytestDriver : Node
     Assert (Self.Score == 0, $"own score is 0 before the fall, got {Self.Score}");
     Self.Position = new Vector3 (120.0f, 5.0f, 120.0f); // Beyond the arena: nothing below but the kill boundary.
     await WaitUntil (() => Self.Score == -1, 60, "fall at score 0 dropped own score to -1");
+    // Cooldowns reset with the life (issue #299): the punches & shots this run has
+    // been spamming must all read ready the moment we respawn.
+    Assert (Self.PunchReadyFraction >= 1.0f && Self.FullAutoReadyFraction >= 1.0f && Self.SlideReadyFraction >= 1.0f, "respawn reset every action cooldown (#299)");
     // Respawned from the fall; the shooter's paper airplane phase needs us standing
     // in the spawn room (#102).
     await WaitUntil (() => Self.GlobalPosition.Y > 20.0f, 30, "respawned in the spawn room after the fall");
