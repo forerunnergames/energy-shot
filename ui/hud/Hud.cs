@@ -134,7 +134,7 @@ public partial class Hud : Control
     _world = GetNode <World> ("/root/World");
     _healthBar = GetNode <ProgressBar> ("VBoxContainer/Health/ProgressBar");
     _messageScroller = GetNode <MessageScroller> ("MessageScroller");
-    _messageScroller.Visible = Settings.ShowMessages; // Issue #297.
+    _messageScroller.ApplyVisibilitySetting(); // Issue #297: also closes any stuck Tab backdrop.
     _scoreLabel = GetNode <Label> ("VBoxContainer/Score/Label");
     _leaderboardEntries = GetNode <RichTextLabel> ("Leaderboard/MarginContainer/VBoxContainer/Entries");
     _vignette = (ShaderMaterial)GetNode <ColorRect> ("Vignette").Material;
@@ -303,13 +303,14 @@ public partial class Hud : Control
     var rows = _settingsDialog.GetNode <BoxContainer> ("VBoxContainer/HBoxContainer");
     rows.Alignment = BoxContainer.AlignmentMode.Center;
     var column = new VBoxContainer();
-    column.AddThemeConstantOverride ("separation", 24);
+    column.AddThemeConstantOverride ("separation", 36);
+    column.CustomMinimumSize = new Vector2 (1100.0f, 0.0f);
     rows.AddChild (column);
     column.AddChild (SettingToggle ("Hold to crouch", Settings.HoldToCrouch, isEnabled => { Settings.HoldToCrouch = isEnabled; Player.Local?.RefreshCrouchMode(); }));
     column.AddChild (SettingToggle ("Hold to scope", Settings.HoldToScope, isEnabled => { Settings.HoldToScope = isEnabled; Player.Local?.RefreshScopeMode(); }));
     column.AddChild (SettingToggle ("Show music player", Settings.ShowMusicPlayer, isEnabled => { Settings.ShowMusicPlayer = isEnabled; GetNode <MusicPlayer> ("MusicPlayer").ApplyVisibilitySetting(); }));
     column.AddChild (SettingToggle ("Show chat", Settings.ShowChat, isEnabled => Settings.ShowChat = isEnabled));
-    column.AddChild (SettingToggle ("Show game messages", Settings.ShowMessages, isEnabled => { Settings.ShowMessages = isEnabled; _messageScroller.Visible = isEnabled; }));
+    column.AddChild (SettingToggle ("Show game messages", Settings.ShowMessages, isEnabled => { Settings.ShowMessages = isEnabled; _messageScroller.ApplyVisibilitySetting(); }));
     _settingsDialog.Hide();
     // The pause dialog's middle row hosts the way in.
     var pauseRow = _quitDialog.GetNode <BoxContainer> ("VBoxContainer/HBoxContainer");
@@ -320,12 +321,21 @@ public partial class Hud : Control
     pauseRow.AddChild (settingsButton);
   }
 
-  private static CheckButton SettingToggle (string text, bool initial, System.Action <bool> apply)
+  // Full-size rows (Aaron, 2026-08-22: code-built widgets keep coming out tiny):
+  // a big label & a real ON/OFF toggle button - no theme-sized check icons, which
+  // render microscopic against the 4K design viewport no matter the font.
+  private static Control SettingToggle (string text, bool initial, System.Action <bool> apply)
   {
-    var toggle = new CheckButton { Text = text, ButtonPressed = initial };
-    toggle.AddThemeFontSizeOverride ("font_size", 40);
-    toggle.Toggled += isEnabled => apply (isEnabled);
-    return toggle;
+    var row = new HBoxContainer();
+    row.AddThemeConstantOverride ("separation", 40);
+    var label = new Label { Text = text, SizeFlagsHorizontal = SizeFlags.ExpandFill, VerticalAlignment = VerticalAlignment.Center };
+    label.AddThemeFontSizeOverride ("font_size", 60);
+    var toggle = new Button { ToggleMode = true, ButtonPressed = initial, Text = initial ? "  ON  " : "  OFF  ", CustomMinimumSize = new Vector2 (260.0f, 0.0f) };
+    toggle.AddThemeFontSizeOverride ("font_size", 60);
+    toggle.Toggled += isEnabled => { toggle.Text = isEnabled ? "  ON  " : "  OFF  "; apply (isEnabled); };
+    row.AddChild (label);
+    row.AddChild (toggle);
+    return row;
   }
 
   private void OpenSettings()
