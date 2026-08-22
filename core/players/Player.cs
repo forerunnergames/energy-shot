@@ -463,6 +463,7 @@ public partial class Player : CharacterBody3D
     UpdateStickyFlight (delta);
     UpdateCameraKick (delta);
     UpdateScopeSway(); // The scoped view sways with the heartbeat (issue #279).
+    ClampCameraPitch(); // After every rotation writer, every frame (issue #322).
     UpdateCameraShake (delta);
     UpdateDeathView(); // Keeps the fallen body framed during the lie-down (issue #152).
     UpdateChaseViewAim(); // Re-aims the chase camera when wall clipping shortens the arm (issue #187).
@@ -490,10 +491,19 @@ public partial class Player : CharacterBody3D
     if (@event is not InputEventMouseMotion motionEvent) return;
     RotateY (-motionEvent.Relative.X * MouseSensitivity);
     _camera.RotateX (-motionEvent.Relative.Y * MouseSensitivity);
-    // Third person can't pitch all the way up (issue #234): the chase arm hangs behind
-    // the head camera, so looking straight up swung it down into the floor, where the
-    // camera z-fought the ground texture. The ceiling keeps the arm above your feet.
+    ClampCameraPitch();
+  }
+
+  // The ONE pitch invariant (issue #322): every writer - mouse look, the camera
+  // kick & its recovery, the scope sway - lands inside the same bounds every frame.
+  // The clamp used to live only in the mouse handler, so effect-driven rotation
+  // between mouse events could wind past +/-90, where the euler readback flips
+  // (roll 180) & the view turns upside down. Roll pins to zero for the same reason.
+  // Third person can't pitch all the way up (issue #234): the chase arm hangs behind
+  // the head camera, so looking straight up swung it down into the floor.
+  private void ClampCameraPitch()
+  {
     var maxUp = _thirdPerson ? Mathf.DegToRad (ThirdPersonMaxPitchUpDegrees) : Mathf.Pi / 2.0f;
-    _camera.Rotation = new Vector3 (Mathf.Clamp (_camera.Rotation.X, -Mathf.Pi / 2.0f, maxUp), _camera.Rotation.Y, _camera.Rotation.Z);
+    _camera.Rotation = new Vector3 (Mathf.Clamp (_camera.Rotation.X, -Mathf.Pi / 2.0f, maxUp), _camera.Rotation.Y, 0.0f);
   }
 }
