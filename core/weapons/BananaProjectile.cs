@@ -130,7 +130,12 @@ public partial class BananaProjectile : Node3D
   // catches; merely holding one is not enough (thepro & Caleb's balance rule).
   private bool TryCatch (CharacterBody3D body)
   {
-    if (body is not Player catcher || !catcher.DrawingSlingshot) return false;
+    // The pouch must be ABLE to accept (CodeRabbit): DrawingSlingshot & SlingshotAmmo
+    // both replicate, so the projectile's peer sees the same emptiness the catcher's
+    // ReceiveBananaCatch guard will demand - an occupied pouch just gets hit normally
+    // instead of vanishing the banana. The catcher-side guard stays as the backstop
+    // for the sub-frame race.
+    if (body is not Player catcher || !catcher.DrawingSlingshot || catcher.SlingshotAmmo != HeldWeapon.None) return false;
     if (_isLive) EmitSignal (SignalName.CaughtBySlingshot, catcher, FuseSecondsLeft);
     QueueFree();
     return true;
