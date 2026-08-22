@@ -34,8 +34,9 @@ Slot keys select what's in your hands. You spawn with fists **and bread** (bread
 With the slingshot **out and empty**, walking onto any world item **loads it** instead of collecting it - another player's dropped laser, the banana launcher, the boomerang, even another slingshot, plus loose bread, banana chunks, and a grounded paper airplane. You can only ever load what's on the ground: your own equipped weapons stay in your hands.
 
 - One item at a time. While something is nocked, normal pickup rules apply again.
+- Any slung hit blurs the victim's screen like a punch; slung **bread** also plasters them in brown crumbs (not banana goo - crumbs).
 - Slung items fly the same draw-scaled arc as a stone. Small things sting like a stone; **big things hit hard** - a slung gun deals roughly double the damage and knockback, the banana launcher triple (never a one-hit, even at full draw).
-- A **slung laser goes berserk**: it sprays full-auto shots in random directions as it tumbles, until it lands. Dangerous to everyone near its flight path.
+- **Every slung gun goes berserk**: a slung laser sprays full-auto shots, a slung banana launcher lobs bananas, a slung slingshot flings stones - all in random directions as it tumbles, until it lands. Dangerous to everyone near its flight path. (A slung blowgun is always empty - its darts went back into the level when it left your hands.)
 - Wherever the item lands, it becomes an ordinary world pickup again - nothing is ever destroyed by being fired.
 - Holster the slingshot (or fill it) if you'd rather just pick things up.
 
@@ -83,7 +84,7 @@ There is exactly **one** paper airplane in the arena. It's a slot-6 weapon like 
 
 ## The boxing ring
 
-The spawn box is a boxing ring: its walls are rubber ropes. Run, slide, or get punched into one and you bounce back the way you came with a big shove - the harder you hit, the harder it flings you; jump into the ropes and you can be thrown clean across the ring. Stand or jump on top of a rope and it trampolines you up - each bounce a little higher, up to a cap you reach after about ten in a row. Land on top of another player's head and you spring high into the air. Spawn armor & the room's protection work exactly as before.
+The spawn box is a boxing ring: its walls are rubber ropes. Run, slide, or get punched into one and you bounce back the way you came with a big shove - the harder you hit, the harder it flings you; jump into the ropes and you can be thrown clean across the ring. Dive onto a rope top and it trampolines you - the harder you land, the bigger the bounce (each rebound a bit smaller, so you always settle) - while a gentle step just stands on it. Land on top of another player's head and you spring high into the air. Spawn armor & the room's protection work exactly as before.
 
 ## Headshots
 

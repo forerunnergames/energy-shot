@@ -66,8 +66,11 @@ public partial class CooldownMeter : HBoxContainer
     _interruptSecondsLeft = Mathf.Max (0.0f, _interruptSecondsLeft - dt);
     var isRelevant = _isRecovering || _isDraining || _flashSecondsLeft > 0.0f || _interruptSecondsLeft > 0.0f;
     _alpha = Mathf.Clamp (_alpha + (isRelevant ? FadeInPerSecond : -FadeOutPerSecond) * dt, 0.0f, 1.0f);
-    Modulate = FlashColor() with { A = _alpha };
+    Modulate = FlashColor() with { A = _alpha * MaxAlpha };
   }
+
+  // Bigger meters (issue #250) stay semi-transparent so they never block the view.
+  private const float MaxAlpha = 0.75f;
 
   private Color FlashColor()
   {
