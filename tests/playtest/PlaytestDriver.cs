@@ -1412,7 +1412,25 @@ public partial class PlaytestDriver : Node
     await Task.Delay (100);
     ReleaseAction ("weapon_6");
     Assert (Self.SelectedWeapon == SelectedWeapon.PaperAirplane, "airplane equipped for the mine-load phase (#325)");
+    // Bystander-aware landing (main's v0.8.117 red: the idle host stood in the
+    // old fixed zone & stepped on the mine ONE SECOND after it landed - the load
+    // found the pickup gone & the host got zapped for its trouble): of the four
+    // compass lanes 4m out, land in the one farthest from both idle bodies (the
+    // #358 dart-step medicine).
+    var hostBody = FindPlayer (HostName)!;
+    var victimBody = FindPlayer (VictimName)!;
     var landingZone = lane + new Vector3 (0.0f, 0.0f, -4.0f);
+    var bestClearance = -1.0f;
+
+    foreach (var throwLane in new[] { new Vector3 (0.0f, 0.0f, -4.0f), new Vector3 (0.0f, 0.0f, 4.0f), new Vector3 (-4.0f, 0.0f, 0.0f), new Vector3 (4.0f, 0.0f, 0.0f) })
+    {
+      var candidate = lane + throwLane;
+      var clearance = Mathf.Min (FlatDistance (candidate, hostBody.GlobalPosition), FlatDistance (candidate, victimBody.GlobalPosition));
+      if (clearance <= bestClearance) continue;
+      bestClearance = clearance;
+      landingZone = candidate;
+    }
+
     AimAt (new Vector3 (landingZone.X, 30.25f, landingZone.Z)); // Into the deck: a short flight & a fast come-down.
     PressLeftClick();
     await Task.Delay (60);
@@ -1430,9 +1448,29 @@ public partial class PlaytestDriver : Node
     // the mine into a rightful pop (issue #286 covers EMPTY pouches only). The
     // walk was never the mechanic (load-at-claim-range is) - park ON the mine.
     Assert (Self.SlingshotAmmo == HeldWeapon.None, "the pouch is still EMPTY before stepping to the mine (#325)");
-    var mineSpot = mine.GlobalPosition;
-    Self.Position = new Vector3 (mineSpot.X, 31.3f, mineSpot.Z);
-    await WaitUntil (() => Self.SlingshotAmmo == HeldWeapon.PaperAirplane, 20, "the OPEN slingshot loaded the ARMED airplane as ammo (#286/#325)");
+    // CHASE the live mine & fight the litter (round 2 of this PR: a spot captured
+    // once goes stale - the landed airplane settles & slides like every pickup
+    // this week - so the stand idled 24s off claim range until a stray laser won
+    // the pouch instead). Re-park on the LIVE mine each beat; sling away any
+    // interloper (each spat piece is gone for good, so the loop converges).
+    var mineLoadDeadline = Time.GetTicksMsec() + 25_000;
+
+    while (Self.SlingshotAmmo != HeldWeapon.PaperAirplane && Time.GetTicksMsec() < mineLoadDeadline)
+    {
+      if (Self.SlingshotAmmo != HeldWeapon.None)
+      {
+        AimAt (Self.GlobalPosition + new Vector3 (0.0f, 25.0f, 30.0f));
+        await SlingAStone (drawMs: 300, "spat the litter that beat us to the pouch (#325)");
+        await Task.Delay (500);
+        continue;
+      }
+
+      var liveMine = DroppedNear (HeldWeapon.PaperAirplane, landingZone, 10.0f);
+      if (liveMine is { Armed: true }) Self.Position = liveMine.GlobalPosition + Vector3.Up * 0.3f;
+      await Task.Delay (500);
+    }
+
+    Assert (Self.SlingshotAmmo == HeldWeapon.PaperAirplane, "the OPEN slingshot loaded the ARMED airplane as ammo (#286/#325)");
     // Dwell through the fuse window (CodeRabbit): a faulty load could trigger the
     // mine whose DAMAGE lands on a delayed tick - the instant health check would
     // pass right before the boom. The fuse detector is direct: a begun mine fuse
