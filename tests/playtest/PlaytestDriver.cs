@@ -1602,10 +1602,24 @@ public partial class PlaytestDriver : Node
     var host = FindPlayer (HostName)!;
     var tossedNear = ShooterParkSpot + new Vector3 (0.0f, 0.0f, 3.0f); // The blowgun phase tossed it this way.
     await WaitUntil (() => DroppedNear (HeldWeapon.Blowgun, tossedNear) != null, 20, "the dropped blowgun rests ahead as a pickup (#242/#316)");
-    await WaitUntil (() => WalkedTo (DroppedNear (HeldWeapon.Blowgun, tossedNear)?.GlobalPosition ?? Self.GlobalPosition), 20, "walked onto the dropped blowgun (#316)");
-    // Generous claim window (the 15s single-stand flaked): the pickup's claim delay,
-    // the once-a-second retry, & a loaded runner stack up - stand on it & wait long.
-    await WaitUntil (() => Self.HasBlowgun && Self.BlowgunDarts == 0, 30, "re-collected the blowgun EMPTY (#316)");
+    // Park ON the pickup (the mine phase's lesson): we are POISONED here by design
+    // (the #236/#248 dart step) & the drunk wobble (#261) can drift a walker off
+    // the claim spot - claims fire on eligibility, not movement.
+    var gunSpot = DroppedNear (HeldWeapon.Blowgun, tossedNear)!.GlobalPosition;
+    Self.Position = new Vector3 (gunSpot.X, 31.3f, gunSpot.Z);
+    await WaitUntil (() => Self.HasBlowgun, 30, "re-collected the blowgun (#316)");
+    // The gun lands beside its own scattered darts & re-loads them on pickup -
+    // spit any aboard off-range rather than demanding an empty arrival.
+    for (var spit = 0; spit < 4 && Self.BlowgunDarts > 0; ++spit)
+    {
+      AimAt (Self.GlobalPosition + new Vector3 (0.0f, 6.0f, 40.0f));
+      PressLeftClick();
+      await Task.Delay (60);
+      ReleaseLeftClick();
+      await Task.Delay (700);
+    }
+
+    Assert (Self.BlowgunDarts == 0, "the re-collected blowgun is EMPTY for the club (#316)");
     PressAction ("weapon_8");
     await Task.Delay (100);
     ReleaseAction ("weapon_8");
