@@ -1603,7 +1603,16 @@ public partial class PlaytestDriver : Node
   private async Task SpitADart (string why)
   {
     var before = Self.BlowgunDarts;
-    AimAt (Self.GlobalPosition + new Vector3 (0.0f, 6.0f, 40.0f)); // High & far: it lands well outside every phase's search radius.
+    // Steep & away (main's v0.8.103 red run: the old flat +Z spit flew at chest
+    // height through the victim's park & bounced off geometry back into the zone).
+    // At 84 m/s & ~75 degrees the dart clears every head & building instantly &
+    // lands hundreds of meters off-map, where the void despawns it.
+    var host = FindPlayer (HostName);
+    var victim = FindPlayer (VictimName);
+    var away = (Self.GlobalPosition - (host?.GlobalPosition ?? Self.GlobalPosition)) + (Self.GlobalPosition - (victim?.GlobalPosition ?? Self.GlobalPosition));
+    away.Y = 0.0f;
+    var azimuth = away.LengthSquared() > 0.01f ? away.Normalized() : Vector3.Right;
+    AimAt (Self.GlobalPosition + azimuth * 10.0f + Vector3.Up * 40.0f);
 
     for (var attempt = 0; attempt < 6 && Self.BlowgunDarts == before; ++attempt)
     {
