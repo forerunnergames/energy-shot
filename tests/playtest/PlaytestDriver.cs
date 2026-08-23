@@ -1406,7 +1406,10 @@ public partial class PlaytestDriver : Node
     if (!Self.Holds (HeldWeapon.PaperAirplane))
     {
       Self.Position = WeaponSpawner.PlaytestAirplanePosition + Vector3.Up * 0.5f;
-      await WaitUntil (() => Self.Holds (HeldWeapon.PaperAirplane), 30, "collected the airplane for the mine-load phase (#325)");
+      // 75s, not 30 (round 3's dice): airplanes are census-capped & the VICTIM's
+      // landmine phase can hold the count at max - the fixture restocks only once
+      // their airplane is spent, up to a full phase-cycle away.
+      await WaitUntil (() => Self.Holds (HeldWeapon.PaperAirplane), 75, "collected the airplane for the mine-load phase (#325)");
     }
 
     // A CLEAN lane (the first run's lesson): the drop phase leaves its laser at
