@@ -1596,33 +1596,32 @@ public partial class PlaytestDriver : Node
   // back empty, & the walk exercises the re-collect cell for free. The HOST is the
   // target: it idles clean at its spawn, so the exact-damage assert can't be muddied
   // by the victim's poison ticks (a tick & a club cost the same).
-  // One dart, definitely fired (CodeRabbit on the sweep): the blowgun's 1.5s fire
-  // cooldown rejects a press that comes too soon, so the press retries until the
-  // count DROPS, then the full cooldown passes before the caller's next action.
-  private async Task SpitADart (string why)
+  // Empty the gun, however many darts that takes (the v0.8.103 follow-up red:
+  // standing in the litter, a NEIGHBORING dart can auto-load MID-SPIT, so exact
+  // per-dart counts are a moving target): cooldown-spaced presses until the pouch
+  // reads zero. Steep & away (the earlier red: a flat +Z spit flew at chest
+  // height through the victim's park & came off geometry back into the zone) -
+  // at 84 m/s & ~75 degrees the dart clears every head & building instantly &
+  // lands hundreds of meters off-map, where the void despawns it.
+  private async Task SpitAllDarts (string why)
   {
-    var before = Self.BlowgunDarts;
-    // Steep & away (main's v0.8.103 red run: the old flat +Z spit flew at chest
-    // height through the victim's park & bounced off geometry back into the zone).
-    // At 84 m/s & ~75 degrees the dart clears every head & building instantly &
-    // lands hundreds of meters off-map, where the void despawns it.
-    var host = FindPlayer (HostName);
-    var victim = FindPlayer (VictimName);
-    var away = (Self.GlobalPosition - (host?.GlobalPosition ?? Self.GlobalPosition)) + (Self.GlobalPosition - (victim?.GlobalPosition ?? Self.GlobalPosition));
-    away.Y = 0.0f;
-    var azimuth = away.LengthSquared() > 0.01f ? away.Normalized() : Vector3.Right;
-    AimAt (Self.GlobalPosition + azimuth * 10.0f + Vector3.Up * 40.0f);
+    var deadline = Time.GetTicksMsec() + 30_000;
 
-    for (var attempt = 0; attempt < 6 && Self.BlowgunDarts == before; ++attempt)
+    while (Self.BlowgunDarts > 0 && Time.GetTicksMsec() < deadline)
     {
+      var host = FindPlayer (HostName);
+      var victim = FindPlayer (VictimName);
+      var away = (Self.GlobalPosition - (host?.GlobalPosition ?? Self.GlobalPosition)) + (Self.GlobalPosition - (victim?.GlobalPosition ?? Self.GlobalPosition));
+      away.Y = 0.0f;
+      var azimuth = away.LengthSquared() > 0.01f ? away.Normalized() : Vector3.Right;
+      AimAt (Self.GlobalPosition + azimuth * 10.0f + Vector3.Up * 40.0f);
       PressLeftClick();
       await Task.Delay (60);
       ReleaseLeftClick();
-      await Task.Delay (400);
+      await Task.Delay (1700); // The full 1.5s fire cooldown between presses.
     }
 
-    Assert (Self.BlowgunDarts == before - 1, why);
-    await Task.Delay (1600); // The full 1.5s fire cooldown before the caller's next press.
+    Assert (Self.BlowgunDarts == 0, why);
   }
 
   private async Task RunClubPhase()
@@ -1638,7 +1637,7 @@ public partial class PlaytestDriver : Node
     await WaitUntil (() => Self.HasBlowgun, 30, "re-collected the blowgun (#316)");
     // The gun lands beside its own scattered darts & re-loads them on pickup -
     // spit any aboard off-range rather than demanding an empty arrival.
-    while (Self.BlowgunDarts > 0) await SpitADart ("spat a re-loaded dart off-range (#316)");
+    await SpitAllDarts ("spat the re-loaded darts off-range (#316)");
     Assert (Self.BlowgunDarts == 0, "the re-collected blowgun is EMPTY for the club (#316)");
     PressAction ("weapon_8");
     await Task.Delay (100);
@@ -1657,7 +1656,7 @@ public partial class PlaytestDriver : Node
       var straySpot = stray.GlobalPosition;
       Self.Position = new Vector3 (straySpot.X, 31.3f, straySpot.Z);
       await WaitUntil (() => Self.BlowgunDarts > 0 || DroppedNear (HeldWeapon.PoisonDart, straySpot, 1.5f) == null, 10, "vacuumed a stray armed dart near the host (#269)");
-      while (Self.BlowgunDarts > 0) await SpitADart ("spat the swept dart out of the shove zone (#269)");
+      await SpitAllDarts ("spat the swept darts out of the shove zone (#269)");
     }
 
     Assert (DroppedNear (HeldWeapon.PoisonDart, host.GlobalPosition, 8.0f) == null, "no armed dart litter left in the host's shove zone (#269)");
