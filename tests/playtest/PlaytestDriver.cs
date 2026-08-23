@@ -1459,23 +1459,38 @@ public partial class PlaytestDriver : Node
     // the mine into a rightful pop (issue #286 covers EMPTY pouches only). The
     // walk was never the mechanic (load-at-claim-range is) - park ON the mine.
     Assert (Self.SlingshotAmmo == HeldWeapon.None, "the pouch is still EMPTY before stepping to the mine (#325)");
-    // CHASE the live mine & fight the litter (round 2 of this PR: a spot captured
-    // once goes stale - the landed airplane settles & slides like every pickup
-    // this week - so the stand idled 24s off claim range until a stray laser won
-    // the pouch instead). Re-park on the LIVE mine each beat; sling away any
-    // interloper (each spat piece is gone for good, so the loop converges).
-    var mineLoadDeadline = Time.GetTicksMsec() + 25_000;
+    // PRE-SWEEP the landing zone (v0.8.119's lesson: a FULL pouch standing on
+    // the mine is a stepper - litter loaded while we stood there, the mine
+    // locked on & popped us mid-sling): with the pouch open, load each
+    // NON-airplane straggler & sling it away FROM THE SAFE LANE, until only the
+    // airplane remains in the zone.
+    var sweepDeadline = Time.GetTicksMsec() + 20_000;
+
+    while (Self.SlingshotAmmo != HeldWeapon.PaperAirplane && Time.GetTicksMsec() < sweepDeadline)
+    {
+      var straggler = _world.GetChildren().OfType <WeaponPickup>().FirstOrDefault (pickup => pickup.Weapon != HeldWeapon.PaperAirplane && !pickup.IsQueuedForDeletion() && FlatDistance (pickup.GlobalPosition, landingZone) < 6.0f);
+      if (straggler == null && Self.SlingshotAmmo == HeldWeapon.None) break;
+
+      if (Self.SlingshotAmmo == HeldWeapon.None && straggler != null)
+      {
+        Self.Position = straggler.GlobalPosition + Vector3.Up * 0.3f;
+        await TryWaitUntil (() => Self.SlingshotAmmo != HeldWeapon.None, 5);
+      }
+
+      if (Self.SlingshotAmmo is HeldWeapon.None or HeldWeapon.PaperAirplane) continue;
+      Self.Position = lane; // Sling from the safe spot, never beside the mine.
+      await Task.Delay (300);
+      AimAt (Self.GlobalPosition + new Vector3 (0.0f, 25.0f, 30.0f));
+      await SlingAStone (drawMs: 300, "swept a straggler from the mine's zone (#325)");
+      await Task.Delay (500);
+    }
+
+    // Now the zone holds only the airplane: chase the LIVE mine (it settles &
+    // slides like every pickup this week) with the pouch guaranteed empty.
+    var mineLoadDeadline = Time.GetTicksMsec() + 20_000;
 
     while (Self.SlingshotAmmo != HeldWeapon.PaperAirplane && Time.GetTicksMsec() < mineLoadDeadline)
     {
-      if (Self.SlingshotAmmo != HeldWeapon.None)
-      {
-        AimAt (Self.GlobalPosition + new Vector3 (0.0f, 25.0f, 30.0f));
-        await SlingAStone (drawMs: 300, "spat the litter that beat us to the pouch (#325)");
-        await Task.Delay (500);
-        continue;
-      }
-
       var liveMine = DroppedNear (HeldWeapon.PaperAirplane, landingZone, 10.0f);
       if (liveMine is { Armed: true }) Self.Position = liveMine.GlobalPosition + Vector3.Up * 0.3f;
       await Task.Delay (500);
