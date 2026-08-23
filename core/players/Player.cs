@@ -347,6 +347,8 @@ public partial class Player : CharacterBody3D
   public void SetInputEnabled (bool isEnabled) => _isInputEnabled = isEnabled;
   // Re-reads the persisted crouch mode (issue #147); the pause-dialog toggle calls this.
   public void RefreshCrouchMode() => _holdToCrouch = Settings.HoldToCrouch;
+  public void RefreshDanceMode() => _holdToDance = Settings.HoldToDance;
+  private bool _holdToDance;
   // Guards against "The multiplayer instance isn't currently active" error spam from
   // IsMultiplayerAuthority() after the session ends but before player nodes are freed (see issue #22).
   private bool IsMultiplayerActive() => Multiplayer.MultiplayerPeer != null && Multiplayer.MultiplayerPeer.GetConnectionStatus() == MultiplayerPeer.ConnectionStatus.Connected;
@@ -427,6 +429,7 @@ public partial class Player : CharacterBody3D
     _isInputEnabled = true;
     _holdToCrouch = Settings.HoldToCrouch; // Toggle-vs-hold crouch preference (issue #147).
     _holdToScope = Settings.HoldToScope; // Toggle-vs-hold scope preference (issue #290).
+    _holdToDance = Settings.HoldToDance; // Toggle-vs-hold emote preference (Aaron, 2026-08-23).
     Input.MouseMode = Input.MouseModeEnum.Captured;
     Position = CalculateRandomSpawnPosition();
     SetBreadHeld (isHeld: true); // The starting loaf rides the HeldWeapon mask (issue #190).
