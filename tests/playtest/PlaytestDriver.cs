@@ -127,6 +127,12 @@ public partial class PlaytestDriver : Node
       // stdout tail vanished at quit & the run failed as 'never finished'): stderr
       // is unbuffered - it's why FAIL lines always land - so PASS echoes there too.
       GD.PrintErr ($"PLAYTEST PASS [{_role}]");
+      // AND through .NET's own Console (v0.8.108's lesson): the hard exit skips
+      // Godot's logger flush, so GD-printed verdicts died in the buffer & every
+      // run failed as 'no PASS marker'. Console.Out/Error auto-flush per line &
+      // write the process fds directly - immune to the logger & the teardown.
+      System.Console.WriteLine ($"PLAYTEST PASS [{_role}]");
+      System.Console.Error.WriteLine ($"PLAYTEST PASS [{_role}]");
       await Task.Delay (500); // Let final packets flush before quitting.
       HardExit (0);
     }
@@ -139,6 +145,7 @@ public partial class PlaytestDriver : Node
   private void Fail (string reason)
   {
     GD.PrintErr ($"PLAYTEST FAIL [{_role}]: {reason}");
+    System.Console.Error.WriteLine ($"PLAYTEST FAIL [{_role}]: {reason}"); // Past the Godot logger (v0.8.108's lesson).
     HardExit (1);
   }
 
