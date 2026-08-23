@@ -7,7 +7,9 @@ namespace com.forerunnergames.energyshot.players;
 // on purpose - it's exclusively the spawn-armor indicator (issue #114).
 public static class PlayerColors
 {
-  private static readonly string[] Names = { "Blue", "Orange", "Sky Blue", "Green", "Yellow", "Vermilion", "Pink", "Purple", "Teal" };
+  // APPEND-ONLY (the replication rule's spirit): saved & replicated indices must
+  // keep meaning the same color forever. Eight more distinct picks (Jacob, 2026-08-23).
+  private static readonly string[] Names = { "Blue", "Orange", "Sky Blue", "Green", "Yellow", "Vermilion", "Pink", "Purple", "Teal", "Red", "Magenta", "Lime", "Brown", "Navy", "Charcoal", "Mint", "Gold" };
 
   private static readonly Color[] Palette =
   {
@@ -19,7 +21,15 @@ public static class PlayerColors
     new("d55e00"),
     new("cc79a7"),
     new("8f45c9"),
-    new("00bfc4")
+    new("00bfc4"),
+    new("b22222"), // Red: true crimson, well clear of Vermilion's orange lean.
+    new("ff00cc"),
+    new("8bd346"),
+    new("8b5a2b"),
+    new("16216e"),
+    new("3d3d3d"),
+    new("9ff2c8"),
+    new("c9a227")
   };
 
   public static int Count => Palette.Length;
