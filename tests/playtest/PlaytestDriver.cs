@@ -1579,6 +1579,7 @@ public partial class PlaytestDriver : Node
     await Task.Delay (60);
     ReleaseAction ("scope");
     await WaitUntil (() => Self.IsScoped, 10, "right click opened the scope view (#236)");
+    await WaitUntil (() => !Self.HandsVisible, 5, "own hands hide in the scoped view (#351)");
     Assert (Self.ZoomStep == 0, "the scope opens at its first zoom stop (#236)");
     PressAction ("cycle_weapon_next");
     await Task.Delay (60);
@@ -1590,6 +1591,7 @@ public partial class PlaytestDriver : Node
     await Task.Delay (60);
     ReleaseAction ("scope");
     await WaitUntil (() => !Self.IsScoped, 10, "right click closed the scope (#236)");
+    await WaitUntil (() => Self.HandsVisible, 5, "hands return when the scope closes (#351)");
 
     // Poison the parked victim with the loaded dart.
     await WaitUntil (() => !victim.SpawnArmor && FlatDistance (victim.GlobalPosition, VictimParkSpot) < 2.0f && victim.PoisonDarts == 0 && victim.Health == victim.MaxHealth, 120, "victim parked & clean for the dart (#236)");
@@ -1709,6 +1711,7 @@ public partial class PlaytestDriver : Node
     await Task.Delay (100);
     ReleaseAction ("weapon_8");
     Assert (Self.SelectedWeapon == SelectedWeapon.Blowgun, "empty blowgun equipped for the club swing (#269)");
+    await WaitUntil (() => Self.HandsVisible, 5, "hands grip the held blowgun (#351)");
     // Sweep the shove zone (the v0.8.102-era red run's lesson): earlier phases
     // scatter ARMED darts around the host park spot, & the calibration punch
     // SHOVES the host (issue #269's 2.5x knockback) onto them - embedded darts
@@ -1785,6 +1788,7 @@ public partial class PlaytestDriver : Node
     await Task.Delay (100);
     ReleaseAction ("weapon_2");
     Assert (Self.SelectedWeapon == SelectedWeapon.Laser && Self.Holds (HeldWeapon.Laser), "laser in hand for the drop phase (#242)");
+    await WaitUntil (() => Self.HandsVisible, 5, "hands grip the held laser (#351)");
     var ahead = ShooterParkSpot + new Vector3 (0.0f, 0.0f, -2.0f);
     AimAt (ahead + Vector3.Up);
     PressAction ("drop");
