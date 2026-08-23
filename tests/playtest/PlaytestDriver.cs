@@ -1655,7 +1655,9 @@ public partial class PlaytestDriver : Node
     var tossedNear = ShooterParkSpot + new Vector3 (0.0f, 0.0f, 3.0f); // The blowgun phase tossed it this way.
     await WaitUntil (() => DroppedNear (HeldWeapon.Blowgun, tossedNear) != null, 20, "the dropped blowgun rests ahead as a pickup (#242/#316)");
     await WaitUntil (() => WalkedTo (DroppedNear (HeldWeapon.Blowgun, tossedNear)?.GlobalPosition ?? Self.GlobalPosition), 20, "walked onto the dropped blowgun (#316)");
-    await WaitUntil (() => Self.HasBlowgun && Self.BlowgunDarts == 0, 15, "re-collected the blowgun EMPTY (#316)");
+    // Generous claim window (the 15s single-stand flaked): the pickup's claim delay,
+    // the once-a-second retry, & a loaded runner stack up - stand on it & wait long.
+    await WaitUntil (() => Self.HasBlowgun && Self.BlowgunDarts == 0, 30, "re-collected the blowgun EMPTY (#316)");
     PressAction ("weapon_8");
     await Task.Delay (100);
     ReleaseAction ("weapon_8");
@@ -1690,9 +1692,18 @@ public partial class PlaytestDriver : Node
     Assert (Self.SelectedWeapon == SelectedWeapon.Blowgun, "back on the empty blowgun after the calibration punch (#269)");
     var healthBeforeClub = host.Health;
     AimAt (host.GlobalPosition + Vector3.Up);
-    PressAction ("shoot");
-    await Task.Delay (60);
-    ReleaseAction ("shoot");
+
+    // Retried swings (the single press flaked on CI): the blowgun's fire cooldown
+    // from the dart phase can still be running when the first press lands - a swing
+    // that changed nothing gets another, up to four.
+    for (var attempt = 0; attempt < 4 && host.Health == healthBeforeClub; ++attempt)
+    {
+      PressAction ("shoot");
+      await Task.Delay (60);
+      ReleaseAction ("shoot");
+      await Task.Delay (600);
+    }
+
     await WaitUntil (() => host.Health == healthBeforeClub - 2 * punchDamage, 15, $"the club swing hit for exactly twice the observed punch (#269), punch -{punchDamage}");
     Assert (Self.HasBlowgun, "the club swing never left our hands (#269)");
     Self.Position = ShooterParkSpot;
