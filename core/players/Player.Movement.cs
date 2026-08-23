@@ -220,6 +220,7 @@ public partial class Player
     // Gravity still applies, so a floor vanishing underneath still drops you.
     if (Eating) { velocity.X = 0.0f; velocity.Z = 0.0f; return; }
     if (_stickyFlightSecondsLeft > 0.0f) return; // Banana-launched (issue #83): momentum owns the ride.
+    if (_knockbackCarrySecondsLeft > 0.0f) return; // Freshly shoved (issue #334): the knockback owns the ride - into the ropes & back.
     if (_slideJumpCarrying) return; // Slide-jump air (issue #149): the slide's momentum owns the ride until touchdown.
     var speed = MoveSpeed();
     var inputDir = PoisonSteer (Input.GetVector ("move_left", "move_right", "move_forward", "move_back"), PoisonDarts); // Poison inverts the wheel (issue #277).
@@ -332,6 +333,7 @@ public partial class Player
     ClearBurning(); // No fire (or incoming airplane) carries into a new life (issue #191).
     ClearPoison(); // No embedded darts either - fresh lives are clean (issue #194).
     _stickyFlightSecondsLeft = 0.0f; // A new life isn't still banana-launched (issue #83).
+    _knockbackCarrySecondsLeft = 0.0f; // Nor still mid-shove (issue #334).
     ActivateSpawnArmor();
     // Fresh lives start standing & slide-ready: no lingering pose, no cooldown carryover (#104).
     // EVERY action cooldown resets with the life (issue #299, Aaron): the slide one

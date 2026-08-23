@@ -254,6 +254,12 @@ public partial class Player : CharacterBody3D
   // still connects (issue #86).
   [Export] public float AirRocketBoostRange = 8.0f;
   [Export] public float KnockbackStrength = 16.0f;
+  // Momentum owns a shove briefly (issue #334, Aaron: 2.5x still read as nothing -
+  // Move() overwrites horizontal velocity from input EVERY physics frame, so the
+  // 8 m/s punch shove died within one frame; the sticky launch solved this exact
+  // problem with a flight window). Long enough to reach the ring ropes & ride the
+  // bounce back for the repeat punch.
+  [Export] public float KnockbackCarrySeconds = 0.8f;
   // Hits shove mostly horizontally (issue #163): knockback never pushes upward speed
   // past this, so stacked or full-draw hits can't launch victims sky-high.
   [Export] public float KnockbackUpPopCap = 6.0f;
@@ -474,6 +480,7 @@ public partial class Player : CharacterBody3D
     UpdateHandBob (delta);
     UpdateAirBoost();
     UpdateStickyFlight (delta);
+    UpdateKnockbackCarry (delta);
     UpdateCameraKick (delta);
     UpdateScopeSway(); // The scoped view sways with the heartbeat (issue #279).
     UpdateCameraShake (delta);
