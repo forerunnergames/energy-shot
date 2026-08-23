@@ -1412,7 +1412,25 @@ public partial class PlaytestDriver : Node
     await Task.Delay (100);
     ReleaseAction ("weapon_6");
     Assert (Self.SelectedWeapon == SelectedWeapon.PaperAirplane, "airplane equipped for the mine-load phase (#325)");
+    // Bystander-aware landing (main's v0.8.117 red: the idle host stood in the
+    // old fixed zone & stepped on the mine ONE SECOND after it landed - the load
+    // found the pickup gone & the host got zapped for its trouble): of the four
+    // compass lanes 4m out, land in the one farthest from both idle bodies (the
+    // #358 dart-step medicine).
+    var hostBody = FindPlayer (HostName)!;
+    var victimBody = FindPlayer (VictimName)!;
     var landingZone = lane + new Vector3 (0.0f, 0.0f, -4.0f);
+    var bestClearance = -1.0f;
+
+    foreach (var throwLane in new[] { new Vector3 (0.0f, 0.0f, -4.0f), new Vector3 (0.0f, 0.0f, 4.0f), new Vector3 (-4.0f, 0.0f, 0.0f), new Vector3 (4.0f, 0.0f, 0.0f) })
+    {
+      var candidate = lane + throwLane;
+      var clearance = Mathf.Min (FlatDistance (candidate, hostBody.GlobalPosition), FlatDistance (candidate, victimBody.GlobalPosition));
+      if (clearance <= bestClearance) continue;
+      bestClearance = clearance;
+      landingZone = candidate;
+    }
+
     AimAt (new Vector3 (landingZone.X, 30.25f, landingZone.Z)); // Into the deck: a short flight & a fast come-down.
     PressLeftClick();
     await Task.Delay (60);
