@@ -1379,6 +1379,7 @@ public partial class PlaytestDriver : Node
     await RunDropPhase();
     await RunRingPhase();
     await RunArmedMineLoadPhase();
+    await RunBananaPhases (victim);
   }
 
   // Aaron's report (issue #325): an OPEN slingshot - selected, never drawn - must
@@ -1442,6 +1443,63 @@ public partial class PlaytestDriver : Node
     await Task.Delay (300);
   }
 
+  // The banana launcher's matrix row (#316's emptiest): the survivable ground
+  // blast (#61), the sticky direct hit's launch & one-hit fuse (#83), & the
+  // drawn-slingshot grenade catch (#251) - each proven on the parked victim.
+  private async Task RunBananaPhases (Player victim)
+  {
+    if (!Self.Holds (HeldWeapon.Banana))
+    {
+      Self.Position = WeaponSpawner.PlaytestBananaPosition + Vector3.Up * 0.5f;
+      await WaitUntil (() => Self.Holds (HeldWeapon.Banana), 30, "collected the launcher for the banana phases (#316)");
+    }
+
+    PressAction ("weapon_3");
+    await Task.Delay (100);
+    ReleaseAction ("weapon_3");
+    Assert (Self.SelectedWeapon == SelectedWeapon.Banana, "launcher equipped for the banana phases (#316)");
+
+    // BLAST (#61/#83): the banana lands at the parked victim's feet - the blast
+    // hurts & stuns but NEVER zaps a full-health player.
+    await WaitUntil (() => !victim.SpawnArmor && FlatDistance (victim.GlobalPosition, VictimParkSpot) < 2.0f && victim.Health == victim.MaxHealth, 120, "victim parked & clean for the blast (#316)");
+    Self.Position = VictimParkSpot + new Vector3 (0.0f, 0.3f, 6.0f);
+    await Task.Delay (400);
+    // BESIDE them, not at their feet (the first run's lesson: the low line to the
+    // feet clips the body en route & the shot becomes the STICKY) - 2.5m out is
+    // clear of the capsule & still deep inside the 6m blast radius.
+    AimAt (new Vector3 (victim.GlobalPosition.X + 2.5f, 30.4f, victim.GlobalPosition.Z));
+    PressLeftClick();
+    await Task.Delay (60);
+    ReleaseLeftClick();
+    await WaitUntil (() => victim.Health < victim.MaxHealth, 20, "the banana blast hurt the parked victim (#83)");
+    Assert (!victim.Fallen && victim.Health >= 1, $"the blast never zaps a full-health player (#61), health {victim.Health}");
+
+    // STICKY (#83): a direct hit pins the banana, launches the victim across the
+    // level, & the fuse one-hit-kills whatever it is stuck to.
+    await WaitUntil (() => !victim.SpawnArmor && FlatDistance (victim.GlobalPosition, VictimParkSpot) < 2.0f && victim.Health == victim.MaxHealth, 120, "victim parked fresh for the sticky (#316)");
+    await WaitUntil (() => Self.BananaReadyFraction >= 1.0f, 20, "launcher cooled for the sticky shot (#70)");
+    Self.Position = VictimParkSpot + new Vector3 (0.0f, 0.3f, 6.0f);
+    await Task.Delay (400);
+    AimAt (victim.GlobalPosition + Vector3.Up);
+    PressLeftClick();
+    await Task.Delay (60);
+    ReleaseLeftClick();
+    await WaitUntil (() => victim.Fallen, 15, "the sticky banana zapped the victim after its ride (#83)");
+
+    // CATCH (#251): the victim re-parks DRAWING an empty slingshot; the lobbed
+    // banana meets the drawn pouch & nocks as a live grenade; they fire it away.
+    await WaitUntil (() => victim.DrawingSlingshot && !victim.SpawnArmor && FlatDistance (victim.GlobalPosition, VictimParkSpot) < 2.0f, 120, "victim drawing at its mark for the catch (#251)");
+    await WaitUntil (() => Self.BananaReadyFraction >= 1.0f, 20, "launcher cooled for the catch lob (#70)");
+    AimAt (victim.GlobalPosition + Vector3.Up);
+    PressLeftClick();
+    await Task.Delay (60);
+    ReleaseLeftClick();
+    await WaitUntil (() => victim.SlingshotAmmo == HeldWeapon.BananaGrenade, 15, "the drawn slingshot caught the live banana (#251)");
+    await WaitUntil (() => victim.SlingshotAmmo == HeldWeapon.None, 15, "the hot potato left the victim's pouch (#251)");
+    Self.Position = ShooterParkSpot;
+    await Task.Delay (300);
+  }
+
   private async Task RunEndOfRunVictimPhases()
   {
     await ResetLifeAndPark();
@@ -1450,6 +1508,12 @@ public partial class PlaytestDriver : Node
     await BeTheHeadshotTarget();
     await ResetLifeAndPark();
     await BeThePoisonTarget();
+    await ResetLifeAndPark();
+    await BeTheBlastTarget();
+    await ResetLifeAndPark();
+    await BeTheStickyTarget();
+    await ResetLifeAndPark();
+    await BeTheCatchTarget();
   }
 
   // A fresh life on demand: the off-world fall respawns us (#108) with full health, a
@@ -1566,6 +1630,54 @@ public partial class PlaytestDriver : Node
   // hand, scopes through a real scope with a zoom ladder, & its dart poisons the
   // victim - who then loses 10% a tick. A miss lands as an ARMED dart; stepping on it
   // without the blowgun poisons you.
+  // The blast target (#61/#83): parked at full health, the banana lands at our
+  // feet - we hurt, we stagger, we NEVER zap out from full.
+  private async Task BeTheBlastTarget()
+  {
+    await WaitUntil (() => !Self.SpawnArmor, 20, "spawn armor expired before the blast (#48/#316)");
+    var healthBefore = Self.Health;
+    await WaitUntil (() => Self.Health < healthBefore, 120, "the banana blast reached us (#83)");
+    Assert (Self.Health >= 1 && !Self.Fallen, $"a full-health player survives the blast (#61), health {Self.Health}");
+    Assert (Self.StunFactor > 0.0f, "the blast staggered us (#70)");
+  }
+
+  // The sticky target (#83): the direct hit launches us across the level, then
+  // the fuse one-hit-kills us wherever we came down.
+  private async Task BeTheStickyTarget()
+  {
+    await WaitUntil (() => !Self.SpawnArmor, 20, "spawn armor expired before the sticky (#48/#316)");
+    var mark = Self.GlobalPosition;
+    await WaitUntil (() => FlatDistance (Self.GlobalPosition, mark) > 8.0f || Self.Fallen, 120, "the sticky banana launched us across the level (#83)");
+    await WaitUntil (() => Self.Fallen, 10, "the sticky detonation zapped us out (#83)");
+  }
+
+  // The catch target (#251): DRAW an empty slingshot & hold - the incoming live
+  // banana nocks as a grenade with its fuse ticking; fire it out fast & live.
+  private async Task BeTheCatchTarget()
+  {
+    await WaitUntil (() => !Self.SpawnArmor, 20, "spawn armor expired before the catch (#48/#251)");
+
+    if (!Self.Holds (HeldWeapon.Slingshot))
+    {
+      Self.Position = WeaponSpawner.PlaytestSlingshotPosition + Vector3.Up * 0.5f;
+      await WaitUntil (() => Self.Holds (HeldWeapon.Slingshot), 30, "collected a slingshot for the catch (#251)");
+      Self.Position = VictimParkSpot;
+      await Task.Delay (300);
+    }
+
+    PressAction ("weapon_5");
+    await Task.Delay (100);
+    ReleaseAction ("weapon_5");
+    Assert (Self.SelectedWeapon == SelectedWeapon.Slingshot && Self.SlingshotAmmo == HeldWeapon.None, "empty slingshot out for the catch (#251)");
+    AimAt (Self.GlobalPosition + new Vector3 (0.0f, 25.0f, -35.0f)); // Pre-aimed: the caught grenade leaves high & far off the deck.
+    PressLeftClick(); // DRAW & hold - the drawn pouch is the catcher's glove (#251).
+    await WaitUntil (() => Self.SlingshotAmmo == HeldWeapon.BananaGrenade, 120, "the drawn slingshot caught the live banana (#251)");
+    ReleaseLeftClick(); // Fire the hot potato out, fuse & all.
+    await WaitUntil (() => Self.SlingshotAmmo == HeldWeapon.None, 10, "the hot potato left our pouch (#251)");
+    await Task.Delay (2500); // Its fuse pops far away, not on us.
+    Assert (!Self.Fallen && Self.Health > 0, "fired it back out in time & lived (#251)");
+  }
+
   private async Task BeThePoisonTarget()
   {
     await WaitUntil (() => Self.PoisonDarts > 0, 180, "a blowgun dart stuck in us (#236)");
