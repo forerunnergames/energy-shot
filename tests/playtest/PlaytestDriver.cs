@@ -1536,6 +1536,11 @@ public partial class PlaytestDriver : Node
     await Task.Delay (60);
     ReleaseAction ("drop");
     await WaitUntil (() => !Self.Holds (HeldWeapon.Bread), 10, "X dropped the loaf as the payload (#242/#316)");
+    // RETREAT before the drop-grace expires (round 2's lesson: the toss landed
+    // inside claim range & the loaf went straight back into the pack during the
+    // weapon-switch window) - the pouch must be out BEFORE we go near it again.
+    Self.Position = ShooterParkSpot + new Vector3 (0.0f, 0.0f, 4.0f);
+    await Task.Delay (300);
     PressAction ("weapon_5");
     await Task.Delay (100);
     ReleaseAction ("weapon_5");
@@ -1545,7 +1550,8 @@ public partial class PlaytestDriver : Node
 
     while (Self.SlingshotAmmo != HeldWeapon.Bread && Time.GetTicksMsec() < loafDeadline)
     {
-      var loaf = DroppedNear (HeldWeapon.Bread, ShooterParkSpot, 6.0f);
+      if (Self.Holds (HeldWeapon.Bread)) { Assert (false, "the loaf went back into the pack instead of the pouch (#190/#316)"); }
+      var loaf = DroppedNear (HeldWeapon.Bread, ShooterParkSpot, 8.0f);
       if (loaf != null) Self.Position = new Vector3 (loaf.GlobalPosition.X, 31.3f, loaf.GlobalPosition.Z);
       await Task.Delay (1000);
     }
