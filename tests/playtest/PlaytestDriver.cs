@@ -1384,7 +1384,6 @@ public partial class PlaytestDriver : Node
     await RunRingPhase();
     await RunArmedMineLoadPhase();
     await RunBananaPhases (victim);
-    await RunSlungBreadPhase (victim);
   }
 
   // Aaron's report (issue #325): an OPEN slingshot - selected, never drawn - must
@@ -1453,6 +1452,14 @@ public partial class PlaytestDriver : Node
   // drawn-slingshot grenade catch (#251) - each proven on the parked victim.
   private async Task RunBananaPhases (Player victim)
   {
+    // The slung-loaf section needs a slingshot IN THE PACK before the sticky kill
+    // (its 15s window is too short to go shopping): stock up first.
+    if (!Self.Holds (HeldWeapon.Slingshot))
+    {
+      Self.Position = WeaponSpawner.PlaytestSlingshotPosition + Vector3.Up * 0.5f;
+      await WaitUntil (() => Self.Holds (HeldWeapon.Slingshot), 30, "stocked a slingshot for the slung loaf (#316)");
+    }
+
     if (!Self.Holds (HeldWeapon.Banana))
     {
       Self.Position = WeaponSpawner.PlaytestBananaPosition + Vector3.Up * 0.5f;
@@ -1491,6 +1498,38 @@ public partial class PlaytestDriver : Node
     ReleaseLeftClick();
     await WaitUntil (() => victim.Fallen, 15, "the sticky banana zapped the victim after its ride (#83)");
 
+    // SLUNG LOAF (#229/#247/#270, rounds 1-3's lessons distilled): a pouch-load
+    // only wins when a normal collect CANNOT (the #190 rule - you already hold
+    // one), so the payload is the victim's death-dropped loaf from the sticky
+    // kill, chased with our OWN loaf still in the pack & the pouch out - the
+    // field-realistic way anyone slings bread.
+    Assert (Self.Holds (HeldWeapon.Bread), "our own loaf still in the pack for the pouch-load rule (#190/#316)");
+    PressAction ("weapon_5");
+    await Task.Delay (100);
+    ReleaseAction ("weapon_5");
+    Assert (Self.SelectedWeapon == SelectedWeapon.Slingshot, "pouch out for the victim's dropped loaf (#316)");
+    var loafDeadline = Time.GetTicksMsec() + 14_000; // The unclaimed drop expires at ~15s.
+
+    while (Self.SlingshotAmmo != HeldWeapon.Bread && Time.GetTicksMsec() < loafDeadline)
+    {
+      var loaf = DroppedNear (HeldWeapon.Bread, VictimParkSpot, 8.0f);
+      if (loaf != null) Self.Position = new Vector3 (loaf.GlobalPosition.X, 31.3f, loaf.GlobalPosition.Z);
+      await Task.Delay (800);
+    }
+
+    Assert (Self.SlingshotAmmo == HeldWeapon.Bread, "the pouch loaded the victim's dropped loaf (#190/#316)");
+    await WaitUntil (() => !victim.SpawnArmor && FlatDistance (victim.GlobalPosition, VictimParkSpot) < 2.0f && victim.Health == victim.MaxHealth, 120, "victim parked & clean for the slung loaf (#316)");
+    Self.Position = VictimParkSpot + new Vector3 (0.0f, 0.3f, 6.0f);
+    await Task.Delay (400);
+    AimAt (victim.GlobalPosition + Vector3.Up);
+    await SlingAStone (drawMs: 400, "slung the loaf at the victim (#229/#270)");
+    await WaitUntil (() => victim.Health < victim.MaxHealth, 15, "the slung loaf hit the victim like a punch (#229/#247)");
+    Assert (!victim.Fallen, "a slung loaf never zaps anyone out (#247)");
+    PressAction ("weapon_3");
+    await Task.Delay (100);
+    ReleaseAction ("weapon_3");
+    Assert (Self.SelectedWeapon == SelectedWeapon.Banana, "launcher back out for the catch lob (#316)");
+
     // CATCH (#251): the victim re-parks DRAWING an empty slingshot; the lobbed
     // banana meets the drawn pouch & nocks as a live grenade; they fire it away.
     await WaitUntil (() => victim.DrawingSlingshot && !victim.SpawnArmor && FlatDistance (victim.GlobalPosition, VictimParkSpot) < 2.0f, 120, "victim drawing at its mark for the catch (#251)");
@@ -1511,63 +1550,6 @@ public partial class PlaytestDriver : Node
     await Task.Delay (300);
   }
 
-  // The bread row's last gap (#316): the universal pouch slings the LOAF & the
-  // slung hit lands like a punch (#229/#247/#270) - never a zap-out.
-  private async Task RunSlungBreadPhase (Player victim)
-  {
-    if (!Self.Holds (HeldWeapon.Slingshot))
-    {
-      Self.Position = WeaponSpawner.PlaytestSlingshotPosition + Vector3.Up * 0.5f;
-      await WaitUntil (() => Self.Holds (HeldWeapon.Slingshot), 30, "collected a slingshot for the slung loaf (#316)");
-    }
-
-    Self.Position = ShooterParkSpot;
-    await Task.Delay (300);
-    // Our own spawn loaf becomes the payload - & X drops what's IN YOUR HANDS
-    // (the first run's lesson: with the slingshot selected, X dropped the
-    // slingshot & the loaf never left the pack). Bring the loaf OUT first.
-    Assert (Self.Holds (HeldWeapon.Bread), "still carrying this life's loaf to sling (#190/#316)");
-    PressAction ("weapon_0");
-    await Task.Delay (100);
-    ReleaseAction ("weapon_0");
-    Assert (Self.SelectedWeapon == SelectedWeapon.Bread, "loaf out for the payload drop (#209/#316)");
-    AimAt (ShooterParkSpot + new Vector3 (0.0f, 1.0f, -3.0f));
-    PressAction ("drop");
-    await Task.Delay (60);
-    ReleaseAction ("drop");
-    await WaitUntil (() => !Self.Holds (HeldWeapon.Bread), 10, "X dropped the loaf as the payload (#242/#316)");
-    // RETREAT before the drop-grace expires (round 2's lesson: the toss landed
-    // inside claim range & the loaf went straight back into the pack during the
-    // weapon-switch window) - the pouch must be out BEFORE we go near it again.
-    Self.Position = ShooterParkSpot + new Vector3 (0.0f, 0.0f, 4.0f);
-    await Task.Delay (300);
-    PressAction ("weapon_5");
-    await Task.Delay (100);
-    ReleaseAction ("weapon_5");
-    Assert (Self.SelectedWeapon == SelectedWeapon.Slingshot, "pouch out to load the payload (#316)");
-    await EmptySlingshot();
-    var loafDeadline = Time.GetTicksMsec() + 30_000;
-
-    while (Self.SlingshotAmmo != HeldWeapon.Bread && Time.GetTicksMsec() < loafDeadline)
-    {
-      if (Self.Holds (HeldWeapon.Bread)) { Assert (false, "the loaf went back into the pack instead of the pouch (#190/#316)"); }
-      var loaf = DroppedNear (HeldWeapon.Bread, ShooterParkSpot, 8.0f);
-      if (loaf != null) Self.Position = new Vector3 (loaf.GlobalPosition.X, 31.3f, loaf.GlobalPosition.Z);
-      await Task.Delay (1000);
-    }
-
-    Assert (Self.SlingshotAmmo == HeldWeapon.Bread, "the open pouch loaded the dropped loaf (#190/#316)");
-    await WaitUntil (() => !victim.SpawnArmor && FlatDistance (victim.GlobalPosition, VictimParkSpot) < 2.0f && victim.Health == victim.MaxHealth, 120, "victim parked & clean for the slung loaf (#316)");
-    Self.Position = VictimParkSpot + new Vector3 (0.0f, 0.3f, 6.0f);
-    await Task.Delay (400);
-    AimAt (victim.GlobalPosition + Vector3.Up);
-    await SlingAStone (drawMs: 400, "slung the loaf at the victim (#229/#270)");
-    await WaitUntil (() => victim.Health < victim.MaxHealth, 15, "the slung loaf hit the victim like a punch (#229/#247)");
-    Assert (!victim.Fallen, "a slung loaf never zaps anyone out (#247)");
-    Self.Position = ShooterParkSpot;
-    await Task.Delay (300);
-  }
-
   private async Task RunEndOfRunVictimPhases()
   {
     await ResetLifeAndPark();
@@ -1581,9 +1563,9 @@ public partial class PlaytestDriver : Node
     await ResetLifeAndPark();
     await BeTheStickyTarget();
     await ResetLifeAndPark();
-    await BeTheCatchTarget();
-    await ResetLifeAndPark();
     await BeTheSlungBreadTarget();
+    await ResetLifeAndPark();
+    await BeTheCatchTarget();
   }
 
   // A fresh life on demand: the off-world fall respawns us (#108) with full health, a
