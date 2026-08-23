@@ -1361,6 +1361,68 @@ public partial class PlaytestDriver : Node
     await RunClubPhase();
     await RunDropPhase();
     await RunRingPhase();
+    await RunArmedMineLoadPhase();
+  }
+
+  // Aaron's report (issue #325): an OPEN slingshot - selected, never drawn - must
+  // safely collect an ARMED landed airplane as ammo (the #286 ruling). The phase
+  // manufactures the mine deliberately: throw the airplane into the floor ahead,
+  // let it come down armed, then walk over it with the empty slingshot out.
+  private async Task RunArmedMineLoadPhase()
+  {
+    if (!Self.Holds (HeldWeapon.PaperAirplane))
+    {
+      Self.Position = WeaponSpawner.PlaytestAirplanePosition + Vector3.Up * 0.5f;
+      await WaitUntil (() => Self.Holds (HeldWeapon.PaperAirplane), 30, "collected the airplane for the mine-load phase (#325)");
+    }
+
+    // A CLEAN lane (the first run's lesson): the drop phase leaves its laser at
+    // park + (0,0,-2), & the open slingshot loaded THAT en route - a full pouch
+    // can't collect, so the mine rightly popped. Field-relevant: a loaded pouch
+    // walks onto mines like anyone else (#286 covers EMPTY pouches only).
+    // Round 3's lesson: gliders HOME - a lane 2m from the parked victim got the
+    // throw locked onto them instead of landing. The west lane is 8m from the
+    // victim & 3m from the drop-phase litter.
+    var lane = ShooterParkSpot + new Vector3 (-3.0f, 0.0f, 0.0f);
+    Self.Position = lane;
+    await Task.Delay (300);
+    PressAction ("weapon_6");
+    await Task.Delay (100);
+    ReleaseAction ("weapon_6");
+    Assert (Self.SelectedWeapon == SelectedWeapon.PaperAirplane, "airplane equipped for the mine-load phase (#325)");
+    var landingZone = lane + new Vector3 (0.0f, 0.0f, -4.0f);
+    AimAt (new Vector3 (landingZone.X, 30.25f, landingZone.Z)); // Into the deck: a short flight & a fast come-down.
+    PressLeftClick();
+    await Task.Delay (60);
+    ReleaseLeftClick();
+    await WaitUntil (() => DroppedNear (HeldWeapon.PaperAirplane, landingZone, 8.0f) is { Armed: true }, 45, "the thrown airplane came down ARMED nearby (#191/#325)");
+    var mine = DroppedNear (HeldWeapon.PaperAirplane, landingZone, 8.0f)!;
+    // The OPEN slingshot: selected, empty, & pointedly never drawn.
+    PressAction ("weapon_5");
+    await Task.Delay (100);
+    ReleaseAction ("weapon_5");
+    Assert (Self.SelectedWeapon == SelectedWeapon.Slingshot && Self.SlingshotAmmo == HeldWeapon.None, "open EMPTY slingshot out for the armed pickup (#325)");
+    var healthBefore = Self.Health;
+    // Round 5's lesson ends the lane-tuning: even the west lane crossed litter -
+    // the open pouch auto-loaded a stray Laser EN ROUTE & the full pouch walked
+    // the mine into a rightful pop (issue #286 covers EMPTY pouches only). The
+    // walk was never the mechanic (load-at-claim-range is) - park ON the mine.
+    Assert (Self.SlingshotAmmo == HeldWeapon.None, "the pouch is still EMPTY before stepping to the mine (#325)");
+    var mineSpot = mine.GlobalPosition;
+    Self.Position = new Vector3 (mineSpot.X, 31.3f, mineSpot.Z);
+    await WaitUntil (() => Self.SlingshotAmmo == HeldWeapon.PaperAirplane, 20, "the OPEN slingshot loaded the ARMED airplane as ammo (#286/#325)");
+    // Dwell through the fuse window (CodeRabbit): a faulty load could trigger the
+    // mine whose DAMAGE lands on a delayed tick - the instant health check would
+    // pass right before the boom. The fuse detector is direct: a begun mine fuse
+    // pins AirplaneThreatFraction to 1.
+    await Task.Delay (2000);
+    Assert (Self.AirplaneThreatFraction == 0.0f && !Self.Burning, "no mine fuse ever started on the loader (#325)");
+    Assert (Self.Health == healthBefore, $"loading the mine cost no health through the fuse window (#325), was {healthBefore} now {Self.Health}");
+    // Leave nothing nocked for whatever follows: fire it into the deck & let the caps recycle it.
+    AimAt (new Vector3 (ShooterParkSpot.X, 30.25f, ShooterParkSpot.Z - 3.0f));
+    await SlingAStone (drawMs: 300, "cleared the nocked airplane (#325)");
+    Self.Position = ShooterParkSpot;
+    await Task.Delay (300);
   }
 
   private async Task RunEndOfRunVictimPhases()
