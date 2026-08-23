@@ -756,7 +756,10 @@ public partial class PlaytestDriver : Node
     ReleaseAction ("weapon_1");
     // The eating state replicates WHILE the ritual is in progress, not just after it.
     await WaitUntil (() => victim.Eating, 90, "victim's in-progress eating state replicated to shooter (#192)");
-    await Task.Delay (400); // Leave the victim a window to prove the ritual roots it - short: the ritual is only 3s (#365).
+    // The FULL 700ms courtesy stands (the #365 fix's own lesson: a 400ms wait let
+    // the first punch cancel the eat INSIDE the victim's 400ms rooted-input proof
+    // & its still-Eating assert failed) - the victim needs its window whole.
+    await Task.Delay (700);
     var healthAtEatStart = victim.Health;
 
     // The whole ritual is only 3s, so swing about as fast as the punch cooldown
