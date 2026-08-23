@@ -1514,16 +1514,22 @@ public partial class PlaytestDriver : Node
     await Task.Delay (100);
     ReleaseAction ("weapon_5");
     Assert (Self.SelectedWeapon == SelectedWeapon.Slingshot, "pouch out for the victim's dropped loaf (#316)");
-    var loafDeadline = Time.GetTicksMsec() + 14_000; // The unclaimed drop expires at ~15s.
+    // Round 6's two facts: a dropped loaf expires in ~5 SECONDS, & the sticky
+    // launch can hurl the victim clean off the deck - they died at ground level
+    // 56m away & the old deck-height teleport hovered 30m above the loaf. Chase
+    // fast, at the loaf's OWN height, wherever the body came down.
+    var loafDeadline = Time.GetTicksMsec() + 10_000;
 
     while (Self.SlingshotAmmo != HeldWeapon.Bread && Time.GetTicksMsec() < loafDeadline)
     {
-      var loaf = DroppedNear (HeldWeapon.Bread, stickyDeathSpot, 12.0f);
-      if (loaf != null) Self.Position = new Vector3 (loaf.GlobalPosition.X, 31.3f, loaf.GlobalPosition.Z);
-      await Task.Delay (800);
+      var loaf = DroppedNear (HeldWeapon.Bread, stickyDeathSpot, 15.0f);
+      if (loaf != null) Self.Position = loaf.GlobalPosition + Vector3.Up * 0.4f;
+      await Task.Delay (300);
     }
 
     Assert (Self.SlingshotAmmo == HeldWeapon.Bread, "the pouch loaded the victim's dropped loaf (#190/#316)");
+    Self.Position = ShooterParkSpot; // The chase may end at ground level far away - come home before the next mark.
+    await Task.Delay (300);
     await WaitUntil (() => !victim.SpawnArmor && FlatDistance (victim.GlobalPosition, VictimParkSpot) < 2.0f && victim.Health == victim.MaxHealth, 120, "victim parked & clean for the slung loaf (#316)");
     Self.Position = VictimParkSpot + new Vector3 (0.0f, 0.3f, 6.0f);
     await Task.Delay (400);
