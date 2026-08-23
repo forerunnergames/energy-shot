@@ -4,6 +4,7 @@ using com.forerunnergames.energyshot.players;
 using com.forerunnergames.energyshot.ui;
 using com.forerunnergames.energyshot.ui.hud;
 using com.forerunnergames.energyshot.utilities;
+using com.forerunnergames.energyshot.core.audio;
 using Godot;
 
 namespace com.forerunnergames.energyshot.core.world;
@@ -86,6 +87,9 @@ public partial class World : Node3D
 
   public override void _Ready()
   {
+    AudioBuses.EnsureSfxBus(); // Volume sliders (issue #301): every effect rides the SFX bus.
+    AudioBuses.RouteSfx (this);
+    AudioBuses.ApplyVolumes (Settings.SfxVolume, Settings.MusicVolume);
     DressTheRing(); // The spawn box is a boxing ring (issue #174).
     BackstopTheRing(); // Nobody tunnels out of it (issue #276).
     _onServerDisconnectedCallable = Callable.From (OnServerDisconnected);

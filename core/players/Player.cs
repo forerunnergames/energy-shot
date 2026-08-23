@@ -1,6 +1,7 @@
 using com.forerunnergames.energyshot.items;
 using com.forerunnergames.energyshot.utilities;
 using com.forerunnergames.energyshot.weapons;
+using com.forerunnergames.energyshot.core.audio;
 using Godot;
 
 namespace com.forerunnergames.energyshot.players;
@@ -376,6 +377,7 @@ public partial class Player : CharacterBody3D
 
   public override void _Ready()
   {
+    AudioBuses.RouteSfx (this); // Every player sound is an effect (issue #301).
     _spawnRoom = GetNode <Node3D> ("/root/World/SpawnRoom");
     _laserBoltScene = ResourceLoader.Load <PackedScene> ("res://core/weapons/LaserBolt.tscn");
     _bananaProjectileScene = ResourceLoader.Load <PackedScene> ("res://core/weapons/BananaProjectile.tscn");
