@@ -227,7 +227,14 @@ public partial class PlaytestDriver : Node
     // window - kept wandering onto dart litter, mines & the airplane FIXTURE,
     // where it stole the restock & starved the shooter's census wait): while
     // idling out the clients' phases, re-park every few seconds if displaced.
-    var anchor = Self.GlobalPosition;
+    // The EMPTY QUARTER (the leash's completion - three reds after v0.8.121: the
+    // host, anchored wherever it stood on the crowded deck, kept faithfully
+    // re-parking onto OTHER phases' pickups - the shooter's dropped blowgun twice
+    // & the airplane restock once). The anchor moves to bare ground far from
+    // every phase zone; the club phase clubs it there, litter-free.
+    var anchor = new Vector3 (30.0f, 1.4f, -30.0f);
+    Self.Position = anchor;
+    await Task.Delay (300);
     var leashDeadline = Time.GetTicksMsec() + (ulong)(tailBudgetSeconds * 1000);
 
     while (_world.GetPlayers().Count() > 1 && Time.GetTicksMsec() < leashDeadline)
