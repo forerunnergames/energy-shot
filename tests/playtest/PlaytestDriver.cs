@@ -1406,7 +1406,10 @@ public partial class PlaytestDriver : Node
     if (!Self.Holds (HeldWeapon.PaperAirplane))
     {
       Self.Position = WeaponSpawner.PlaytestAirplanePosition + Vector3.Up * 0.5f;
-      await WaitUntil (() => Self.Holds (HeldWeapon.PaperAirplane), 30, "collected the airplane for the mine-load phase (#325)");
+      // 75s, not 30 (round 3's dice): airplanes are census-capped & the VICTIM's
+      // landmine phase can hold the count at max - the fixture restocks only once
+      // their airplane is spent, up to a full phase-cycle away.
+      await WaitUntil (() => Self.Holds (HeldWeapon.PaperAirplane), 75, "collected the airplane for the mine-load phase (#325)");
     }
 
     // A CLEAN lane (the first run's lesson): the drop phase leaves its laser at
@@ -1433,49 +1436,76 @@ public partial class PlaytestDriver : Node
     var landingZone = lane + new Vector3 (0.0f, 0.0f, -4.0f);
     var bestClearance = -1.0f;
 
+    // Clearance counts BODIES & RESTOCKING FIXTURES alike (this round's second
+    // feeder: the +Z zone sits 0.5m from the laser spawner, which restocks
+    // unconditionally - sweep it, sling it, it respawns forever).
+    var fixtures = new[] { WeaponSpawner.PlaytestLaserPosition, WeaponSpawner.PlaytestBoomerangPosition, WeaponSpawner.PlaytestSlingshotPosition, WeaponSpawner.PlaytestBlowgunPosition, WeaponSpawner.PlaytestDartPosition, WeaponSpawner.PlaytestAirplanePosition };
+
     foreach (var throwLane in new[] { new Vector3 (0.0f, 0.0f, -4.0f), new Vector3 (0.0f, 0.0f, 4.0f), new Vector3 (-4.0f, 0.0f, 0.0f), new Vector3 (4.0f, 0.0f, 0.0f) })
     {
       var candidate = lane + throwLane;
       var clearance = Mathf.Min (FlatDistance (candidate, hostBody.GlobalPosition), FlatDistance (candidate, victimBody.GlobalPosition));
+      foreach (var fixture in fixtures) clearance = Mathf.Min (clearance, FlatDistance (candidate, fixture));
       if (clearance <= bestClearance) continue;
       bestClearance = clearance;
       landingZone = candidate;
     }
 
+    // PRE-THROW SWEEP (the terminal lesson of five rounds: sweeping AFTER the
+    // throw means standing near an armed mine by construction - litter loads,
+    // the full pouch is a stepper, the mine pops us. BEFORE the throw there is
+    // no mine, so the sweep is perfectly safe): with the open pouch, load each
+    // pickup out of the chosen zone & sling it far away, until the zone is bare.
+    PressAction ("weapon_5");
+    await Task.Delay (100);
+    ReleaseAction ("weapon_5");
+    Assert (Self.SelectedWeapon == SelectedWeapon.Slingshot, "pouch out for the pre-throw sweep (#325)");
+    var sweepDeadline = Time.GetTicksMsec() + 20_000;
+
+    while (Time.GetTicksMsec() < sweepDeadline)
+    {
+      if (Self.SlingshotAmmo != HeldWeapon.None)
+      {
+        Self.Position = lane;
+        await Task.Delay (300);
+        AimAt (Self.GlobalPosition + new Vector3 (0.0f, 25.0f, 30.0f));
+        await SlingAStone (drawMs: 300, "swept a straggler out of the landing zone (#325)");
+        await Task.Delay (500);
+        continue;
+      }
+
+      var straggler = _world.GetChildren().OfType <WeaponPickup>().FirstOrDefault (pickup => !pickup.IsQueuedForDeletion() && FlatDistance (pickup.GlobalPosition, landingZone) < 6.0f && fixtures.All (fixture => FlatDistance (pickup.GlobalPosition, fixture) > 1.0f));
+      if (straggler == null) break;
+      Self.Position = straggler.GlobalPosition + Vector3.Up * 0.3f;
+      await TryWaitUntil (() => Self.SlingshotAmmo != HeldWeapon.None, 5);
+      await Task.Delay (200);
+    }
+
+    Assert (Self.SlingshotAmmo == HeldWeapon.None, "the pouch is EMPTY after the pre-throw sweep (#325)");
+    Self.Position = lane;
+    await Task.Delay (300);
+
+    // Now the throw, into the cleaned zone.
+    PressAction ("weapon_6");
+    await Task.Delay (100);
+    ReleaseAction ("weapon_6");
+    Assert (Self.SelectedWeapon == SelectedWeapon.PaperAirplane, "airplane back out for the throw (#325)");
     AimAt (new Vector3 (landingZone.X, 30.25f, landingZone.Z)); // Into the deck: a short flight & a fast come-down.
     PressLeftClick();
     await Task.Delay (60);
     ReleaseLeftClick();
     await WaitUntil (() => DroppedNear (HeldWeapon.PaperAirplane, landingZone, 8.0f) is { Armed: true }, 45, "the thrown airplane came down ARMED nearby (#191/#325)");
-    var mine = DroppedNear (HeldWeapon.PaperAirplane, landingZone, 8.0f)!;
     // The OPEN slingshot: selected, empty, & pointedly never drawn.
     PressAction ("weapon_5");
     await Task.Delay (100);
     ReleaseAction ("weapon_5");
     Assert (Self.SelectedWeapon == SelectedWeapon.Slingshot && Self.SlingshotAmmo == HeldWeapon.None, "open EMPTY slingshot out for the armed pickup (#325)");
-    var healthBefore = Self.Health;
-    // Round 5's lesson ends the lane-tuning: even the west lane crossed litter -
-    // the open pouch auto-loaded a stray Laser EN ROUTE & the full pouch walked
-    // the mine into a rightful pop (issue #286 covers EMPTY pouches only). The
-    // walk was never the mechanic (load-at-claim-range is) - park ON the mine.
-    Assert (Self.SlingshotAmmo == HeldWeapon.None, "the pouch is still EMPTY before stepping to the mine (#325)");
-    // CHASE the live mine & fight the litter (round 2 of this PR: a spot captured
-    // once goes stale - the landed airplane settles & slides like every pickup
-    // this week - so the stand idled 24s off claim range until a stray laser won
-    // the pouch instead). Re-park on the LIVE mine each beat; sling away any
-    // interloper (each spat piece is gone for good, so the loop converges).
-    var mineLoadDeadline = Time.GetTicksMsec() + 25_000;
+    // Chase the LIVE mine (it settles & slides like every pickup this week) with
+    // the pouch empty & the zone swept bare - nothing left to race the load.
+    var mineLoadDeadline = Time.GetTicksMsec() + 20_000;
 
     while (Self.SlingshotAmmo != HeldWeapon.PaperAirplane && Time.GetTicksMsec() < mineLoadDeadline)
     {
-      if (Self.SlingshotAmmo != HeldWeapon.None)
-      {
-        AimAt (Self.GlobalPosition + new Vector3 (0.0f, 25.0f, 30.0f));
-        await SlingAStone (drawMs: 300, "spat the litter that beat us to the pouch (#325)");
-        await Task.Delay (500);
-        continue;
-      }
-
       var liveMine = DroppedNear (HeldWeapon.PaperAirplane, landingZone, 10.0f);
       if (liveMine is { Armed: true }) Self.Position = liveMine.GlobalPosition + Vector3.Up * 0.3f;
       await Task.Delay (500);
@@ -1488,7 +1518,10 @@ public partial class PlaytestDriver : Node
     // pins AirplaneThreatFraction to 1.
     await Task.Delay (2000);
     Assert (Self.AirplaneThreatFraction == 0.0f && !Self.Burning, "no mine fuse ever started on the loader (#325)");
-    Assert (Self.Health == healthBefore, $"loading the mine cost no health through the fuse window (#325), was {healthBefore} now {Self.Health}");
+    // No health-equality check (this round's lesson: the sweep walks armed dart
+    // litter barefoot & ambient poison ticks alias the window - a -30 tick failed
+    // the old equality with the mine entirely innocent). The fuse detector above
+    // IS the no-detonation proof: a begun fuse pins AirplaneThreatFraction to 1.
     // Leave nothing nocked for whatever follows: fire it into the deck & let the caps recycle it.
     AimAt (new Vector3 (ShooterParkSpot.X, 30.25f, ShooterParkSpot.Z - 3.0f));
     await SlingAStone (drawMs: 300, "cleared the nocked airplane (#325)");
