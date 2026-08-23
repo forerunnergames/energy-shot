@@ -276,6 +276,52 @@ public partial class Hud : Control
     var hill = (GameMode)mode != GameMode.KingOfTheHill ? string.Empty : hillHolder.Length == 0 ? "hill: empty" : hillHolder == "contested" ? "hill: CONTESTED" : $"hill: {hillHolder}";
     _roundClock.Text = string.Join ("   ·   ", new[] { clock, target, hill }.Where (part => part.Length > 0));
     _roundClock.Visible = _roundClock.Text.Length > 0 && !_roundOverlay.Visible;
+    if ((GameMode)mode == GameMode.KingOfTheHill) UpdateKingBanner (hillHolder);
+  }
+
+  // Crowning hits BIG (issue #376, thepro & Caleb: 'so underwhelming'): the moment
+  // YOU take the hill, a huge gold center-screen banner; losing it gets a DETHRONED
+  // beat; everyone else gets a scroller line on the handover. Contested & empty are
+  // not a change of king - the last sole holder stays remembered through them.
+  private string _lastKing = string.Empty;
+  private Label? _kingBanner;
+  private Tween? _kingBannerTween;
+
+  private void UpdateKingBanner (string hillHolder)
+  {
+    var isSoleHolder = hillHolder.Length > 0 && hillHolder != "contested";
+    if (!isSoleHolder || hillHolder == _lastKing) return;
+    var previousKing = _lastKing;
+    _lastKing = hillHolder;
+    var selfName = Player.Local?.DisplayName ?? string.Empty;
+    if (hillHolder == selfName) ShowKingBanner ("\U0001F451 YOU ARE THE KING! \U0001F451", fontSize: 170, holdSeconds: 2.5f);
+    else if (previousKing == selfName) ShowKingBanner ("DETHRONED!", fontSize: 110, holdSeconds: 1.8f);
+    else PrintMessage ($"{hillHolder} took the hill!", MessageScroller.MessageImportance.High);
+  }
+
+  private void ShowKingBanner (string text, int fontSize, float holdSeconds)
+  {
+    if (_kingBanner == null)
+    {
+      _kingBanner = new Label { HorizontalAlignment = HorizontalAlignment.Center, MouseFilter = MouseFilterEnum.Ignore };
+      _kingBanner.AddThemeColorOverride ("font_color", new Color (1.0f, 0.85f, 0.2f));
+      _kingBanner.AddThemeColorOverride ("font_outline_color", new Color (0.2f, 0.1f, 0.0f));
+      _kingBanner.AddThemeConstantOverride ("outline_size", 24);
+      _kingBanner.SetAnchorsPreset (LayoutPreset.CenterTop);
+      _kingBanner.GrowHorizontal = GrowDirection.Both;
+      _kingBanner.Position = new Vector2 (_kingBanner.Position.X, 320.0f);
+      AddChild (_kingBanner);
+    }
+
+    _kingBanner.AddThemeFontSizeOverride ("font_size", fontSize);
+    _kingBanner.Text = text;
+    _kingBanner.Modulate = Colors.White;
+    _kingBanner.Visible = true;
+    _kingBannerTween?.Kill();
+    _kingBannerTween = CreateTween();
+    _kingBannerTween.TweenInterval (holdSeconds);
+    _kingBannerTween.TweenProperty (_kingBanner, "modulate:a", 0.0f, 0.6f);
+    _kingBannerTween.TweenCallback (Callable.From (() => _kingBanner.Visible = false));
   }
 
   private void OnRoundEnded (string scoreboardBbcode)
