@@ -1448,12 +1448,11 @@ public partial class PlaytestDriver : Node
     // the mine into a rightful pop (issue #286 covers EMPTY pouches only). The
     // walk was never the mechanic (load-at-claim-range is) - park ON the mine.
     Assert (Self.SlingshotAmmo == HeldWeapon.None, "the pouch is still EMPTY before stepping to the mine (#325)");
-    var mineSpot = mine.GlobalPosition;
-    Self.Position = new Vector3 (mineSpot.X, 31.3f, mineSpot.Z);
-    // Litter can BEAT the airplane to the pouch (the v0.8.117 follow-up red: a
-    // stray laser sat within claim range of the mine itself & loaded first) -
-    // sling any interloper far away & let the claim re-run until the airplane
-    // wins. Every spat piece is gone for good, so the loop converges.
+    // CHASE the live mine & fight the litter (round 2 of this PR: a spot captured
+    // once goes stale - the landed airplane settles & slides like every pickup
+    // this week - so the stand idled 24s off claim range until a stray laser won
+    // the pouch instead). Re-park on the LIVE mine each beat; sling away any
+    // interloper (each spat piece is gone for good, so the loop converges).
     var mineLoadDeadline = Time.GetTicksMsec() + 25_000;
 
     while (Self.SlingshotAmmo != HeldWeapon.PaperAirplane && Time.GetTicksMsec() < mineLoadDeadline)
@@ -1462,8 +1461,12 @@ public partial class PlaytestDriver : Node
       {
         AimAt (Self.GlobalPosition + new Vector3 (0.0f, 25.0f, 30.0f));
         await SlingAStone (drawMs: 300, "spat the litter that beat us to the pouch (#325)");
+        await Task.Delay (500);
+        continue;
       }
 
+      var liveMine = DroppedNear (HeldWeapon.PaperAirplane, landingZone, 10.0f);
+      if (liveMine is { Armed: true }) Self.Position = liveMine.GlobalPosition + Vector3.Up * 0.3f;
       await Task.Delay (500);
     }
 
