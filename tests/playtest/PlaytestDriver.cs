@@ -1497,6 +1497,9 @@ public partial class PlaytestDriver : Node
     await Task.Delay (60);
     ReleaseLeftClick();
     await WaitUntil (() => victim.Fallen, 15, "the sticky banana zapped the victim after its ride (#83)");
+    // The loaf drops WHERE THEY FELL (CodeRabbit): the launch carried them far
+    // from the park, & the body's spot is gone once their reset teleports them.
+    var stickyDeathSpot = victim.GlobalPosition;
 
     // SLUNG LOAF (#229/#247/#270, rounds 1-3's lessons distilled): a pouch-load
     // only wins when a normal collect CANNOT (the #190 rule - you already hold
@@ -1512,7 +1515,7 @@ public partial class PlaytestDriver : Node
 
     while (Self.SlingshotAmmo != HeldWeapon.Bread && Time.GetTicksMsec() < loafDeadline)
     {
-      var loaf = DroppedNear (HeldWeapon.Bread, VictimParkSpot, 8.0f);
+      var loaf = DroppedNear (HeldWeapon.Bread, stickyDeathSpot, 12.0f);
       if (loaf != null) Self.Position = new Vector3 (loaf.GlobalPosition.X, 31.3f, loaf.GlobalPosition.Z);
       await Task.Delay (800);
     }

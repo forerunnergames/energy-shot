@@ -97,7 +97,7 @@ Evidence cells quote the assert's issue refs.
 | the eat ritual | ✅ | full-stop precondition, three-second ritual, no input escapes, completion consumes & heals (#192/#190) |
 | eat interrupts | ✅ | punch cancels (attacker & victim sides), interrupted loaf wasted, rejected attempt costs nothing (#192) |
 | theft target | ✅ | the loaf is the canonical theft item (#193) |
-| as slingshot ammo (slung loaf) | ✅ | the pouch loads the X-dropped loaf & the slung hit lands like a punch, never a zap (#190/#229/#247) |
+| as slingshot ammo (slung loaf) | ✅ | the pouch loads the victim's death-dropped loaf (own loaf blocks the normal collect, #190) & the slung hit lands like a punch, never a zap (#229/#247) |
 | blunt | — | No club mode |
 
 ## Blowgun
