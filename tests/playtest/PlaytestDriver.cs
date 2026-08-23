@@ -1597,6 +1597,26 @@ public partial class PlaytestDriver : Node
   // back empty, & the walk exercises the re-collect cell for free. The HOST is the
   // target: it idles clean at its spawn, so the exact-damage assert can't be muddied
   // by the victim's poison ticks (a tick & a club cost the same).
+  // One dart, definitely fired (CodeRabbit on the sweep): the blowgun's 1.5s fire
+  // cooldown rejects a press that comes too soon, so the press retries until the
+  // count DROPS, then the full cooldown passes before the caller's next action.
+  private async Task SpitADart (string why)
+  {
+    var before = Self.BlowgunDarts;
+    AimAt (Self.GlobalPosition + new Vector3 (0.0f, 6.0f, 40.0f)); // High & far: it lands well outside every phase's search radius.
+
+    for (var attempt = 0; attempt < 6 && Self.BlowgunDarts == before; ++attempt)
+    {
+      PressLeftClick();
+      await Task.Delay (60);
+      ReleaseLeftClick();
+      await Task.Delay (400);
+    }
+
+    Assert (Self.BlowgunDarts == before - 1, why);
+    await Task.Delay (1600); // The full 1.5s fire cooldown before the caller's next press.
+  }
+
   private async Task RunClubPhase()
   {
     var host = FindPlayer (HostName)!;
@@ -1610,15 +1630,7 @@ public partial class PlaytestDriver : Node
     await WaitUntil (() => Self.HasBlowgun, 30, "re-collected the blowgun (#316)");
     // The gun lands beside its own scattered darts & re-loads them on pickup -
     // spit any aboard off-range rather than demanding an empty arrival.
-    for (var spit = 0; spit < 4 && Self.BlowgunDarts > 0; ++spit)
-    {
-      AimAt (Self.GlobalPosition + new Vector3 (0.0f, 6.0f, 40.0f));
-      PressLeftClick();
-      await Task.Delay (60);
-      ReleaseLeftClick();
-      await Task.Delay (700);
-    }
-
+    while (Self.BlowgunDarts > 0) await SpitADart ("spat a re-loaded dart off-range (#316)");
     Assert (Self.BlowgunDarts == 0, "the re-collected blowgun is EMPTY for the club (#316)");
     PressAction ("weapon_8");
     await Task.Delay (100);
@@ -1637,13 +1649,7 @@ public partial class PlaytestDriver : Node
       var straySpot = stray.GlobalPosition;
       Self.Position = new Vector3 (straySpot.X, 31.3f, straySpot.Z);
       await WaitUntil (() => Self.BlowgunDarts > 0 || DroppedNear (HeldWeapon.PoisonDart, straySpot, 1.5f) == null, 10, "vacuumed a stray armed dart near the host (#269)");
-      if (Self.BlowgunDarts == 0) continue;
-      AimAt (Self.GlobalPosition + new Vector3 (0.0f, 6.0f, 40.0f)); // High & far: it lands well outside every phase's search radius.
-      PressLeftClick();
-      await Task.Delay (60);
-      ReleaseLeftClick();
-      await WaitUntil (() => Self.BlowgunDarts == 0, 10, "spat the swept dart out of the shove zone (#269)");
-      await Task.Delay (700); // Past the blowgun's fire cooldown before the next sweep or the club.
+      while (Self.BlowgunDarts > 0) await SpitADart ("spat the swept dart out of the shove zone (#269)");
     }
 
     Assert (DroppedNear (HeldWeapon.PoisonDart, host.GlobalPosition, 8.0f) == null, "no armed dart litter left in the host's shove zone (#269)");
