@@ -89,7 +89,6 @@ The spawn box is a boxing ring: its walls are rubber ropes. Run, slide, or get p
 
 ## Headshots
 
-**Temporarily on vacation** while the head gets rebuilt properly - no head, no headshots, back soon.
 
 Every player has a floating sensor dome above the body. A laser bolt or a slingshot stone (or slung item) that hits the dome is a headshot: a flat 300 damage that ignores the difficulty handicap - one zaps an Expert or Intermediate outright, a Beginner takes exactly two. Punches, bananas, boomerangs, airplanes & darts don't care where they land. Your hitmarker rings higher on a dome hit.
 
