@@ -1,3 +1,4 @@
+using com.forerunnergames.energyshot.weapons;
 using Godot;
 
 namespace com.forerunnergames.energyshot.players;
