@@ -1474,12 +1474,15 @@ public partial class PlaytestDriver : Node
     // BLAST (#61/#83): the banana lands at the parked victim's feet - the blast
     // hurts & stuns but NEVER zaps a full-health player.
     await WaitUntil (() => !victim.SpawnArmor && FlatDistance (victim.GlobalPosition, VictimParkSpot) < 2.0f && victim.Health == victim.MaxHealth, 120, "victim parked & clean for the blast (#316)");
-    Self.Position = VictimParkSpot + new Vector3 (0.0f, 0.3f, 6.0f);
+    // CLOSE & STEEP (round 5's lesson: from 6m out the flat-ish lob bounced &
+    // skidded meters away - it blasted the HOST at the radius edge & the victim
+    // took nothing). From 3m, plunging at the offset point, the plop stays put.
+    Self.Position = VictimParkSpot + new Vector3 (0.0f, 0.3f, 3.0f);
     await Task.Delay (400);
-    // BESIDE them, not at their feet (the first run's lesson: the low line to the
-    // feet clips the body en route & the shot becomes the STICKY) - 2.5m out is
-    // clear of the capsule & still deep inside the 6m blast radius.
-    AimAt (new Vector3 (victim.GlobalPosition.X + 2.5f, 30.4f, victim.GlobalPosition.Z));
+    // BESIDE them, not at their feet (the first run's lesson: a line to the feet
+    // clips the body en route & the shot becomes the STICKY) - 2m out is clear
+    // of the capsule & deep inside the 6m blast radius.
+    AimAt (new Vector3 (victim.GlobalPosition.X + 2.0f, 30.4f, victim.GlobalPosition.Z));
     PressLeftClick();
     await Task.Delay (60);
     ReleaseLeftClick();
