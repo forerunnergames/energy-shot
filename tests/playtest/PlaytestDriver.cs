@@ -204,8 +204,12 @@ public partial class PlaytestDriver : Node
     await WaitUntil (() => _world.GetPlayers().Count (player => player.IsCrowned) == 1, 30, "exactly one crown after the first score (#178)");
     // Victim respawns with armor visible to the host too (~5s later now, #152).
     await WaitUntil (() => FindPlayer (VictimName)?.SpawnArmor == true, 35, "victim respawn armor replicated to host");
-    // The victim's fall at score 0 goes negative & replicates (issue #108).
-    await WaitUntil (() => FindPlayer (VictimName)?.Score == -1, 60, "victim's fall penalty (-1) replicated to host");
+    // The victim's fall at score 0 goes negative & replicates (issue #108). AT
+    // MOST -1, not exactly (3x today: the suite's longer run reshuffles what
+    // else lands in this 60s window - any extra penalty event parks the score
+    // past -1 & the exact-equality wait starves while the penalty it watches
+    // for has long since applied).
+    await WaitUntil (() => FindPlayer (VictimName)?.Score <= -1, 60, "victim's fall penalty (-1) replicated to host");
     // Crown rules (issue #178): a lower score moving (the fall) never moves the crown.
     Assert (FindPlayer (ShooterName)?.IsCrowned == true, "crown stayed on the leader after the fall penalty (#178)");
     // Stay up until both clients have finished & disconnected (the shooter's solo
