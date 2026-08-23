@@ -167,10 +167,23 @@ public partial class Player
     }
   }
 
+  private StyleBoxFlat? _healthFill;
+
+  // Our OWN fill box (Aaron, 2026-08-23: the green never showed from a distance):
+  // GetThemeStylebox returns a resource SHARED across every player's bar, & the
+  // ALWAYS-mode sync setters made every unpoisoned player's tick stomp the shared
+  // color back to red - last writer wins, the green never survived a frame. A
+  // per-instance override ends the fight.
   private void UpdateOverheadBarPoisonTint()
   {
     if (_healthBar == null) return;
-    if (_healthBar.GetThemeStylebox ("fill") is not StyleBoxFlat fill) return;
-    fill.BgColor = IsPoisoned ? PoisonGreen : new Color (0.756863f, 0.0f, 0.0f);
+
+    if (_healthFill == null)
+    {
+      _healthFill = _healthBar.GetThemeStylebox ("fill") is StyleBoxFlat shared ? (StyleBoxFlat)shared.Duplicate() : new StyleBoxFlat();
+      _healthBar.AddThemeStyleboxOverride ("fill", _healthFill);
+    }
+
+    _healthFill.BgColor = IsPoisoned ? PoisonGreen : new Color (0.756863f, 0.0f, 0.0f);
   }
 }
