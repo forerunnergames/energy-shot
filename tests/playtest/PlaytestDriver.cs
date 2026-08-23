@@ -2071,9 +2071,14 @@ public partial class PlaytestDriver : Node
 
     // Retried swings (the single press flaked on CI): the blowgun's fire cooldown
     // from the dart phase can still be running when the first press lands - a swing
-    // that changed nothing gets another, up to four.
+    // that changed nothing gets another, up to four. RE-TAKE the spot each swing
+    // (#370's carry: the calibration punch now shoves the host ~6m - every club
+    // swing at the old spot whiffed at air).
     for (var attempt = 0; attempt < 4 && host.Health == healthBeforeClub; ++attempt)
     {
+      Self.Position = host.GlobalPosition + new Vector3 (0.0f, 0.3f, 2.0f);
+      await Task.Delay (200);
+      AimAt (host.GlobalPosition + Vector3.Up);
       PressAction ("shoot");
       await Task.Delay (60);
       ReleaseAction ("shoot");

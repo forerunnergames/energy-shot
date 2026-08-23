@@ -9,7 +9,10 @@ namespace com.forerunnergames.energyshot.players;
 // bounce cap (#262) keeps rope-bouncing from turning into a free ride up & a long way down.
 public partial class Player
 {
-  [Export] public float FallDamageFreeMeters = 10.0f;
+  // 36m, up from 10 (Aaron, 2026-08-23): jumping off the spawn platform (a ~34m
+  // peak with the hop) must be free, & so must a jump plus one full-charge
+  // rocket boost (~13m peak). Fall damage is for the truly spectacular drops.
+  [Export] public float FallDamageFreeMeters = 36.0f;
   [Export] public float FallDamagePerMeter = 0.05f; // Energy per metre past the free drop: 0.05 = 5 health per metre.
   public const float MaxFallEnergy = 0.9f;
   private const float TeleportMeters = 6.0f; // More than any physics frame can move you.
