@@ -167,7 +167,18 @@ public partial class Player : CharacterBody3D
     {
       _crouching = value;
       ApplyCrouchScale();
+      ApplyCrouchStealth();
     }
+  }
+
+  // Crouching hides your overhead nametag & health indicator on every OTHER peer
+  // (Aaron, 2026-08-23): sneaking is real - the floating giveaway goes away until
+  // you stand. Own tags are always hidden locally, so the authority skips.
+  private void ApplyCrouchStealth()
+  {
+    if (IsMultiplayerAuthority()) return;
+    if (_nameTag != null) _nameTag.Visible = !_crouching;
+    if (_healthTag != null) _healthTag.Visible = !_crouching;
   }
 
   // Current zap streak, replicated so every peer can render the "on fire" glow &
@@ -267,7 +278,11 @@ public partial class Player : CharacterBody3D
   [Export] public float TagScaleStopDistance = 200.0f;
   [Export] public float HealthTagNameTagMinSpacing = 0.2f;
   [Export] public float HealthTagNameTagMaxSpacing = 3.0f;
-  [Export] public float NameTagBaseHeight = 2.3f;
+  // 3.4, up from 2.3 (Aaron, 2026-08-23: a 'white box' covered every bar at round
+  // start): the #333 head spans y 2.05-2.95 & the tags sat INSIDE it - a fresh
+  // round's armor turns every head white & the sphere filled the tag's
+  // transparent background. Tags now float clear above the head.
+  [Export] public float NameTagBaseHeight = 3.4f;
   public int NetworkId => Name.ToString().ToInt();
   // Whether the one-per-life loaf is still in hand: the HUD bread icon (issue #160) &
   // the slot-7 selection rules (issue #209). Reads the REPLICATED mask, not the local
