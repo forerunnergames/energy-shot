@@ -1,4 +1,5 @@
 using System.Linq;
+using com.forerunnergames.energyshot.core.audio;
 using com.forerunnergames.energyshot.core.world;
 using com.forerunnergames.energyshot.players;
 using com.forerunnergames.energyshot.ui.dialogs;
@@ -154,7 +155,7 @@ public partial class Hud : Control
     _breadIcon = GetNode <TextureRect> ("VBoxContainer/Bread/Icon");
     CreateBreadSounds();
     CreateBreadNotice();
-    _lockOnSound = new AudioStreamPlayer { Stream = ProceduralSounds.LockOn(), MaxPolyphony = 2 }; // Issue #211.
+    _lockOnSound = new AudioStreamPlayer { Stream = ProceduralSounds.LockOn(), MaxPolyphony = 2, Bus = AudioBuses.SfxBusName }; // Issue #211.
     AddChild (_lockOnSound);
     _world.SelfPlayerPunched += OnSelfPlayerPunched;
     _world.SelfPlayerPoisonTicked += () => _poisonPulse = 1.0f; // Issue #261.
@@ -355,6 +356,9 @@ public partial class Hud : Control
     column.AddChild (SettingToggle ("Hold to crouch", Settings.HoldToCrouch, isEnabled => { Settings.HoldToCrouch = isEnabled; Player.Local?.RefreshCrouchMode(); }));
     column.AddChild (SettingToggle ("Hold to scope", Settings.HoldToScope, isEnabled => { Settings.HoldToScope = isEnabled; Player.Local?.RefreshScopeMode(); }));
     column.AddChild (SettingToggle ("Hold to emote", Settings.HoldToDance, isEnabled => { Settings.HoldToDance = isEnabled; Player.Local?.RefreshDanceMode(); }));
+    // Audio (issue #301, Escendrix: the effects are too loud): two live sliders.
+    column.AddChild (SettingSlider ("Sound effects volume", Settings.SfxVolume, percent => { Settings.SfxVolume = percent; AudioBuses.ApplyVolumes (Settings.SfxVolume, Settings.MusicVolume); }));
+    column.AddChild (SettingSlider ("Music volume", Settings.MusicVolume, percent => { Settings.MusicVolume = percent; AudioBuses.ApplyVolumes (Settings.SfxVolume, Settings.MusicVolume); }));
     column.AddChild (SettingToggle ("Show music player", Settings.ShowMusicPlayer, isEnabled => { Settings.ShowMusicPlayer = isEnabled; GetNode <MusicPlayer> ("MusicPlayer").ApplyVisibilitySetting(); }));
     column.AddChild (SettingToggle ("Show chat", Settings.ShowChat, isEnabled => Settings.ShowChat = isEnabled));
     column.AddChild (SettingToggle ("Show game messages", Settings.ShowMessages, isEnabled => { Settings.ShowMessages = isEnabled; _messageScroller.ApplyVisibilitySetting(); }));
@@ -371,6 +375,23 @@ public partial class Hud : Control
   // Full-size rows (Aaron, 2026-08-22: code-built widgets keep coming out tiny):
   // a big label & a real ON/OFF toggle button - no theme-sized check icons, which
   // render microscopic against the 4K design viewport no matter the font.
+  // A 0-100 slider row at 4K size (the UI rule): label, a wide slider, & the live value.
+  private static Control SettingSlider (string text, int initial, System.Action <int> apply)
+  {
+    var row = new HBoxContainer();
+    row.AddThemeConstantOverride ("separation", 40);
+    var label = new Label { Text = text, SizeFlagsHorizontal = SizeFlags.ExpandFill, VerticalAlignment = VerticalAlignment.Center };
+    label.AddThemeFontSizeOverride ("font_size", 60);
+    var value = new Label { Text = $"{initial}%", CustomMinimumSize = new Vector2 (200.0f, 0.0f), HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
+    value.AddThemeFontSizeOverride ("font_size", 60);
+    var slider = new HSlider { MinValue = 0, MaxValue = 100, Step = 5, Value = initial, CustomMinimumSize = new Vector2 (700.0f, 80.0f), SizeFlagsVertical = SizeFlags.ShrinkCenter };
+    slider.ValueChanged += newValue => { value.Text = $"{(int)newValue}%"; apply ((int)newValue); };
+    row.AddChild (label);
+    row.AddChild (slider);
+    row.AddChild (value);
+    return row;
+  }
+
   private static Control SettingToggle (string text, bool initial, System.Action <bool> apply)
   {
     var row = new HBoxContainer();
@@ -462,8 +483,8 @@ public partial class Hud : Control
   // & the interruption are HUD-local.
   private void CreateBreadSounds()
   {
-    _breadDeniedSound = new AudioStreamPlayer { Stream = ProceduralSounds.Denied() };
-    _breadInterruptedSound = new AudioStreamPlayer { Stream = ProceduralSounds.Interrupted() };
+    _breadDeniedSound = new AudioStreamPlayer { Stream = ProceduralSounds.Denied(), Bus = AudioBuses.SfxBusName };
+    _breadInterruptedSound = new AudioStreamPlayer { Stream = ProceduralSounds.Interrupted(), Bus = AudioBuses.SfxBusName };
     AddChild (_breadDeniedSound);
     AddChild (_breadInterruptedSound);
   }
