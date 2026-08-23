@@ -97,7 +97,7 @@ Evidence cells quote the assert's issue refs.
 | the eat ritual | ✅ | full-stop precondition, three-second ritual, no input escapes, completion consumes & heals (#192/#190) |
 | eat interrupts | ✅ | punch cancels (attacker & victim sides), interrupted loaf wasted, rejected attempt costs nothing (#192) |
 | theft target | ✅ | the loaf is the canonical theft item (#193) |
-| as slingshot ammo (slung crumbs) | ❌ | Slung bread plasters the victim in crumbs - shipped, unasserted |
+| as slingshot ammo (slung loaf) | ✅ | the pouch loads the victim's death-dropped loaf (own loaf blocks the normal collect, #190) & the slung hit lands like a punch, never a zap (#229/#247) |
 | blunt | — | No club mode |
 
 ## Blowgun
@@ -146,7 +146,7 @@ Queued combos, unasserted (each becomes a phase when its cell's weapon PR lands)
 
 ## Gap queue (risk-ordered, one weapon per PR, per the #316 plan)
 
-1. **Slung launcher-lob & stone sprees, & Bread crumbs** - the laser spray is proven; the rest of the slung family (#229/#270) is not.
+1. **Slung launcher-lob & stone sprees** - the laser spray & slung loaf are proven; the launcher & slingshot payloads (#229/#270) are not.
 2. **Boomerang steal-on-hit & cooldown** (#98/#106).
 3. **Laser charge ladder** (#67).
 4. **Fists knockback, stun & cooldown** (#68/#71/#335).
