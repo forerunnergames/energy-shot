@@ -1078,6 +1078,7 @@ public partial class PlaytestDriver : Node
     AimAt (Self.GlobalPosition + new Vector3 (0.0f, -1.0f, -6.0f));
     var lasersBefore = LaserPickupNames();
     var ammoStonesBefore = _stonesSpawned;
+    var boltsBeforeSling = _boltsSpawned;
     // A soft lob, NOT a full draw (issue #272): now that the draw is engine-time
     // honest, a 900ms draw punches the stone clean through the paper-thin spawn-room
     // slab & it falls off-world - the server correctly skips the landing ("no ground
@@ -1085,6 +1086,9 @@ public partial class PlaytestDriver : Node
     await SlingAStone (drawMs: 300, "loaded-ammo shot (#190)");
     Assert (_stonesSpawned > ammoStonesBefore, "fired the loaded laser out of the slingshot (#190)");
     await WaitUntil (() => Self.SlingshotAmmo == HeldWeapon.None, 10, "firing emptied the slingshot (#190)");
+    // The spray itself (#208/#244, the matrix gap): a slung laser goes berserk in
+    // flight - real bolt nodes enter the tree & the monotonic counter proves it.
+    await WaitUntil (() => _boltsSpawned > boltsBeforeSling, 10, "the slung laser sprayed bolts as it tumbled (#208/#244)");
     // Nothing may vanish: the slung laser has to come back as an ordinary pickup.
     // Capture the name INSIDE the wait (CodeRabbit): re-querying afterwards could
     // find the pickup already claimed or expired & throw an opaque First() instead

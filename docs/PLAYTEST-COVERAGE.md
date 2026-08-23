@@ -70,7 +70,7 @@ Evidence cells quote the assert's issue refs.
 | equipped loaded | ✅ | laser load (#190), boomerang nock (#212), ARMED airplane load with fuse-window proof (#286/#325) |
 | equipped charging (draw) | 🟡 | draw & release fires (#99); the full-draw LOCK-IN cue & tremble are #288 (pending feature - lands with its cells) |
 | stone projectile | ✅ | long-flight & wall-stop stones (#163), full-draw stone flies 4s |
-| slung-gun ammo spray | ❌ | Every slung gun sprays its own ammo (#229/#270) - shipped, unasserted |
+| slung-gun ammo spray | 🟡 | the slung LASER provably sprays bolts mid-flight (#208/#244); the launcher lob & stone spree remain unasserted |
 | equipped cooldown | 🟡 | respawn reset covers it generically (#299); no slingshot-specific gate assert |
 | blunt | — | No club mode |
 
@@ -146,7 +146,7 @@ Queued combos, unasserted (each becomes a phase when its cell's weapon PR lands)
 
 ## Gap queue (risk-ordered, one weapon per PR, per the #316 plan)
 
-1. **Slingshot spray & Bread crumbs** - the slung-gun ammo spray family (#229/#270), shipped but never proven.
+1. **Slung launcher-lob & stone sprees, & Bread crumbs** - the laser spray is proven; the rest of the slung family (#229/#270) is not.
 2. **Boomerang steal-on-hit & cooldown** (#98/#106).
 3. **Laser charge ladder** (#67).
 4. **Fists knockback, stun & cooldown** (#68/#71/#335).
