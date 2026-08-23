@@ -15,7 +15,7 @@ namespace com.forerunnergames.energyshot.players;
 // of darts it swings as a club (Player.Blunt, issue #249). No recoil. The shooter hears the shot locally; bystanders only within a few feet.
 public partial class Player
 {
-  [Export] public float BlowgunDartSpeed = 84.0f; // Doubled (Aaron, 2026-08-22: still WAY too slow at 42) - fast but visible, per the sniper spec (issues #236/#259).
+  [Export] public float BlowgunDartSpeed = 168.0f; // Doubled AGAIN (Aaron, 2026-08-23; the v0.8.84 doubling was still too slow): a dart is nearly hitscan now. // Doubled (Aaron, 2026-08-22: still WAY too slow at 42) - fast but visible, per the sniper spec (issues #236/#259).
   [Export] public float BlowgunCooldownSeconds = 1.5f;
   [Export]
   public int BlowgunDarts
