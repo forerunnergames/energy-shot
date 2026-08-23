@@ -128,7 +128,7 @@ public partial class PlaytestDriver : Node
       // is unbuffered - it's why FAIL lines always land - so PASS echoes there too.
       GD.PrintErr ($"PLAYTEST PASS [{_role}]");
       await Task.Delay (500); // Let final packets flush before quitting.
-      GetTree().Quit (0);
+      HardExit (0);
     }
     catch (Exception e)
     {
@@ -139,8 +139,14 @@ public partial class PlaytestDriver : Node
   private void Fail (string reason)
   {
     GD.PrintErr ($"PLAYTEST FAIL [{_role}]: {reason}");
-    GetTree().Quit (1);
+    HardExit (1);
   }
+
+  // The verdict is printed & flushed: exit the PROCESS before Godot's engine
+  // teardown runs (issue #354) - the mono finalizer race there aborts with exit
+  // 134 & turns fully-green runs red. The verdict lines are the source of truth
+  // & the harness's verify_log still proves the run actually happened.
+  private static void HardExit (int code) => System.Environment.Exit (code);
 
   // ---------------------------------------------------------------- roles
 
