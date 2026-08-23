@@ -1610,6 +1610,29 @@ public partial class PlaytestDriver : Node
     await Task.Delay (100);
     ReleaseAction ("weapon_8");
     Assert (Self.SelectedWeapon == SelectedWeapon.Blowgun, "empty blowgun equipped for the club swing (#269)");
+    // Sweep the shove zone (the v0.8.102-era red run's lesson): earlier phases
+    // scatter ARMED darts around the host park spot, & the calibration punch
+    // SHOVES the host (issue #269's 2.5x knockback) onto them - embedded darts
+    // tick poison that aliases the punch measurement (a -40 observed where the
+    // punch dealt -20). The blowgun in hand vacuums stepped darts (issue #236),
+    // then spits each far off-range so nothing re-lands in the shove zone.
+    for (var sweep = 0; sweep < 6; ++sweep)
+    {
+      var stray = DroppedNear (HeldWeapon.PoisonDart, host.GlobalPosition, 8.0f);
+      if (stray == null) break;
+      var straySpot = stray.GlobalPosition;
+      Self.Position = new Vector3 (straySpot.X, 31.3f, straySpot.Z);
+      await WaitUntil (() => Self.BlowgunDarts > 0 || DroppedNear (HeldWeapon.PoisonDart, straySpot, 1.5f) == null, 10, "vacuumed a stray armed dart near the host (#269)");
+      if (Self.BlowgunDarts == 0) continue;
+      AimAt (Self.GlobalPosition + new Vector3 (0.0f, 6.0f, 40.0f)); // High & far: it lands well outside every phase's search radius.
+      PressLeftClick();
+      await Task.Delay (60);
+      ReleaseLeftClick();
+      await WaitUntil (() => Self.BlowgunDarts == 0, 10, "spat the swept dart out of the shove zone (#269)");
+      await Task.Delay (700); // Past the blowgun's fire cooldown before the next sweep or the club.
+    }
+
+    Assert (DroppedNear (HeldWeapon.PoisonDart, host.GlobalPosition, 8.0f) == null, "no armed dart litter left in the host's shove zone (#269)");
     // The clean-target precondition (CodeRabbit): a stray dart in the host would
     // alias the club's damage - fail loudly here rather than flake there.
     // Zero darts is the ONLY real precondition (a poison tick costs what a club
