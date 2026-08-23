@@ -5,40 +5,43 @@ using static GdUnit4.Assertions;
 
 namespace com.forerunnergames.energyshot;
 
-// King of the Hill (issue #44): the occupancy test is the whole scoring rule, so its
-// edges are pinned - inside, the rim, outside, & hovering over it.
+// The roaming hill (issues #44 & #294): four sky-platform spots, each a real trip
+// from the spawn room - the spawn-adjacent banana platform is out of the pool.
 [TestSuite]
 public class HillTest
 {
   [TestCase]
-  public void CenterAndRimCount()
+  public void EverySpotContainsItsOwnRingAndNotBeyondIt()
   {
-    AssertBool (Hill.Contains (Hill.Spot)).IsTrue();
-    AssertBool (Hill.Contains (Hill.Spot + Vector3.Right * Hill.Radius)).IsTrue();
+    for (var i = 0; i < Hill.Spots.Length; ++i)
+    {
+      AssertBool (Hill.Contains (i, Hill.Spots[i])).IsTrue();
+      AssertBool (Hill.Contains (i, Hill.Spots[i] + Vector3.Right * Hill.Radius)).IsTrue();
+      AssertBool (Hill.Contains (i, Hill.Spots[i] + Vector3.Right * (Hill.Radius + 0.01f))).IsFalse();
+      AssertBool (Hill.Contains (i, Hill.Spots[i] + Vector3.Up * 10.0f)).IsFalse();
+    }
   }
 
   [TestCase]
-  public void JustOutsideAndFlyingOverDoNot()
+  public void NoSpotSitsNextToTheSpawnRoom()
   {
-    AssertBool (Hill.Contains (Hill.Spot + Vector3.Right * (Hill.Radius + 0.01f))).IsFalse();
-    AssertBool (Hill.Contains (Hill.Spot + Vector3.Up * 10.0f)).IsFalse();
-  }
-
-  // Issue #239: the full placement contract - centered on the banana platform (World.tscn:
-  // BananaPlatform at (0, 28, 11), a 6x6x0.5 slab, so its top is y 28.25) & a radius
-  // that stays inside the slab's half-width, so standing on the platform IS the hill.
-  [TestCase]
-  public void HillSitsCenteredOnTheBananaPlatformTop()
-  {
-    AssertObject (Hill.Spot).IsEqual (new Vector3 (0.0f, 28.25f, 11.0f));
-    AssertFloat (Hill.Radius).IsLess (3.0f);
-    AssertFloat (Hill.Radius).IsGreater (2.0f); // Still a real ring, not a dot.
+    // The complaint that moved the hill (#294): the old banana-platform spot sat
+    // 11m from the spawn room's column. Every pool spot keeps a real distance.
+    foreach (var spot in Hill.Spots)
+      AssertFloat (new Vector2 (spot.X, spot.Z).Length()).IsGreater (20.0f);
   }
 
   [TestCase]
-  public void ScoreboardColumnNamesTheMode()
+  public void TheOldBananaPlatformSpotIsOutOfThePool()
   {
-    AssertString (Match.ScoreColumnLabel (GameMode.Zaps)).IsEqual ("Zaps");
-    AssertString (Match.ScoreColumnLabel (GameMode.KingOfTheHill)).IsEqual ("Hill pts");
+    foreach (var spot in Hill.Spots)
+      AssertBool (spot.IsEqualApprox (new Vector3 (0.0f, 28.25f, 11.0f))).IsFalse();
+  }
+
+  [TestCase]
+  public void AnOutOfRangeIndexClampsInsteadOfCrashing()
+  {
+    AssertBool (Hill.Contains (99, Hill.Spots[^1])).IsTrue();
+    AssertBool (Hill.Contains (-1, Hill.Spots[0])).IsTrue();
   }
 }

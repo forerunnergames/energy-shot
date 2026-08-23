@@ -599,23 +599,31 @@ public partial class World : Node3D
     _zapLimit = zapLimit;
     _mode = mode;
     _roundElapsed = 0.0f;
-    EnsureHill();
+    RollHillSpot(); // The hill roams (issue #294).
+    EnsureHill (_hillIndex);
     ServerLog.Event ($"rounds: {mode}, {(roundSeconds > 0 ? $"{roundSeconds / 60} min" : "no time limit")}, {(zapLimit > 0 ? $"first to {zapLimit}" : "no point limit")}");
   }
 
   // The hill ring exists only in King of the Hill (issue #44); clients learn the mode
   // from the round clock broadcast & build theirs on the first tick.
-  private void EnsureHill()
+  private int _hillIndex;
+
+  private void EnsureHill (int hillIndex)
   {
-    if (_mode != GameMode.KingOfTheHill || _hill != null) return;
-    _hill = Hill.Create();
+    if (_mode != GameMode.KingOfTheHill) return;
+    if (_hill != null && hillIndex == _hillIndex) return;
+    _hill?.QueueFree(); // The hill roams per round (issue #294): rebuild at the new spot.
+    _hillIndex = hillIndex;
+    _hill = Hill.Create (hillIndex);
     AddChild (_hill);
   }
+
+  private void RollHillSpot() => _hillIndex = (int)(GD.Randi() % Hill.Spots.Length);
 
   // Sole occupant of the hill earns a point per tick (issue #44); a contest pays nobody.
   private string AwardHillPoint (List <Player> players)
   {
-    var inside = players.Where (player => !player.Fallen && Hill.Contains (player.GlobalPosition)).ToList();
+    var inside = players.Where (player => !player.Fallen && Hill.Contains (_hillIndex, player.GlobalPosition)).ToList();
     if (inside.Count != 1) return inside.Count == 0 ? string.Empty : "contested";
     var king = inside[0];
     if (king.NetworkId == Multiplayer.GetUniqueId()) king.NotifyHillPoint();
@@ -633,7 +641,7 @@ public partial class World : Node3D
     _roundElapsed += 1.0f;
     var holder = _mode == GameMode.KingOfTheHill ? AwardHillPoint (players) : string.Empty;
     var secondsLeft = _roundSeconds > 0 ? Mathf.Max (0, _roundSeconds - (int)_roundElapsed) : -1;
-    Rpc (MethodName.ReceiveRoundClock, secondsLeft, _zapLimit, (int)_mode, holder);
+    Rpc (MethodName.ReceiveRoundClock, secondsLeft, _zapLimit, (int)_mode, holder, _hillIndex);
     if (!Match.IsOver (_roundElapsed, _roundSeconds, players.Max (player => player.Score), _zapLimit)) return;
     EndRound (players);
   }
@@ -654,6 +662,8 @@ public partial class World : Node3D
 
   private void StartNewRound()
   {
+    RollHillSpot(); // The hill roams per round (issue #294).
+    EnsureHill (_hillIndex);
     foreach (var player in GetPlayers())
     {
       if (player.NetworkId == Multiplayer.GetUniqueId()) { player.ResetForNewRound(); continue; }
@@ -668,11 +678,11 @@ public partial class World : Node3D
 
   // Only peer 1 runs the match - the admin-message rule (issue #158).
   [Rpc (MultiplayerApi.RpcMode.AnyPeer, CallLocal = true)]
-  private void ReceiveRoundClock (int secondsLeft, int zapLimit, int mode, string hillHolder)
+  private void ReceiveRoundClock (int secondsLeft, int zapLimit, int mode, string hillHolder, int hillIndex)
   {
     if (Multiplayer.GetRemoteSenderId() != 1) return;
     _mode = (GameMode)mode;
-    EnsureHill(); // Clients build the ring the first time the clock says it's that kind of round.
+    EnsureHill (hillIndex); // Clients build (or move) the ring straight from the broadcast (issue #294).
     EmitSignal (SignalName.RoundClockUpdated, secondsLeft, zapLimit, mode, hillHolder);
   }
 
