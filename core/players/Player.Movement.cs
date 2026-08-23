@@ -86,6 +86,7 @@ public partial class Player
   // Move) & the cooldown is skipped entirely, so landing into another slide chains.
   private void SlideJump()
   {
+    _slideCooldownLeft = SlideCooldownSeconds; // Jumping never dodges the cooldown (Aaron, 2026-08-22): slide-jump-reslide chained forever.
     Sliding = false;
     _slideJumpCarrying = true;
     ApplyCameraHeight();

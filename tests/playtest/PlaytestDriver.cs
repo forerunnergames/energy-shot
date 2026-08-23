@@ -945,40 +945,31 @@ public partial class PlaytestDriver : Node
     await JumpOutOfSlide();
     Assert (!Self.Sliding, "jump ended the slide (#149)");
     ReleaseAction ("slide");
-    Assert (Self.SlideReadyFraction >= 1.0f, "slide-jump canceled the slide cooldown (#149)");
+    // The spec FLIPPED (Aaron, 2026-08-22): slide-jumping used to skip the cooldown
+    // & chain forever - now every slide exit starts the same clock, so the jump
+    // keeps its momentum but the NEXT slide waits like any other.
+    Assert (Self.SlideReadyFraction < 1.0f, "slide-jump started the slide cooldown - no more infinite chains (#149 revised)");
     var airSpeed = new Vector3 (Self.Velocity.X, 0.0f, Self.Velocity.Z).Length();
     Assert (airSpeed >= Self.Speed * Self.SlideSpeedMultiplier - 0.5f, $"slide momentum carried into the air (#149), speed {airSpeed:0.0}");
     await WaitUntil (() => Self.IsOnFloor(), 10, "landed from the slide-jump (#149)");
     PressAction ("slide");
-    await WaitUntil (() => Self.Sliding, 10, "chained slide started with no cooldown (#149)");
-    Assert (Self.CurrentSlideSpeed > Self.Speed * Self.SlideSpeedMultiplier + 0.1f, $"chained slide runs faster than base (#149), speed {Self.CurrentSlideSpeed:0.0}");
-    Assert (Self.CurrentSlideSpeed <= Self.Speed * Self.SlideSpeedMultiplier * Self.MaxChainedSlideSpeedScale + 0.01f, $"chained slide speed capped (#149), speed {Self.CurrentSlideSpeed:0.0}");
+    await Task.Delay (400);
+    Assert (!Self.Sliding, "the re-slide was DENIED inside the cooldown (#149 revised)");
     ReleaseAction ("slide");
     Input.ActionRelease ("move_forward");
-    await WaitUntil (() => !Self.Sliding, 10, "chained slide released");
 
-    // Chain window expiry (#149): outliving the landing window forfeits the chain -
-    // the next slide runs at base speed again (CodeRabbit on #185).
-    await WaitUntil (() => Self.SlideReadyFraction >= 1.0f, 15, "slide cooldown ready for the window-expiry test (#149)");
+    // The revised spec end-to-end (#149 revised): after the cooldown recovers, the
+    // next slide runs at BASE speed - the chain boost is gone entirely, not just
+    // rate-limited.
     AimAt (Self.GlobalPosition + new Vector3 (-20.0f, 0.0f, 0.0f)); // Same clear -X lane.
     Input.ActionPress ("move_forward");
+    await WaitUntil (() => Self.SlideReadyFraction >= 1.0f, 15, "slide cooldown recovered after the slide-jump (#149 revised)");
     PressAction ("slide");
-    await WaitUntil (() => Self.Sliding, 10, "slide started for the window-expiry test (#149)");
-    await Task.Delay (200);
-    await JumpOutOfSlide();
-    Assert (!Self.Sliding, "jump ended the window-expiry slide (#149)");
-    // Only a slide-JUMP clears the cooldown (#149); a slide that merely ran out
-    // leaves it recharging, so this is the evidence that the jump landed.
-    Assert (Self.SlideReadyFraction >= 1.0f, "the window-expiry slide was ended by a jump, not by expiry (#149)");
+    await WaitUntil (() => Self.Sliding, 10, "post-cooldown slide started (#149 revised)");
+    Assert (Self.CurrentSlideSpeed <= Self.Speed * Self.SlideSpeedMultiplier + 0.01f, $"post-cooldown slide runs at base speed - no chain boost survives (#149 revised), speed {Self.CurrentSlideSpeed:0.0}");
     ReleaseAction ("slide");
-    await WaitUntil (() => Self.IsOnFloor(), 10, "landed from the window-expiry slide-jump (#149)");
     Input.ActionRelease ("move_forward");
-    await Task.Delay (2000); // Far past the 0.5s window; generous because it counts (slower) physics time.
-    PressAction ("slide");
-    await WaitUntil (() => Self.Sliding, 10, "post-window slide started (#149)");
-    Assert (Self.CurrentSlideSpeed <= Self.Speed * Self.SlideSpeedMultiplier + 0.01f, $"expired chain window: slide back at base speed (#149), speed {Self.CurrentSlideSpeed:0.0}");
-    ReleaseAction ("slide");
-    await WaitUntil (() => !Self.Sliding, 10, "post-window slide released");
+    await WaitUntil (() => !Self.Sliding, 10, "post-cooldown slide released");
 
     // Slide TIMER expiry (#148/#150): the slide runs its full duration & ends STANDING
     // in the open - no more forced crouch on expiry. Stationary (no movement input):
