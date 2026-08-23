@@ -17,8 +17,10 @@ public partial class BlowgunDart : Node3D
   public const float ShaftLength = 0.7f;
   private const float MaxLifetimeSeconds = 6.0f;
   private const float DropAcceleration = 0.3f; // Near-zero: a sniper line, not a lob.
-  private static readonly Color DartBody = new(0.2f, 0.2f, 0.22f);
-  private static readonly Color Tip = new(0.85f, 0.85f, 0.9f);
+  // Real metal, not nerf foam (issue #259, Aaron): a brushed-steel shaft & a long
+  // bright needle that reads as something that pierces.
+  private static readonly Color DartBody = new(0.62f, 0.64f, 0.68f);
+  private static readonly Color Tip = new(0.92f, 0.93f, 0.97f);
   private static readonly Color Fletch = new(1.0f, 0.25f, 0.15f);
   private Vector3 _velocity;
   private Vector3 _sweepStart;
@@ -103,8 +105,9 @@ public partial class BlowgunDart : Node3D
   public static Node3D CreateDartVisual()
   {
     var root = new Node3D();
-    root.AddChild (new MeshInstance3D { Mesh = new CylinderMesh { TopRadius = 0.022f, BottomRadius = 0.022f, Height = ShaftLength }, RotationDegrees = new Vector3 (90.0f, 0.0f, 0.0f), MaterialOverride = new StandardMaterial3D { AlbedoColor = DartBody, Roughness = 0.6f } });
-    root.AddChild (new MeshInstance3D { Mesh = new CylinderMesh { TopRadius = 0.0f, BottomRadius = 0.03f, Height = 0.12f }, Position = new Vector3 (0.0f, 0.0f, -ShaftLength / 2.0f - 0.06f), RotationDegrees = new Vector3 (-90.0f, 0.0f, 0.0f), MaterialOverride = new StandardMaterial3D { AlbedoColor = Tip, Metallic = 0.8f, Roughness = 0.2f } });
+    root.AddChild (new MeshInstance3D { Mesh = new CylinderMesh { TopRadius = 0.018f, BottomRadius = 0.018f, Height = ShaftLength }, RotationDegrees = new Vector3 (90.0f, 0.0f, 0.0f), MaterialOverride = new StandardMaterial3D { AlbedoColor = DartBody, Metallic = 0.9f, Roughness = 0.28f } });
+    // The needle (issue #259): twice as long, half as wide at the base, polished steel.
+    root.AddChild (new MeshInstance3D { Mesh = new CylinderMesh { TopRadius = 0.0f, BottomRadius = 0.016f, Height = 0.24f }, Position = new Vector3 (0.0f, 0.0f, -ShaftLength / 2.0f - 0.12f), RotationDegrees = new Vector3 (-90.0f, 0.0f, 0.0f), MaterialOverride = new StandardMaterial3D { AlbedoColor = Tip, Metallic = 1.0f, Roughness = 0.12f } });
     for (var i = 0; i < 3; ++i)
     {
       var fin = new MeshInstance3D { Mesh = new BoxMesh { Size = new Vector3 (0.01f, 0.11f, 0.16f) }, Position = new Vector3 (0.0f, 0.055f, ShaftLength / 2.0f - 0.1f), MaterialOverride = new StandardMaterial3D { AlbedoColor = Fletch, Roughness = 0.5f } };
