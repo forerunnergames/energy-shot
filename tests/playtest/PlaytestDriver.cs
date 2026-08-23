@@ -1494,8 +1494,14 @@ public partial class PlaytestDriver : Node
     PressLeftClick();
     await Task.Delay (60);
     ReleaseLeftClick();
-    await WaitUntil (() => victim.SlingshotAmmo == HeldWeapon.BananaGrenade, 15, "the drawn slingshot caught the live banana (#251)");
-    await WaitUntil (() => victim.SlingshotAmmo == HeldWeapon.None, 15, "the hot potato left the victim's pouch (#251)");
+    // The DURABLE signal, not the transient pouch (main's v0.8.114 red: the victim
+    // caught & threw back inside one sync interval - 1.2s fuse - so the shooter's
+    // replica never saw BananaGrenade at all). The victim holds its draw until a
+    // successful catch & releases ONLY then: the draw dropping is the catch, & the
+    // victim's own authoritative asserts still prove the pouch states.
+    await WaitUntil (() => !victim.DrawingSlingshot, 20, "the victim's draw released - it caught & threw the banana back (#251)");
+    await Task.Delay (2500); // Their fired grenade pops far away.
+    Assert (!victim.Fallen, "the catcher lived through the whole exchange (#251)");
     Self.Position = ShooterParkSpot;
     await Task.Delay (300);
   }
