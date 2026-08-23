@@ -1436,10 +1436,16 @@ public partial class PlaytestDriver : Node
     var landingZone = lane + new Vector3 (0.0f, 0.0f, -4.0f);
     var bestClearance = -1.0f;
 
+    // Clearance counts BODIES & RESTOCKING FIXTURES alike (this round's second
+    // feeder: the +Z zone sits 0.5m from the laser spawner, which restocks
+    // unconditionally - sweep it, sling it, it respawns forever).
+    var fixtures = new[] { WeaponSpawner.PlaytestLaserPosition, WeaponSpawner.PlaytestBoomerangPosition, WeaponSpawner.PlaytestSlingshotPosition, WeaponSpawner.PlaytestBlowgunPosition, WeaponSpawner.PlaytestDartPosition, WeaponSpawner.PlaytestAirplanePosition };
+
     foreach (var throwLane in new[] { new Vector3 (0.0f, 0.0f, -4.0f), new Vector3 (0.0f, 0.0f, 4.0f), new Vector3 (-4.0f, 0.0f, 0.0f), new Vector3 (4.0f, 0.0f, 0.0f) })
     {
       var candidate = lane + throwLane;
       var clearance = Mathf.Min (FlatDistance (candidate, hostBody.GlobalPosition), FlatDistance (candidate, victimBody.GlobalPosition));
+      foreach (var fixture in fixtures) clearance = Mathf.Min (clearance, FlatDistance (candidate, fixture));
       if (clearance <= bestClearance) continue;
       bestClearance = clearance;
       landingZone = candidate;
@@ -1468,7 +1474,7 @@ public partial class PlaytestDriver : Node
         continue;
       }
 
-      var straggler = _world.GetChildren().OfType <WeaponPickup>().FirstOrDefault (pickup => !pickup.IsQueuedForDeletion() && FlatDistance (pickup.GlobalPosition, landingZone) < 6.0f);
+      var straggler = _world.GetChildren().OfType <WeaponPickup>().FirstOrDefault (pickup => !pickup.IsQueuedForDeletion() && FlatDistance (pickup.GlobalPosition, landingZone) < 6.0f && fixtures.All (fixture => FlatDistance (pickup.GlobalPosition, fixture) > 1.0f));
       if (straggler == null) break;
       Self.Position = straggler.GlobalPosition + Vector3.Up * 0.3f;
       await TryWaitUntil (() => Self.SlingshotAmmo != HeldWeapon.None, 5);
