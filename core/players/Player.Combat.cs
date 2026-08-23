@@ -183,12 +183,29 @@ public partial class Player
     EmitSignal (SignalName.HealthChanged, Health);
   }
 
+  private ulong _lastKickMs;
+
+  // The recoil ledger, pure for the unit tests (issue #237): one shot's climb,
+  // capped so a long burst can't wrap you into the sky; & the per-shot kick size.
+  public static float NextRecoil (float current, float kick, float max) => Mathf.Min (current + Mathf.Max (0.0f, kick), max);
+  public static float ShotKick (bool isFullAuto, float energy, float fullAutoKick, float tapFloor, float perEnergy) => isFullAuto ? fullAutoKick : Mathf.Max (tapFloor, energy * perEnergy);
+
+  // Recovery waits out a short pause after the last shot, so a burst climbs
+  // instead of jolting & snapping back between rounds; then it settles fast. Only
+  // the OFFSET decays - the aim accumulator is never touched (the #309 lesson).
   private void UpdateCameraKick (double delta)
   {
-    if (_cameraKickRemaining <= 0.0f) return;
-    var recover = Mathf.Min (_cameraKickRemaining, CameraKickRecoverySpeed * (float)delta);
-    SetCameraPitch (_cameraPitch - recover); // Through the one writer (issue #322).
-    _cameraKickRemaining -= recover;
+    if (_recoilPitch <= 0.0f) return;
+    if (Time.GetTicksMsec() - _lastKickMs < (ulong)(RecoilRecoveryDelaySeconds * 1000.0f)) return;
+    _recoilPitch = Mathf.Max (0.0f, _recoilPitch - CameraKickRecoverySpeed * (float)delta);
+    ApplyCameraRotation();
+  }
+
+  private void Kick (float radians)
+  {
+    _recoilPitch = NextRecoil (_recoilPitch, radians, MaxRecoilRadians);
+    _lastKickMs = Time.GetTicksMsec();
+    ApplyCameraRotation();
   }
 
   private void OnWeaponShotFired (float energy, bool isFullAuto)
@@ -196,9 +213,7 @@ public partial class Player
     CancelSpawnArmorIfFired();
     // Aim direction is captured before the camera kick so the kick is purely visual.
     var direction = ShotDirection(); // Converged in third person (issue #338).
-    var kick = energy * CameraKickRadians;
-    SetCameraPitch (_cameraPitch + kick); // Through the one writer (issue #322).
-    _cameraKickRemaining += kick;
+    Kick (ShotKick (isFullAuto, energy, FullAutoKickRadians, LaserTapKickMinRadians, CameraKickRadians)); // Issue #237.
     TryRocketBoost (direction, energy);
     var sweepStart = _camera.GlobalPosition;
     var origin = sweepStart + direction * MuzzleOffsetMeters;

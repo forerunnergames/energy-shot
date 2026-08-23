@@ -45,8 +45,7 @@ public partial class Player
   private void ApplyBananaFiringFeel (Vector3 aimDirection)
   {
     Velocity -= aimDirection * BananaShooterKnockbackSpeed;
-    _camera.RotateX (BananaRecoilRadians);
-    _cameraKickRemaining += BananaRecoilRadians;
+    Kick (BananaRecoilRadians); // The same accumulating ledger as the laser (issue #237).
     AnimateLauncherRecoil();
   }
 

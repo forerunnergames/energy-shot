@@ -217,7 +217,18 @@ public partial class Player : CharacterBody3D
   // 200 damage: one-hit-kills an Expert, bypassing the survivable clamp (issue #83).
   [Export] public float StickyBananaEnergy = 2.0f;
   [Export] public float CameraKickRadians = 0.06f;
-  [Export] public float CameraKickRecoverySpeed = 0.4f;
+  // The recoil model (issue #237, re-landed after the #309 revert): every gun
+  // climbs the crosshair & the climb ACCUMULATES while you keep firing - recovery
+  // begins only after a pause. A laser tap has a floor so a quick shot still
+  // kicks; full-auto kicks small per shot but twenty of them stack; the banana
+  // launcher's big kick rides the same ledger. The climb lives in _recoilPitch, a
+  // decaying OFFSET summed by the one camera writer - it NEVER touches the aim
+  // accumulator, so recovery can't drag a set aim off target (the #309 miss).
+  [Export] public float LaserTapKickMinRadians = 0.03f;
+  [Export] public float FullAutoKickRadians = 0.014f;
+  [Export] public float MaxRecoilRadians = 0.5f;
+  [Export] public float RecoilRecoveryDelaySeconds = 0.3f;
+  [Export] public float CameraKickRecoverySpeed = 1.2f;
   [Export] public float Speed = 7.0f;
   [Export] public float SlideSpeedMultiplier = 2.0f;
   // 7s -> 3.5s (issue #148, reversing the earlier lengthening): the duration cap is
@@ -304,7 +315,8 @@ public partial class Player : CharacterBody3D
   private float _fullAutoCooldownLeft;
   private float _nextAutoShotIn;
   private float _punchCooldownLeft;
-  private float _cameraKickRemaining;
+  private float _recoilPitch;
+  public float RecoilPitch => _recoilPitch; // The playtest driver watches the climb & the settle (issue #237).
   private AudioStreamPlayer _punchSound = null!;
   private AudioStreamPlayer _punchWhiffSound = null!;
   private AudioStreamPlayer _punchThudSound = null!;
@@ -512,6 +524,6 @@ public partial class Player : CharacterBody3D
   private void ApplyCameraRotation()
   {
     var maxUp = _thirdPerson ? Mathf.DegToRad (ThirdPersonMaxPitchUpDegrees) : PitchLimitRadians;
-    _camera.Rotation = new Vector3 (Mathf.Clamp (_cameraPitch + _swayPitch, -PitchLimitRadians, maxUp), _swayYaw, 0.0f);
+    _camera.Rotation = new Vector3 (Mathf.Clamp (_cameraPitch + _swayPitch + _recoilPitch, -PitchLimitRadians, maxUp), _swayYaw, 0.0f);
   }
 }

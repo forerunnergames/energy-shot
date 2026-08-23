@@ -475,14 +475,18 @@ public partial class PlaytestDriver : Node
 
     // Full-auto: after cooldown, ability + held trigger must fire a burst of bolts.
     await Task.Delay (1200);
+    Assert (Self.RecoilPitch == 0.0f, $"the spam taps' recoil settled before the burst (#237), offset {Self.RecoilPitch}");
     boltsBefore = _boltsSpawned;
     PressAction ("ability");
     await Task.Delay (50);
     ReleaseAction ("ability");
     PressAction ("shoot");
     await Task.Delay (1300);
+    Assert (Self.RecoilPitch > Self.LaserTapKickMinRadians, $"the burst's recoil ACCUMULATED past a single tap (#237), offset {Self.RecoilPitch}");
+    Assert (Self.RecoilPitch <= Self.MaxRecoilRadians, $"the burst's recoil stayed under the cap (#237), offset {Self.RecoilPitch}");
     ReleaseAction ("shoot");
     Assert (_boltsSpawned - boltsBefore >= 3, $"full-auto fired a burst, got {_boltsSpawned - boltsBefore} bolts");
+    await WaitUntil (() => Self.RecoilPitch == 0.0f, 5, "recoil recovered fully after the burst paused (#237)");
 
     // Slide cancels (#131): with the slide key still held (simulating a wedged
     // pressed state), switch weapons mid-slide, then press crouch - the crouch must
