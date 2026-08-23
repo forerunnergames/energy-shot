@@ -945,40 +945,31 @@ public partial class PlaytestDriver : Node
     await JumpOutOfSlide();
     Assert (!Self.Sliding, "jump ended the slide (#149)");
     ReleaseAction ("slide");
-    Assert (Self.SlideReadyFraction >= 1.0f, "slide-jump canceled the slide cooldown (#149)");
+    // The spec FLIPPED (Aaron, 2026-08-22): slide-jumping used to skip the cooldown
+    // & chain forever - now every slide exit starts the same clock, so the jump
+    // keeps its momentum but the NEXT slide waits like any other.
+    Assert (Self.SlideReadyFraction < 1.0f, "slide-jump started the slide cooldown - no more infinite chains (#149 revised)");
     var airSpeed = new Vector3 (Self.Velocity.X, 0.0f, Self.Velocity.Z).Length();
     Assert (airSpeed >= Self.Speed * Self.SlideSpeedMultiplier - 0.5f, $"slide momentum carried into the air (#149), speed {airSpeed:0.0}");
     await WaitUntil (() => Self.IsOnFloor(), 10, "landed from the slide-jump (#149)");
     PressAction ("slide");
-    await WaitUntil (() => Self.Sliding, 10, "chained slide started with no cooldown (#149)");
-    Assert (Self.CurrentSlideSpeed > Self.Speed * Self.SlideSpeedMultiplier + 0.1f, $"chained slide runs faster than base (#149), speed {Self.CurrentSlideSpeed:0.0}");
-    Assert (Self.CurrentSlideSpeed <= Self.Speed * Self.SlideSpeedMultiplier * Self.MaxChainedSlideSpeedScale + 0.01f, $"chained slide speed capped (#149), speed {Self.CurrentSlideSpeed:0.0}");
+    await Task.Delay (400);
+    Assert (!Self.Sliding, "the re-slide was DENIED inside the cooldown (#149 revised)");
     ReleaseAction ("slide");
     Input.ActionRelease ("move_forward");
-    await WaitUntil (() => !Self.Sliding, 10, "chained slide released");
 
-    // Chain window expiry (#149): outliving the landing window forfeits the chain -
-    // the next slide runs at base speed again (CodeRabbit on #185).
-    await WaitUntil (() => Self.SlideReadyFraction >= 1.0f, 15, "slide cooldown ready for the window-expiry test (#149)");
+    // The revised spec end-to-end (#149 revised): after the cooldown recovers, the
+    // next slide runs at BASE speed - the chain boost is gone entirely, not just
+    // rate-limited.
     AimAt (Self.GlobalPosition + new Vector3 (-20.0f, 0.0f, 0.0f)); // Same clear -X lane.
     Input.ActionPress ("move_forward");
+    await WaitUntil (() => Self.SlideReadyFraction >= 1.0f, 15, "slide cooldown recovered after the slide-jump (#149 revised)");
     PressAction ("slide");
-    await WaitUntil (() => Self.Sliding, 10, "slide started for the window-expiry test (#149)");
-    await Task.Delay (200);
-    await JumpOutOfSlide();
-    Assert (!Self.Sliding, "jump ended the window-expiry slide (#149)");
-    // Only a slide-JUMP clears the cooldown (#149); a slide that merely ran out
-    // leaves it recharging, so this is the evidence that the jump landed.
-    Assert (Self.SlideReadyFraction >= 1.0f, "the window-expiry slide was ended by a jump, not by expiry (#149)");
+    await WaitUntil (() => Self.Sliding, 10, "post-cooldown slide started (#149 revised)");
+    Assert (Self.CurrentSlideSpeed <= Self.Speed * Self.SlideSpeedMultiplier + 0.01f, $"post-cooldown slide runs at base speed - no chain boost survives (#149 revised), speed {Self.CurrentSlideSpeed:0.0}");
     ReleaseAction ("slide");
-    await WaitUntil (() => Self.IsOnFloor(), 10, "landed from the window-expiry slide-jump (#149)");
     Input.ActionRelease ("move_forward");
-    await Task.Delay (2000); // Far past the 0.5s window; generous because it counts (slower) physics time.
-    PressAction ("slide");
-    await WaitUntil (() => Self.Sliding, 10, "post-window slide started (#149)");
-    Assert (Self.CurrentSlideSpeed <= Self.Speed * Self.SlideSpeedMultiplier + 0.01f, $"expired chain window: slide back at base speed (#149), speed {Self.CurrentSlideSpeed:0.0}");
-    ReleaseAction ("slide");
-    await WaitUntil (() => !Self.Sliding, 10, "post-window slide released");
+    await WaitUntil (() => !Self.Sliding, 10, "post-cooldown slide released");
 
     // Slide TIMER expiry (#148/#150): the slide runs its full duration & ends STANDING
     // in the open - no more forced crouch on expiry. Stationary (no movement input):
@@ -1461,8 +1452,15 @@ public partial class PlaytestDriver : Node
   // drop phase's tossed pickup & the drop-on-X phase).
   private async Task BeTheTheftTarget()
   {
-    // Punches cost 20 each & the theft is a 20% roll per landed punch, so a run of bad
-    // luck could wear us down first: re-reset whenever we're low & still holding on.
+    // Deterministic theft (today's recurring red: the 20% roll missed 8 straight
+    // connects - a 0.8^8 = 17% streak - & the retrying punches' stacked #269
+    // knockback launched us off the deck, 105m down). The roll is victim-
+    // authoritative & the knob is exported, so the phase pins it: the FIRST
+    // connect steals, & a single punch never shoves us anywhere near the edge.
+    var normalDropChance = Self.PunchDropChance;
+    Self.PunchDropChance = 1.0f;
+    // Punches cost 20 each, so a slow shooter could still wear us down: re-reset
+    // whenever we're low & still holding on.
     var deadline = Time.GetTicksMsec() + 180_000;
 
     while (Self.HasBread && Time.GetTicksMsec() < deadline)
@@ -1472,6 +1470,7 @@ public partial class PlaytestDriver : Node
       await Task.Delay (100);
     }
 
+    Self.PunchDropChance = normalDropChance;
     Assert (!Self.HasBread, "a punch took the loaf out of our hands (#193)");
   }
 
@@ -1659,24 +1658,36 @@ public partial class PlaytestDriver : Node
   // back empty, & the walk exercises the re-collect cell for free. The HOST is the
   // target: it idles clean at its spawn, so the exact-damage assert can't be muddied
   // by the victim's poison ticks (a tick & a club cost the same).
-  // One dart, definitely fired (CodeRabbit on the sweep): the blowgun's 1.5s fire
-  // cooldown rejects a press that comes too soon, so the press retries until the
-  // count DROPS, then the full cooldown passes before the caller's next action.
-  private async Task SpitADart (string why)
-  {
-    var before = Self.BlowgunDarts;
-    AimAt (Self.GlobalPosition + new Vector3 (0.0f, 6.0f, 40.0f)); // High & far: it lands well outside every phase's search radius.
+  // Empty the gun, however many darts that takes (the v0.8.103 follow-up red:
+  // standing in the litter, a NEIGHBORING dart can auto-load MID-SPIT, so exact
+  // per-dart counts are a moving target): cooldown-spaced presses until the pouch
+  // reads zero. Steep & away (the earlier red: a flat +Z spit flew at chest
+  // height through the victim's park & came off geometry back into the zone) -
+  // at 84 m/s & ~75 degrees the dart clears every head & building instantly &
+  // lands hundreds of meters off-map, where the void despawns it.
+  // The shove hazard is ARMED litter alone: the playtest dart spawner's floating
+  // dart is unarmed ammo, restocks forever, & is harmless underfoot (#269).
+  private WeaponPickup? ArmedDartNear (Vector3 spot, float radius) => _world.GetChildren().OfType <WeaponPickup>().FirstOrDefault (pickup => pickup.Weapon == HeldWeapon.PoisonDart && pickup.Armed && !pickup.IsQueuedForDeletion() && FlatDistance (pickup.GlobalPosition, spot) < radius);
 
-    for (var attempt = 0; attempt < 6 && Self.BlowgunDarts == before; ++attempt)
+  private async Task SpitAllDarts (string why)
+  {
+    var deadline = Time.GetTicksMsec() + 30_000;
+
+    while (Self.BlowgunDarts > 0 && Time.GetTicksMsec() < deadline)
     {
+      var host = FindPlayer (HostName);
+      var victim = FindPlayer (VictimName);
+      var away = (Self.GlobalPosition - (host?.GlobalPosition ?? Self.GlobalPosition)) + (Self.GlobalPosition - (victim?.GlobalPosition ?? Self.GlobalPosition));
+      away.Y = 0.0f;
+      var azimuth = away.LengthSquared() > 0.01f ? away.Normalized() : Vector3.Right;
+      AimAt (Self.GlobalPosition + azimuth * 10.0f + Vector3.Up * 40.0f);
       PressLeftClick();
       await Task.Delay (60);
       ReleaseLeftClick();
-      await Task.Delay (400);
+      await Task.Delay (1700); // The full 1.5s fire cooldown between presses.
     }
 
-    Assert (Self.BlowgunDarts == before - 1, why);
-    await Task.Delay (1600); // The full 1.5s fire cooldown before the caller's next press.
+    Assert (Self.BlowgunDarts == 0, why);
   }
 
   private async Task RunClubPhase()
@@ -1692,7 +1703,7 @@ public partial class PlaytestDriver : Node
     await WaitUntil (() => Self.HasBlowgun, 30, "re-collected the blowgun (#316)");
     // The gun lands beside its own scattered darts & re-loads them on pickup -
     // spit any aboard off-range rather than demanding an empty arrival.
-    while (Self.BlowgunDarts > 0) await SpitADart ("spat a re-loaded dart off-range (#316)");
+    await SpitAllDarts ("spat the re-loaded darts off-range (#316)");
     Assert (Self.BlowgunDarts == 0, "the re-collected blowgun is EMPTY for the club (#316)");
     PressAction ("weapon_8");
     await Task.Delay (100);
@@ -1704,17 +1715,22 @@ public partial class PlaytestDriver : Node
     // tick poison that aliases the punch measurement (a -40 observed where the
     // punch dealt -20). The blowgun in hand vacuums stepped darts (issue #236),
     // then spits each far off-range so nothing re-lands in the shove zone.
+    // ARMED darts only (the v0.8.103 follow-up red's follow-up: the playtest
+    // dart SPAWNER restocks its FLOATING dart a second after every claim, &
+    // sweeping it made an infinite feeder - load, spit, respawn, load. The
+    // floating dart is UNARMED ammo & harmless underfoot: a blowgun-less host
+    // only embeds darts that are armed. The shove hazard is armed litter alone.)
     for (var sweep = 0; sweep < 6; ++sweep)
     {
-      var stray = DroppedNear (HeldWeapon.PoisonDart, host.GlobalPosition, 8.0f);
+      var stray = ArmedDartNear (host.GlobalPosition, 8.0f);
       if (stray == null) break;
       var straySpot = stray.GlobalPosition;
       Self.Position = new Vector3 (straySpot.X, 31.3f, straySpot.Z);
-      await WaitUntil (() => Self.BlowgunDarts > 0 || DroppedNear (HeldWeapon.PoisonDart, straySpot, 1.5f) == null, 10, "vacuumed a stray armed dart near the host (#269)");
-      while (Self.BlowgunDarts > 0) await SpitADart ("spat the swept dart out of the shove zone (#269)");
+      await WaitUntil (() => Self.BlowgunDarts > 0 || ArmedDartNear (straySpot, 1.5f) == null, 10, "vacuumed a stray armed dart near the host (#269)");
+      await SpitAllDarts ("spat the swept darts out of the shove zone (#269)");
     }
 
-    Assert (DroppedNear (HeldWeapon.PoisonDart, host.GlobalPosition, 8.0f) == null, "no armed dart litter left in the host's shove zone (#269)");
+    Assert (ArmedDartNear (host.GlobalPosition, 8.0f) == null, "no armed dart litter left in the host's shove zone (#269)");
     // The clean-target precondition (CodeRabbit): a stray dart in the host would
     // alias the club's damage - fail loudly here rather than flake there.
     // Zero darts is the ONLY real precondition (a poison tick costs what a club
