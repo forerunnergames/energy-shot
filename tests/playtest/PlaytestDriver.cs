@@ -1412,16 +1412,13 @@ public partial class PlaytestDriver : Node
     ReleaseAction ("weapon_5");
     Assert (Self.SelectedWeapon == SelectedWeapon.Slingshot && Self.SlingshotAmmo == HeldWeapon.None, "open EMPTY slingshot out for the armed pickup (#325)");
     var healthBefore = Self.Health;
-    Assert (Self.SlingshotAmmo == HeldWeapon.None, "the pouch is still EMPTY at the mine's edge (#325) - nothing auto-loaded en route");
-    // The load fires at claim range (~2m) & FREES the pickup before the walk's 0.8m
-    // arrival check (round 2's lesson - the load SUCCEEDED while the walk-wait
-    // chased a freed node): capture the spot, walk toward it, & the LOAD is the
-    // arrival condition.
+    // Round 5's lesson ends the lane-tuning: even the west lane crossed litter -
+    // the open pouch auto-loaded a stray Laser EN ROUTE & the full pouch walked
+    // the mine into a rightful pop (issue #286 covers EMPTY pouches only). The
+    // walk was never the mechanic (load-at-claim-range is) - park ON the mine.
+    Assert (Self.SlingshotAmmo == HeldWeapon.None, "the pouch is still EMPTY before stepping to the mine (#325)");
     var mineSpot = mine.GlobalPosition;
-    await WaitUntil (() => Self.SlingshotAmmo == HeldWeapon.PaperAirplane || WalkedTo (mineSpot), 20, "walked at the armed airplane with the slingshot out (#325)");
-    // PARK ON the mine (round 4: walk momentum can carry past the claim range &
-    // the stand ends out of reach): claims fire on eligibility, not movement.
-    if (Self.SlingshotAmmo == HeldWeapon.None) { Self.Position = new Vector3 (mineSpot.X, 31.3f, mineSpot.Z); await Task.Delay (300); }
+    Self.Position = new Vector3 (mineSpot.X, 31.3f, mineSpot.Z);
     await WaitUntil (() => Self.SlingshotAmmo == HeldWeapon.PaperAirplane, 20, "the OPEN slingshot loaded the ARMED airplane as ammo (#286/#325)");
     // Dwell through the fuse window (CodeRabbit): a faulty load could trigger the
     // mine whose DAMAGE lands on a delayed tick - the instant health check would
