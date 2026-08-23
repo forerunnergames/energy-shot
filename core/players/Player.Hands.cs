@@ -1,13 +1,12 @@
-using com.forerunnergames.energyshot.weapons;
 using Godot;
 
 namespace com.forerunnergames.energyshot.players;
 
-// Fists (issues #71 & #82): two big player-colored sphere hands, one left & one
-// right. They bob up & down while moving & throw a boxer-style punch that peers
-// replay only when it actually connects. With issue #351 the hands stay out for
-// EVERY selected weapon, parked on per-weapon grip points, so first & third
-// person both show the weapon actually held.
+// Fists (issues #71 & #82): two big player-colored sphere hands at the bottom screen
+// edges, one left & one right, rendered only while fists are the selected weapon.
+// They bob up & down while moving & throw a boxer-style punch that peers replay only
+// when it actually connects. (The #351 hold-every-weapon grips shipped in v0.8.107 &
+// were reverted on owner verdict: fists-only, as before.)
 public partial class Player
 {
   [Export] public float HandRadius = 0.22f;
@@ -25,26 +24,6 @@ public partial class Player
   private int ChooseRandomPunchHand() => _rng.Randf() < 0.5f ? 0 : 1;
   private Vector3 HandRestOffset (int hand) => hand == 0 ? LeftHandRestOffset : RightHandRestOffset;
 
-  // Per-weapon grip points, camera-local like the held visuals they hold (issue
-  // #351): trigger + foregrip on the guns, both palms along the blowgun's tube,
-  // frame + pouch on the slingshot, cradling the loaf. Hand 0 is the left. Pure
-  // & static like NextCycleSlot, so the mapping is unit-testable without a scene.
-  public static Vector3 GripOffset (SelectedWeapon weapon, int hand, Vector3 leftRest, Vector3 rightRest) => weapon switch
-  {
-    SelectedWeapon.Laser => hand == 0 ? new Vector3 (0.55f, 0.18f, -1.3f) : new Vector3 (0.42f, 0.12f, -0.95f),
-    SelectedWeapon.Banana => hand == 0 ? new Vector3 (0.52f, -0.38f, -1.1f) : new Vector3 (0.38f, -0.42f, -0.75f),
-    SelectedWeapon.Boomerang => hand == 0 ? leftRest : new Vector3 (0.48f, -0.45f, -0.85f),
-    SelectedWeapon.Slingshot => hand == 0 ? new Vector3 (0.5f, -0.5f, -0.55f) : new Vector3 (0.5f, -0.58f, -0.85f),
-    SelectedWeapon.PaperAirplane => hand == 0 ? leftRest : new Vector3 (0.45f, -0.47f, -0.8f),
-    SelectedWeapon.Bread => hand == 0 ? new Vector3 (0.35f, -0.5f, -0.8f) : new Vector3 (0.55f, -0.5f, -0.8f),
-    SelectedWeapon.Blowgun => hand == 0 ? new Vector3 (0.5f, -0.38f, -0.95f) : new Vector3 (0.5f, -0.4f, -0.65f),
-    _ => hand == 0 ? leftRest : rightRest,
-  };
-
-  private Vector3 HandGripOffset (int hand) => GripOffset (_selectedWeapon, hand, LeftHandRestOffset, RightHandRestOffset);
-
-  // The playtest driver's window into the grip (issue #351).
-  public bool HandsVisible => _hands[0]?.Visible ?? false;
   // The fists follow the chosen body color too (issue #43).
   private void UpdateHandColor() { if (_handsMaterial != null) _handsMaterial.AlbedoColor = new Color (BaseColor, HandAlpha); }
 
@@ -66,22 +45,20 @@ public partial class Player
     return mesh;
   }
 
-  // The hands are out for every weapon, gripping it (issue #351); dancing waves
-  // them regardless (issue #103). The one exception is our OWN scoped view: the
-  // zoomed sight must stay clear, while other peers still see us holding the tube.
+  // Hands render only while fists are the selected weapon (issue #82) - except while
+  // dancing, when both hands wave regardless of the selected weapon (issue #103).
   private void UpdateHandsVisibility()
   {
     foreach (var hand in _hands)
     {
       if (hand == null) continue;
-      hand.Visible = !(IsScoped && IsMultiplayerAuthority());
+      hand.Visible = IsFistsSelected || Dancing;
     }
   }
 
   // Moving bobs the resting hands up & down (issue #82); a hand mid-punch is left alone.
   private void UpdateHandBob (double delta)
   {
-    UpdateHandsVisibility(); // Scoping in & out must hide/show the own hands the same frame (issue #351).
     if (Dancing) return; // The dance owns the hands (issue #103).
     var speed = new Vector2 (Velocity.X, Velocity.Z).Length();
     _handBobPhase += speed * HandBobFrequency * (float)delta;
@@ -92,7 +69,7 @@ public partial class Player
   private void ApplyHandRest (int hand, Vector3 bob)
   {
     if (_hands[hand] == null || _handTweens[hand]?.IsRunning() == true) return;
-    _hands[hand]!.Position = HandGripOffset (hand) + bob;
+    _hands[hand]!.Position = HandRestOffset (hand) + bob;
   }
 
   // Boxer-style swing: the chosen hand visibly shoots forward & back.
