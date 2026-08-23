@@ -41,10 +41,10 @@ Evidence cells quote the assert's issue refs.
 |---|---|---|
 | spawned | ✅ | playtest banana collected pre-kill (#169) |
 | loose safe | ✅ | victim's dropped banana claimable at the death spot (#169) |
-| projectile (lobbed banana) | ❌ | No assert fires the launcher & proves the arc, the splat, or the blast |
-| sticky banana & fuse | ❌ | The sticky fuse & delayed blast (#83) are unasserted |
-| survivable-at-full-health blast | ❌ | The never-one-shots rule (#61) is unasserted in the driver |
-| banana-grenade catch | ❌ | The drawn-slingshot catch with the fuse ticking (#251, shipped v0.8.78) is unit-tested (BananaCatchTest) but has no driver phase |
+| projectile (lobbed banana) | ✅ | fired at the deck, bounce-fuse-boom hurts the parked victim (#83) |
+| sticky banana & fuse | ✅ | direct hit launches the victim >8m, the fuse one-hit-kills (#83) |
+| survivable-at-full-health blast | ✅ | full-health victim survives with >=1 & a stagger (#61/#70) |
+| banana-grenade catch | ✅ | drawn slingshot nocks the live banana, fires it out, catcher lives (#251) |
 | equipped firing feel | 🟡 | The launcher kick rides the recoil ledger (#237, unit-tested); the shooter knockback shove is unasserted |
 | blunt | — | No club mode |
 
@@ -146,11 +146,10 @@ Queued combos, unasserted (each becomes a phase when its cell's weapon PR lands)
 
 ## Gap queue (risk-ordered, one weapon per PR, per the #316 plan)
 
-1. **Banana launcher** - the emptiest real-weapon row: lob arc, sticky fuse, survivable blast, grenade catch.
-2. **Slingshot spray & Bread crumbs** - the slung-gun ammo spray family (#229/#270), shipped but never proven.
-3. **Boomerang steal-on-hit & cooldown** (#98/#106).
-4. **Laser charge ladder** (#67).
-5. **Fists knockback, stun & cooldown** (#68/#71/#335).
-6. **Poison movement effects** (#261/#277).
-7. **Banana chunks** (#284-#287) - lands with that epic.
-8. **Combo phases** - one per queued combo above.
+1. **Slingshot spray & Bread crumbs** - the slung-gun ammo spray family (#229/#270), shipped but never proven.
+2. **Boomerang steal-on-hit & cooldown** (#98/#106).
+3. **Laser charge ladder** (#67).
+4. **Fists knockback, stun & cooldown** (#68/#71/#335).
+5. **Poison movement effects** (#261/#277).
+6. **Banana chunks** (#284-#287) - lands with that epic.
+7. **Combo phases** - one per queued combo above.
