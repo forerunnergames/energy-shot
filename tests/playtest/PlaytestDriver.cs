@@ -1603,6 +1603,10 @@ public partial class PlaytestDriver : Node
   // height through the victim's park & came off geometry back into the zone) -
   // at 84 m/s & ~75 degrees the dart clears every head & building instantly &
   // lands hundreds of meters off-map, where the void despawns it.
+  // The shove hazard is ARMED litter alone: the playtest dart spawner's floating
+  // dart is unarmed ammo, restocks forever, & is harmless underfoot (#269).
+  private WeaponPickup? ArmedDartNear (Vector3 spot, float radius) => _world.GetChildren().OfType <WeaponPickup>().FirstOrDefault (pickup => pickup.Weapon == HeldWeapon.PoisonDart && pickup.Armed && !pickup.IsQueuedForDeletion() && FlatDistance (pickup.GlobalPosition, spot) < radius);
+
   private async Task SpitAllDarts (string why)
   {
     var deadline = Time.GetTicksMsec() + 30_000;
@@ -1649,17 +1653,22 @@ public partial class PlaytestDriver : Node
     // tick poison that aliases the punch measurement (a -40 observed where the
     // punch dealt -20). The blowgun in hand vacuums stepped darts (issue #236),
     // then spits each far off-range so nothing re-lands in the shove zone.
+    // ARMED darts only (the v0.8.103 follow-up red's follow-up: the playtest
+    // dart SPAWNER restocks its FLOATING dart a second after every claim, &
+    // sweeping it made an infinite feeder - load, spit, respawn, load. The
+    // floating dart is UNARMED ammo & harmless underfoot: a blowgun-less host
+    // only embeds darts that are armed. The shove hazard is armed litter alone.)
     for (var sweep = 0; sweep < 6; ++sweep)
     {
-      var stray = DroppedNear (HeldWeapon.PoisonDart, host.GlobalPosition, 8.0f);
+      var stray = ArmedDartNear (host.GlobalPosition, 8.0f);
       if (stray == null) break;
       var straySpot = stray.GlobalPosition;
       Self.Position = new Vector3 (straySpot.X, 31.3f, straySpot.Z);
-      await WaitUntil (() => Self.BlowgunDarts > 0 || DroppedNear (HeldWeapon.PoisonDart, straySpot, 1.5f) == null, 10, "vacuumed a stray armed dart near the host (#269)");
+      await WaitUntil (() => Self.BlowgunDarts > 0 || ArmedDartNear (straySpot, 1.5f) == null, 10, "vacuumed a stray armed dart near the host (#269)");
       await SpitAllDarts ("spat the swept darts out of the shove zone (#269)");
     }
 
-    Assert (DroppedNear (HeldWeapon.PoisonDart, host.GlobalPosition, 8.0f) == null, "no armed dart litter left in the host's shove zone (#269)");
+    Assert (ArmedDartNear (host.GlobalPosition, 8.0f) == null, "no armed dart litter left in the host's shove zone (#269)");
     // The clean-target precondition (CodeRabbit): a stray dart in the host would
     // alias the club's damage - fail loudly here rather than flake there.
     // Zero darts is the ONLY real precondition (a poison tick costs what a club
