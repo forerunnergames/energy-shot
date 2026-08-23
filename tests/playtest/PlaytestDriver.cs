@@ -1500,35 +1500,53 @@ public partial class PlaytestDriver : Node
     await Task.Delay (60);
     ReleaseLeftClick();
     await WaitUntil (() => victim.Fallen, 15, "the sticky banana zapped the victim after its ride (#83)");
-    // The loaf drops WHERE THEY FELL (CodeRabbit): the launch carried them far
-    // from the park, & the body's spot is gone once their reset teleports them.
-    var stickyDeathSpot = victim.GlobalPosition;
 
-    // SLUNG LOAF (#229/#247/#270, rounds 1-3's lessons distilled): a pouch-load
-    // only wins when a normal collect CANNOT (the #190 rule - you already hold
-    // one), so the payload is the victim's death-dropped loaf from the sticky
-    // kill, chased with our OWN loaf still in the pack & the pouch out - the
-    // field-realistic way anyone slings bread.
+    // SLUNG LOAF (#229/#247/#270): a pouch-load only wins when a normal collect
+    // CANNOT (the #190 rule - you already hold one), so the payload is the
+    // victim's death-dropped loaf. Rounds 5-7's verdict: the sticky's launch
+    // scatters death spots across the whole map & the loaf's ~5 SECOND expiry
+    // wins every race - so the drop comes from a CONTROLLED kill instead: a
+    // full-charge zap on the parked victim puts the loaf right beside the mark.
+    await WaitUntil (() => !victim.SpawnArmor && FlatDistance (victim.GlobalPosition, VictimParkSpot) < 2.0f, 120, "victim parked for the loaf-drop zap (#316)");
+
+    if (!Self.Holds (HeldWeapon.Laser))
+    {
+      Self.Position = WeaponSpawner.PlaytestLaserPosition + Vector3.Up * 0.5f;
+      await WaitUntil (() => Self.Holds (HeldWeapon.Laser), 30, "re-collected a laser for the loaf-drop zap (#316)");
+    }
+
+    PressAction ("weapon_2");
+    await Task.Delay (100);
+    ReleaseAction ("weapon_2");
+    Assert (Self.SelectedWeapon == SelectedWeapon.Laser, "laser out for the loaf-drop zap (#316)");
+    Self.Position = VictimParkSpot + new Vector3 (0.0f, 0.3f, 6.0f);
+    await Task.Delay (400);
+
+    for (var attempt = 0; attempt < 10 && !victim.Fallen; ++attempt)
+    {
+      AimAt (victim.GlobalPosition + Vector3.Up);
+      await ChargeAndFire (chargeSeconds: 2.3f);
+      await TryWaitUntil (() => victim.Fallen, 3);
+    }
+
+    Assert (victim.Fallen, "the full-charge zap dropped the victim's loaf at the mark (#93/#316)");
+    var loafSpot = victim.GlobalPosition; // Died AT the park - no launch, no scatter.
     Assert (Self.Holds (HeldWeapon.Bread), "our own loaf still in the pack for the pouch-load rule (#190/#316)");
     PressAction ("weapon_5");
     await Task.Delay (100);
     ReleaseAction ("weapon_5");
     Assert (Self.SelectedWeapon == SelectedWeapon.Slingshot, "pouch out for the victim's dropped loaf (#316)");
-    // Round 6's two facts: a dropped loaf expires in ~5 SECONDS, & the sticky
-    // launch can hurl the victim clean off the deck - they died at ground level
-    // 56m away & the old deck-height teleport hovered 30m above the loaf. Chase
-    // fast, at the loaf's OWN height, wherever the body came down.
-    var loafDeadline = Time.GetTicksMsec() + 10_000;
+    var loafDeadline = Time.GetTicksMsec() + 8_000; // The unclaimed drop expires in ~5s - chase fast.
 
     while (Self.SlingshotAmmo != HeldWeapon.Bread && Time.GetTicksMsec() < loafDeadline)
     {
-      var loaf = DroppedNear (HeldWeapon.Bread, stickyDeathSpot, 15.0f);
+      var loaf = DroppedNear (HeldWeapon.Bread, loafSpot, 8.0f);
       if (loaf != null) Self.Position = loaf.GlobalPosition + Vector3.Up * 0.4f;
       await Task.Delay (300);
     }
 
     Assert (Self.SlingshotAmmo == HeldWeapon.Bread, "the pouch loaded the victim's dropped loaf (#190/#316)");
-    Self.Position = ShooterParkSpot; // The chase may end at ground level far away - come home before the next mark.
+    Self.Position = ShooterParkSpot;
     await Task.Delay (300);
     await WaitUntil (() => !victim.SpawnArmor && FlatDistance (victim.GlobalPosition, VictimParkSpot) < 2.0f && victim.Health == victim.MaxHealth, 120, "victim parked & clean for the slung loaf (#316)");
     Self.Position = VictimParkSpot + new Vector3 (0.0f, 0.3f, 6.0f);
@@ -1746,6 +1764,14 @@ public partial class PlaytestDriver : Node
   // a punch - it hurts, it never zaps.
   private async Task BeTheSlungBreadTarget()
   {
+    // First we DIE at the park - the controlled full-charge zap drops our loaf
+    // beside the mark (the launch-kill's wild death spots lost the 5s expiry
+    // race every time) - then a fresh life takes the slung loaf like a punch.
+    await WaitUntil (() => !Self.SpawnArmor, 20, "spawn armor expired before the loaf-drop zap (#48/#316)");
+    await WaitUntil (() => Self.Fallen, 120, "the zap dropped our loaf at the mark (#93/#316)");
+    await WaitUntil (() => !Self.Fallen && Self.Health == Self.MaxHealth, 30, "respawned fresh after the loaf drop (#316)");
+    Self.Position = VictimParkSpot;
+    await Task.Delay (300);
     await WaitUntil (() => !Self.SpawnArmor, 20, "spawn armor expired before the slung loaf (#48/#316)");
     var healthBefore = Self.Health;
     await WaitUntil (() => Self.Health < healthBefore, 120, "the slung loaf reached us (#229/#247)");
