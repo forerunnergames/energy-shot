@@ -105,6 +105,19 @@ public static class Settings
     set => Set ("hold_to_scope", value);
   }
 
+  // Volume sliders (issue #301, Escendrix): 0-100 per bus, 100 = the mix as shipped.
+  public static int SfxVolume
+  {
+    get => GetInt ("sfx_volume", 100);
+    set => Set ("sfx_volume", value);
+  }
+
+  public static int MusicVolume
+  {
+    get => GetInt ("music_volume", 100);
+    set => Set ("music_volume", value);
+  }
+
   // Emote as hold-while-pressed instead of the default toggle (Aaron, 2026-08-23):
   // hold G to groove, release to stop; toggle mode stays the default.
   public static bool HoldToDance
