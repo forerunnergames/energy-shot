@@ -1390,8 +1390,15 @@ public partial class PlaytestDriver : Node
   // drop phase's tossed pickup & the drop-on-X phase).
   private async Task BeTheTheftTarget()
   {
-    // Punches cost 20 each & the theft is a 20% roll per landed punch, so a run of bad
-    // luck could wear us down first: re-reset whenever we're low & still holding on.
+    // Deterministic theft (today's recurring red: the 20% roll missed 8 straight
+    // connects - a 0.8^8 = 17% streak - & the retrying punches' stacked #269
+    // knockback launched us off the deck, 105m down). The roll is victim-
+    // authoritative & the knob is exported, so the phase pins it: the FIRST
+    // connect steals, & a single punch never shoves us anywhere near the edge.
+    var normalDropChance = Self.PunchDropChance;
+    Self.PunchDropChance = 1.0f;
+    // Punches cost 20 each, so a slow shooter could still wear us down: re-reset
+    // whenever we're low & still holding on.
     var deadline = Time.GetTicksMsec() + 180_000;
 
     while (Self.HasBread && Time.GetTicksMsec() < deadline)
@@ -1401,6 +1408,7 @@ public partial class PlaytestDriver : Node
       await Task.Delay (100);
     }
 
+    Self.PunchDropChance = normalDropChance;
     Assert (!Self.HasBread, "a punch took the loaf out of our hands (#193)");
   }
 
