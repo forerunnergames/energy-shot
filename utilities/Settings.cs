@@ -105,6 +105,14 @@ public static class Settings
     set => Set ("hold_to_scope", value);
   }
 
+  // Emote as hold-while-pressed instead of the default toggle (Aaron, 2026-08-23):
+  // hold G to groove, release to stop; toggle mode stays the default.
+  public static bool HoldToDance
+  {
+    get => GetBool ("hold_to_dance", false);
+    set => Set ("hold_to_dance", value);
+  }
+
   // Chat box visibility (issue #297): hiding it never blocks receiving - lines
   // still land in the Tab history; T just won't open the input line.
   public static bool ShowChat
