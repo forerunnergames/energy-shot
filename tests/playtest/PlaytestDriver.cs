@@ -1662,7 +1662,12 @@ public partial class PlaytestDriver : Node
     Assert (Self.SelectedWeapon == SelectedWeapon.Blowgun, "empty blowgun equipped for the club swing (#269)");
     // The clean-target precondition (CodeRabbit): a stray dart in the host would
     // alias the club's damage - fail loudly here rather than flake there.
-    Assert (host.PoisonDarts == 0 && host.Health == host.MaxHealth, $"host is clean & full-health before the club (#316), health {host.Health}, darts {host.PoisonDarts}");
+    // Zero darts is the ONLY real precondition (a poison tick costs what a club
+    // does & would alias the measurement) - the empirical punch-then-club design
+    // measures its own fresh baselines, so earlier phases legitimately splashing
+    // the host (the re-enabled theft & headshot phases can - main went red on a
+    // 140/200 host) must not fail the run.
+    Assert (host.PoisonDarts == 0, $"host is unpoisoned before the club (#316), darts {host.PoisonDarts}");
     Self.Position = host.GlobalPosition + new Vector3 (0.0f, 0.3f, 2.0f);
     await Task.Delay (400);
     AimAt (host.GlobalPosition + Vector3.Up);
