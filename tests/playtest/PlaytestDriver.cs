@@ -1632,7 +1632,24 @@ public partial class PlaytestDriver : Node
     // Aim at the actual DECK (the slab top is y 30.25): the old spot inherited the
     // park height & floated 0.75m above the floor, so the near-zero-drop dart flew
     // flat over it, hit the far wall ~5m beyond, & landed outside the search ring.
+    // And land it AWAY from bystanders (#358's red: the idle host, shoved near the
+    // old fixed spot by the club phase's knockback, stepped on the dart FIRST &
+    // the server denied our step on the consumed pickup): of the four compass
+    // lanes 3m out, take the one farthest from both idle bodies.
+    var hostBody = FindPlayer (HostName)!;
+    var victimBody = FindPlayer (VictimName)!;
     var floorSpot = new Vector3 (ShooterParkSpot.X, 30.25f, ShooterParkSpot.Z - 3.0f);
+    var bestClearance = -1.0f;
+
+    foreach (var lane in new[] { new Vector3 (0.0f, 0.0f, -3.0f), new Vector3 (0.0f, 0.0f, 3.0f), new Vector3 (-3.0f, 0.0f, 0.0f), new Vector3 (3.0f, 0.0f, 0.0f) })
+    {
+      var candidate = new Vector3 (ShooterParkSpot.X + lane.X, 30.25f, ShooterParkSpot.Z + lane.Z);
+      var clearance = Mathf.Min (FlatDistance (candidate, hostBody.GlobalPosition), FlatDistance (candidate, victimBody.GlobalPosition));
+      if (clearance <= bestClearance) continue;
+      bestClearance = clearance;
+      floorSpot = candidate;
+    }
+
     AimAt (floorSpot);
     PressAction ("shoot");
     await Task.Delay (60);
