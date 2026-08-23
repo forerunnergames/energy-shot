@@ -1597,19 +1597,62 @@ public partial class PlaytestDriver : Node
   // back empty, & the walk exercises the re-collect cell for free. The HOST is the
   // target: it idles clean at its spawn, so the exact-damage assert can't be muddied
   // by the victim's poison ticks (a tick & a club cost the same).
+  // One dart, definitely fired (CodeRabbit on the sweep): the blowgun's 1.5s fire
+  // cooldown rejects a press that comes too soon, so the press retries until the
+  // count DROPS, then the full cooldown passes before the caller's next action.
+  private async Task SpitADart (string why)
+  {
+    var before = Self.BlowgunDarts;
+    AimAt (Self.GlobalPosition + new Vector3 (0.0f, 6.0f, 40.0f)); // High & far: it lands well outside every phase's search radius.
+
+    for (var attempt = 0; attempt < 6 && Self.BlowgunDarts == before; ++attempt)
+    {
+      PressLeftClick();
+      await Task.Delay (60);
+      ReleaseLeftClick();
+      await Task.Delay (400);
+    }
+
+    Assert (Self.BlowgunDarts == before - 1, why);
+    await Task.Delay (1600); // The full 1.5s fire cooldown before the caller's next press.
+  }
+
   private async Task RunClubPhase()
   {
     var host = FindPlayer (HostName)!;
     var tossedNear = ShooterParkSpot + new Vector3 (0.0f, 0.0f, 3.0f); // The blowgun phase tossed it this way.
     await WaitUntil (() => DroppedNear (HeldWeapon.Blowgun, tossedNear) != null, 20, "the dropped blowgun rests ahead as a pickup (#242/#316)");
-    await WaitUntil (() => WalkedTo (DroppedNear (HeldWeapon.Blowgun, tossedNear)?.GlobalPosition ?? Self.GlobalPosition), 20, "walked onto the dropped blowgun (#316)");
-    // Generous claim window (the 15s single-stand flaked): the pickup's claim delay,
-    // the once-a-second retry, & a loaded runner stack up - stand on it & wait long.
-    await WaitUntil (() => Self.HasBlowgun && Self.BlowgunDarts == 0, 30, "re-collected the blowgun EMPTY (#316)");
+    // Park ON the pickup (the mine phase's lesson): we are POISONED here by design
+    // (the #236/#248 dart step) & the drunk wobble (#261) can drift a walker off
+    // the claim spot - claims fire on eligibility, not movement.
+    var gunSpot = DroppedNear (HeldWeapon.Blowgun, tossedNear)!.GlobalPosition;
+    Self.Position = new Vector3 (gunSpot.X, 31.3f, gunSpot.Z);
+    await WaitUntil (() => Self.HasBlowgun, 30, "re-collected the blowgun (#316)");
+    // The gun lands beside its own scattered darts & re-loads them on pickup -
+    // spit any aboard off-range rather than demanding an empty arrival.
+    while (Self.BlowgunDarts > 0) await SpitADart ("spat a re-loaded dart off-range (#316)");
+    Assert (Self.BlowgunDarts == 0, "the re-collected blowgun is EMPTY for the club (#316)");
     PressAction ("weapon_8");
     await Task.Delay (100);
     ReleaseAction ("weapon_8");
     Assert (Self.SelectedWeapon == SelectedWeapon.Blowgun, "empty blowgun equipped for the club swing (#269)");
+    // Sweep the shove zone (the v0.8.102-era red run's lesson): earlier phases
+    // scatter ARMED darts around the host park spot, & the calibration punch
+    // SHOVES the host (issue #269's 2.5x knockback) onto them - embedded darts
+    // tick poison that aliases the punch measurement (a -40 observed where the
+    // punch dealt -20). The blowgun in hand vacuums stepped darts (issue #236),
+    // then spits each far off-range so nothing re-lands in the shove zone.
+    for (var sweep = 0; sweep < 6; ++sweep)
+    {
+      var stray = DroppedNear (HeldWeapon.PoisonDart, host.GlobalPosition, 8.0f);
+      if (stray == null) break;
+      var straySpot = stray.GlobalPosition;
+      Self.Position = new Vector3 (straySpot.X, 31.3f, straySpot.Z);
+      await WaitUntil (() => Self.BlowgunDarts > 0 || DroppedNear (HeldWeapon.PoisonDart, straySpot, 1.5f) == null, 10, "vacuumed a stray armed dart near the host (#269)");
+      while (Self.BlowgunDarts > 0) await SpitADart ("spat the swept dart out of the shove zone (#269)");
+    }
+
+    Assert (DroppedNear (HeldWeapon.PoisonDart, host.GlobalPosition, 8.0f) == null, "no armed dart litter left in the host's shove zone (#269)");
     // The clean-target precondition (CodeRabbit): a stray dart in the host would
     // alias the club's damage - fail loudly here rather than flake there.
     // Zero darts is the ONLY real precondition (a poison tick costs what a club
