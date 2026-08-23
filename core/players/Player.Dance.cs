@@ -73,7 +73,9 @@ public partial class Player
     || Input.IsActionJustPressed ("crouch")
     || Input.IsActionJustPressed ("punch")
     || Input.IsActionJustPressed ("ability")
-    || Input.IsActionJustPressed ("dance");
+    // Hold mode (Aaron, 2026-08-23): release G to stop; toggle mode (default) ends
+    // on another G press, as always.
+    || (_holdToDance ? !Input.IsActionPressed ("dance") : Input.IsActionJustPressed ("dance"));
 
   // Runs on every peer via the replicated Dancing property; ALWAYS-mode sync re-fires
   // the setter every tick, so start/stop exactly once per state flip.

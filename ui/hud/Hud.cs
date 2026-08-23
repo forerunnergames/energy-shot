@@ -308,6 +308,7 @@ public partial class Hud : Control
     rows.AddChild (column);
     column.AddChild (SettingToggle ("Hold to crouch", Settings.HoldToCrouch, isEnabled => { Settings.HoldToCrouch = isEnabled; Player.Local?.RefreshCrouchMode(); }));
     column.AddChild (SettingToggle ("Hold to scope", Settings.HoldToScope, isEnabled => { Settings.HoldToScope = isEnabled; Player.Local?.RefreshScopeMode(); }));
+    column.AddChild (SettingToggle ("Hold to emote", Settings.HoldToDance, isEnabled => { Settings.HoldToDance = isEnabled; Player.Local?.RefreshDanceMode(); }));
     column.AddChild (SettingToggle ("Show music player", Settings.ShowMusicPlayer, isEnabled => { Settings.ShowMusicPlayer = isEnabled; GetNode <MusicPlayer> ("MusicPlayer").ApplyVisibilitySetting(); }));
     column.AddChild (SettingToggle ("Show chat", Settings.ShowChat, isEnabled => Settings.ShowChat = isEnabled));
     column.AddChild (SettingToggle ("Show game messages", Settings.ShowMessages, isEnabled => { Settings.ShowMessages = isEnabled; _messageScroller.ApplyVisibilitySetting(); }));
