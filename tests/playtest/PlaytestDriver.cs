@@ -756,17 +756,28 @@ public partial class PlaytestDriver : Node
     ReleaseAction ("weapon_1");
     // The eating state replicates WHILE the ritual is in progress, not just after it.
     await WaitUntil (() => victim.Eating, 90, "victim's in-progress eating state replicated to shooter (#192)");
-    await Task.Delay (700); // Leave the victim its own window to prove the ritual roots it.
+    // The FULL 700ms courtesy stands (the #365 fix's own lesson: a 400ms wait let
+    // the first punch cancel the eat INSIDE the victim's 400ms rooted-input proof
+    // & its still-Eating assert failed) - the victim needs its window whole.
+    await Task.Delay (700);
+    var healthAtEatStart = victim.Health;
 
-    // The whole ritual is only 3s, so swing about as fast as the punch cooldown allows.
-    // Re-take the punching spot every attempt & skip a swing rather than spend it on
-    // thin air (#213): a rooted victim can't dodge, but its position still reaches us
-    // over the wire & can be stale on a lagging runner.
-    for (var attempt = 0; attempt < 20 && victim.Eating; ++attempt)
+    // The whole ritual is only 3s, so swing about as fast as the punch cooldown
+    // allows. Re-take the punching spot every attempt; the distance guard skips a
+    // wasted swing, but NEVER twice in a row (#365: on a lagging runner the
+    // replicated position goes stale, every swing got skipped, the ritual
+    // completed & healed the victim to full - the assert then read 400/400).
+    // A connected punch shows as a health drop - break as soon as one lands.
+    var guardSkips = 0;
+
+    for (var attempt = 0; attempt < 20 && victim.Eating && victim.Health >= healthAtEatStart; ++attempt)
     {
       Self.Position = victim.GlobalPosition + new Vector3 (0.0f, 0.0f, -2.0f); // Behind it, off the wall it punched.
       await Task.Delay (100); // Settle before swinging.
-      if (Self.GlobalPosition.DistanceTo (victim.GlobalPosition) > Self.PunchRange * 0.75f) continue;
+
+      if (Self.GlobalPosition.DistanceTo (victim.GlobalPosition) > Self.PunchRange * 0.75f && ++guardSkips < 2) continue;
+
+      guardSkips = 0;
       AimAt (victim.GlobalPosition + Vector3.Up);
       PressLeftClick();
       await Task.Delay (60);
