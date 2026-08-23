@@ -127,8 +127,14 @@ public partial class PlaytestDriver : Node
       // stdout tail vanished at quit & the run failed as 'never finished'): stderr
       // is unbuffered - it's why FAIL lines always land - so PASS echoes there too.
       GD.PrintErr ($"PLAYTEST PASS [{_role}]");
+      // AND through .NET's own Console (v0.8.108's lesson): the hard exit skips
+      // Godot's logger flush, so GD-printed verdicts died in the buffer & every
+      // run failed as 'no PASS marker'. Console.Out/Error auto-flush per line &
+      // write the process fds directly - immune to the logger & the teardown.
+      System.Console.WriteLine ($"PLAYTEST PASS [{_role}]");
+      System.Console.Error.WriteLine ($"PLAYTEST PASS [{_role}]");
       await Task.Delay (500); // Let final packets flush before quitting.
-      GetTree().Quit (0);
+      HardExit (0);
     }
     catch (Exception e)
     {
@@ -139,8 +145,15 @@ public partial class PlaytestDriver : Node
   private void Fail (string reason)
   {
     GD.PrintErr ($"PLAYTEST FAIL [{_role}]: {reason}");
-    GetTree().Quit (1);
+    System.Console.Error.WriteLine ($"PLAYTEST FAIL [{_role}]: {reason}"); // Past the Godot logger (v0.8.108's lesson).
+    HardExit (1);
   }
+
+  // The verdict is printed & flushed: exit the PROCESS before Godot's engine
+  // teardown runs (issue #354) - the mono finalizer race there aborts with exit
+  // 134 & turns fully-green runs red. The verdict lines are the source of truth
+  // & the harness's verify_log still proves the run actually happened.
+  private static void HardExit (int code) => System.Environment.Exit (code);
 
   // ---------------------------------------------------------------- roles
 
@@ -1701,12 +1714,21 @@ public partial class PlaytestDriver : Node
     var host = FindPlayer (HostName)!;
     var tossedNear = ShooterParkSpot + new Vector3 (0.0f, 0.0f, 3.0f); // The blowgun phase tossed it this way.
     await WaitUntil (() => DroppedNear (HeldWeapon.Blowgun, tossedNear) != null, 20, "the dropped blowgun rests ahead as a pickup (#242/#316)");
-    // Park ON the pickup (the mine phase's lesson): we are POISONED here by design
-    // (the #236/#248 dart step) & the drunk wobble (#261) can drift a walker off
-    // the claim spot - claims fire on eligibility, not movement.
-    var gunSpot = DroppedNear (HeldWeapon.Blowgun, tossedNear)!.GlobalPosition;
-    Self.Position = new Vector3 (gunSpot.X, 31.3f, gunSpot.Z);
-    await WaitUntil (() => Self.HasBlowgun, 30, "re-collected the blowgun (#316)");
+    // Park ON the pickup & CHASE it (the mine phase's lesson, plus #353's rerun:
+    // an X-dropped gun tosses forward & keeps sliding, so a spot captured once
+    // goes stale & the stand waits 30s beside a moved pickup). We are POISONED
+    // here by design (the #236/#248 dart step) & the drunk wobble (#261) drifts
+    // walkers - so re-park on the LIVE position once a second until the claim.
+    var reCollectDeadline = Time.GetTicksMsec() + 30_000;
+
+    while (!Self.HasBlowgun && Time.GetTicksMsec() < reCollectDeadline)
+    {
+      var gun = DroppedNear (HeldWeapon.Blowgun, tossedNear);
+      if (gun != null) Self.Position = new Vector3 (gun.GlobalPosition.X, 31.3f, gun.GlobalPosition.Z);
+      await Task.Delay (1000);
+    }
+
+    Assert (Self.HasBlowgun, "re-collected the blowgun (#316)");
     // The gun lands beside its own scattered darts & re-loads them on pickup -
     // spit any aboard off-range rather than demanding an empty arrival.
     await SpitAllDarts ("spat the re-loaded darts off-range (#316)");
