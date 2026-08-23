@@ -102,7 +102,7 @@ Press Esc for the pause dialog, then **SETTINGS**: hold-to-crouch, hold-to-scope
 
 ## Fall damage
 
-Dropping more than about 10 m hurts: 5 health per extra metre, never an instant zap-out. The respawn drop-in from the spawn room is free while your spawn armor is up; stay up there dithering and the 30 m trip costs you.
+Only truly spectacular drops hurt (more than about 36 m): 5 health per extra metre, never an instant zap-out. Jumping off the spawn platform is free, and so is a jump boosted by a laser ground-shot.
 
 ## Recoil
 

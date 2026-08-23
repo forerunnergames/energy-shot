@@ -227,7 +227,14 @@ public partial class PlaytestDriver : Node
     // window - kept wandering onto dart litter, mines & the airplane FIXTURE,
     // where it stole the restock & starved the shooter's census wait): while
     // idling out the clients' phases, re-park every few seconds if displaced.
-    var anchor = Self.GlobalPosition;
+    // The EMPTY QUARTER (the leash's completion - three reds after v0.8.121: the
+    // host, anchored wherever it stood on the crowded deck, kept faithfully
+    // re-parking onto OTHER phases' pickups - the shooter's dropped blowgun twice
+    // & the airplane restock once). The anchor moves to bare ground far from
+    // every phase zone; the club phase clubs it there, litter-free.
+    var anchor = new Vector3 (30.0f, 1.4f, -30.0f);
+    Self.Position = anchor;
+    await Task.Delay (300);
     var leashDeadline = Time.GetTicksMsec() + (ulong)(tailBudgetSeconds * 1000);
 
     while (_world.GetPlayers().Count() > 1 && Time.GetTicksMsec() < leashDeadline)
@@ -2064,9 +2071,14 @@ public partial class PlaytestDriver : Node
 
     // Retried swings (the single press flaked on CI): the blowgun's fire cooldown
     // from the dart phase can still be running when the first press lands - a swing
-    // that changed nothing gets another, up to four.
+    // that changed nothing gets another, up to four. RE-TAKE the spot each swing
+    // (#370's carry: the calibration punch now shoves the host ~6m - every club
+    // swing at the old spot whiffed at air).
     for (var attempt = 0; attempt < 4 && host.Health == healthBeforeClub; ++attempt)
     {
+      Self.Position = host.GlobalPosition + new Vector3 (0.0f, 0.3f, 2.0f);
+      await Task.Delay (200);
+      AimAt (host.GlobalPosition + Vector3.Up);
       PressAction ("shoot");
       await Task.Delay (60);
       ReleaseAction ("shoot");

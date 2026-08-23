@@ -392,7 +392,11 @@ public partial class Player
     // ascent (a jump, a rocket boost) keeps its own speed.
     var poppedUp = Mathf.Min (Velocity.Y + strength * 0.3f, KnockbackUpPopCap);
     Velocity = new Vector3 (Velocity.X + push.X, Mathf.Max (Velocity.Y, poppedUp), Velocity.Z + push.Z);
+    _knockbackCarrySecondsLeft = KnockbackCarrySeconds; // The shove must survive Move()'s per-frame input overwrite (issue #334).
   }
+
+  private float _knockbackCarrySecondsLeft;
+  private void UpdateKnockbackCarry (double delta) => _knockbackCarrySecondsLeft = Mathf.Max (0.0f, _knockbackCarrySecondsLeft - (float)delta);
 
   [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
   private void NotifyScored (string shotPlayerName)
