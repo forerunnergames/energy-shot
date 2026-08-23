@@ -1464,7 +1464,10 @@ public partial class PlaytestDriver : Node
     await WaitUntil (() => !victim.SpawnArmor && FlatDistance (victim.GlobalPosition, VictimParkSpot) < 2.0f && victim.Health == victim.MaxHealth, 120, "victim parked & clean for the blast (#316)");
     Self.Position = VictimParkSpot + new Vector3 (0.0f, 0.3f, 6.0f);
     await Task.Delay (400);
-    AimAt (victim.GlobalPosition with { Y = 30.4f }); // The deck at their feet: bounce, fuse, boom.
+    // BESIDE them, not at their feet (the first run's lesson: the low line to the
+    // feet clips the body en route & the shot becomes the STICKY) - 2.5m out is
+    // clear of the capsule & still deep inside the 6m blast radius.
+    AimAt (new Vector3 (victim.GlobalPosition.X + 2.5f, 30.4f, victim.GlobalPosition.Z));
     PressLeftClick();
     await Task.Delay (60);
     ReleaseLeftClick();
