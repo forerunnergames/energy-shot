@@ -1367,6 +1367,7 @@ public partial class PlaytestDriver : Node
     await RunPunchTheftPhase (victim); // Un-quarantined (issue #312): the fly-out search-ring fix.
     await RunHeadshotPhase (victim); // Back with the head (issue #238): bigger, seated, & pose-following.
     await RunBlowgunPhase (victim);
+    await RunClubPhase();
     await RunDropPhase();
     await RunRingPhase();
   }
@@ -1585,6 +1586,58 @@ public partial class PlaytestDriver : Node
 
   // Drop on X (#242): the equipped laser flies out the way we look & lands as a
   // tossed pickup we no longer hold.
+  // The empty blowgun is a club (#269) - the equipped-empty blunt-hit cell of the
+  // coverage matrix (issue #316, Aaron's example gap: this cell shipped untested).
+  // RunBlowgunPhase just ended with the gun X-dropped & its darts spilled
+  // (CodeRabbit): re-collecting that tossed pickup IS the setup - the gun comes
+  // back empty, & the walk exercises the re-collect cell for free. The HOST is the
+  // target: it idles clean at its spawn, so the exact-damage assert can't be muddied
+  // by the victim's poison ticks (a tick & a club cost the same).
+  private async Task RunClubPhase()
+  {
+    var host = FindPlayer (HostName)!;
+    var tossedNear = ShooterParkSpot + new Vector3 (0.0f, 0.0f, 3.0f); // The blowgun phase tossed it this way.
+    await WaitUntil (() => DroppedNear (HeldWeapon.Blowgun, tossedNear) != null, 20, "the dropped blowgun rests ahead as a pickup (#242/#316)");
+    await WaitUntil (() => WalkedTo (DroppedNear (HeldWeapon.Blowgun, tossedNear)?.GlobalPosition ?? Self.GlobalPosition), 20, "walked onto the dropped blowgun (#316)");
+    await WaitUntil (() => Self.HasBlowgun && Self.BlowgunDarts == 0, 15, "re-collected the blowgun EMPTY (#316)");
+    PressAction ("weapon_8");
+    await Task.Delay (100);
+    ReleaseAction ("weapon_8");
+    Assert (Self.SelectedWeapon == SelectedWeapon.Blowgun, "empty blowgun equipped for the club swing (#269)");
+    // The clean-target precondition (CodeRabbit): a stray dart in the host would
+    // alias the club's damage - fail loudly here rather than flake there.
+    Assert (host.PoisonDarts == 0 && host.Health == host.MaxHealth, $"host is clean & full-health before the club (#316), health {host.Health}, darts {host.PoisonDarts}");
+    Self.Position = host.GlobalPosition + new Vector3 (0.0f, 0.3f, 2.0f);
+    await Task.Delay (400);
+    AimAt (host.GlobalPosition + Vector3.Up);
+    // The twice-a-punch spec proven EMPIRICALLY on the same target (the first run
+    // showed damage is difficulty-scaled - the host takes handicapped hits, so the
+    // unscaled formula asserted a number the engine never produces): punch once,
+    // record the real decrease, club, & demand exactly double.
+    var healthBefore = host.Health;
+    PressAction ("weapon_1");
+    await Task.Delay (100);
+    ReleaseAction ("weapon_1");
+    PressLeftClick();
+    await Task.Delay (60);
+    ReleaseLeftClick();
+    await WaitUntil (() => host.Health < healthBefore, 15, "the calibration punch landed on the host (#269)");
+    var punchDamage = healthBefore - host.Health;
+    PressAction ("weapon_8");
+    await Task.Delay (400); // Past the punch cooldown, back on the empty blowgun.
+    ReleaseAction ("weapon_8");
+    Assert (Self.SelectedWeapon == SelectedWeapon.Blowgun, "back on the empty blowgun after the calibration punch (#269)");
+    var healthBeforeClub = host.Health;
+    AimAt (host.GlobalPosition + Vector3.Up);
+    PressAction ("shoot");
+    await Task.Delay (60);
+    ReleaseAction ("shoot");
+    await WaitUntil (() => host.Health == healthBeforeClub - 2 * punchDamage, 15, $"the club swing hit for exactly twice the observed punch (#269), punch -{punchDamage}");
+    Assert (Self.HasBlowgun, "the club swing never left our hands (#269)");
+    Self.Position = ShooterParkSpot;
+    await Task.Delay (300);
+  }
+
   private async Task RunDropPhase()
   {
     PressAction ("weapon_2");
