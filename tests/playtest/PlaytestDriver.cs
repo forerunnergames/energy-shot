@@ -1636,7 +1636,24 @@ public partial class PlaytestDriver : Node
     // Aim at the actual DECK (the slab top is y 30.25): the old spot inherited the
     // park height & floated 0.75m above the floor, so the near-zero-drop dart flew
     // flat over it, hit the far wall ~5m beyond, & landed outside the search ring.
+    // And land it AWAY from bystanders (#358's red: the idle host, shoved near the
+    // old fixed spot by the club phase's knockback, stepped on the dart FIRST &
+    // the server denied our step on the consumed pickup): of the four compass
+    // lanes 3m out, take the one farthest from both idle bodies.
+    var hostBody = FindPlayer (HostName)!;
+    var victimBody = FindPlayer (VictimName)!;
     var floorSpot = new Vector3 (ShooterParkSpot.X, 30.25f, ShooterParkSpot.Z - 3.0f);
+    var bestClearance = -1.0f;
+
+    foreach (var lane in new[] { new Vector3 (0.0f, 0.0f, -3.0f), new Vector3 (0.0f, 0.0f, 3.0f), new Vector3 (-3.0f, 0.0f, 0.0f), new Vector3 (3.0f, 0.0f, 0.0f) })
+    {
+      var candidate = new Vector3 (ShooterParkSpot.X + lane.X, 30.25f, ShooterParkSpot.Z + lane.Z);
+      var clearance = Mathf.Min (FlatDistance (candidate, hostBody.GlobalPosition), FlatDistance (candidate, victimBody.GlobalPosition));
+      if (clearance <= bestClearance) continue;
+      bestClearance = clearance;
+      floorSpot = candidate;
+    }
+
     AimAt (floorSpot);
     PressAction ("shoot");
     await Task.Delay (60);
@@ -1648,13 +1665,23 @@ public partial class PlaytestDriver : Node
     ReleaseAction ("drop");
     await WaitUntil (() => !Self.HasBlowgun, 10, "X dropped the blowgun (#242)");
     Assert (Self.BlowgunDarts == 0, "losing the blowgun returned its darts to the level (#236)");
-    var dart = DroppedNear (HeldWeapon.PoisonDart, floorSpot)!;
     // Shed spawn armor FIRST (this flaked on two branches): an armed dart never
     // touches an armored player (#248 eligibility), & the cooldown-reset respawns
     // (#299) let the driver arrive here while the armor is still up.
     await WaitUntil (() => !Self.SpawnArmor, 20, "spawn armor expired before the dart step (#248/#316)");
-    Self.Position = dart.GlobalPosition with { Y = ShooterParkSpot.Y };
-    await WaitUntil (() => Self.PoisonDarts >= 1, 30, "stepping on the landed dart without the blowgun poisoned us (#236/#248)");
+    // CHASE the live dart (the #353 finale's red, & #356's cure): darts slide &
+    // the census can re-deal them during the armor wait, so a node captured once
+    // goes stale - re-find & re-park on an ARMED dart each second until the sting.
+    var stepDeadline = Time.GetTicksMsec() + 30_000;
+
+    while (Self.PoisonDarts == 0 && Time.GetTicksMsec() < stepDeadline)
+    {
+      var target = ArmedDartNear (floorSpot, DropSearchRadius);
+      if (target != null) Self.Position = target.GlobalPosition with { Y = ShooterParkSpot.Y };
+      await Task.Delay (1000);
+    }
+
+    Assert (Self.PoisonDarts >= 1, "stepping on the landed dart without the blowgun poisoned us (#236/#248)");
     Self.Position = ShooterParkSpot;
     await Task.Delay (300);
   }
