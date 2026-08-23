@@ -1422,8 +1422,14 @@ public partial class PlaytestDriver : Node
     // PARK ON the mine (round 4: walk momentum can carry past the claim range &
     // the stand ends out of reach): claims fire on eligibility, not movement.
     if (Self.SlingshotAmmo == HeldWeapon.None) { Self.Position = new Vector3 (mineSpot.X, 31.3f, mineSpot.Z); await Task.Delay (300); }
-    await WaitUntil (() => Self.SlingshotAmmo == HeldWeapon.PaperAirplane, 20, "the OPEN slingshot loaded the ARMED airplane as ammo - no detonation (#286/#325)");
-    Assert (Self.Health == healthBefore, $"loading the mine cost no health (#325), was {healthBefore} now {Self.Health}");
+    await WaitUntil (() => Self.SlingshotAmmo == HeldWeapon.PaperAirplane, 20, "the OPEN slingshot loaded the ARMED airplane as ammo (#286/#325)");
+    // Dwell through the fuse window (CodeRabbit): a faulty load could trigger the
+    // mine whose DAMAGE lands on a delayed tick - the instant health check would
+    // pass right before the boom. The fuse detector is direct: a begun mine fuse
+    // pins AirplaneThreatFraction to 1.
+    await Task.Delay (2000);
+    Assert (Self.AirplaneThreatFraction == 0.0f && !Self.Burning, "no mine fuse ever started on the loader (#325)");
+    Assert (Self.Health == healthBefore, $"loading the mine cost no health through the fuse window (#325), was {healthBefore} now {Self.Health}");
     // Leave nothing nocked for whatever follows: fire it into the deck & let the caps recycle it.
     AimAt (new Vector3 (ShooterParkSpot.X, 30.25f, ShooterParkSpot.Z - 3.0f));
     await SlingAStone (drawMs: 300, "cleared the nocked airplane (#325)");
