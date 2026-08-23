@@ -8,22 +8,32 @@ namespace com.forerunnergames.energyshot.core.world;
 // counting with the pure Contains check below.
 public partial class Hill : Node3D
 {
-  // On top of the banana platform (issue #239): 28 m up, a 6x6 slab reached by the
-  // rocket jump, a slide-jump chain, or a head bounce - hard to get to, harder to hold.
-  public static readonly Vector3 Spot = new(0.0f, 28.25f, 11.0f);
-  public const float Radius = 2.8f; // Just inside the slab's edge, so standing on the platform is standing on the hill.
+  // The hill roams (issue #294, thepro & Caleb: the banana platform sits right
+  // next to the spawn room - a dud). Every round the server rolls one of the four
+  // 8x8 sky platforms spread across the arena, all a real trip from spawn; the
+  // choice rides the round-clock broadcast so every peer rebuilds the same ring.
+  public static readonly Vector3[] Spots =
+  {
+    new(22.0f, 4.25f, -10.0f),
+    new(-22.0f, 5.25f, 12.0f),
+    new(8.0f, 6.25f, -32.0f),
+    new(-28.0f, 8.25f, 26.0f),
+  };
+
+  public const float Radius = 3.8f; // Just inside the 8x8 slab's edge, so standing on the platform is standing on the hill.
   private const float HeightTolerance = 3.0f; // Standing on it, not flying over it.
   private static readonly Color Gold = new(1.0f, 0.8f, 0.2f, 0.35f);
 
-  public static bool Contains (Vector3 position)
+  public static bool Contains (int spotIndex, Vector3 position)
   {
-    var flat = new Vector2 (position.X - Spot.X, position.Z - Spot.Z);
-    return flat.Length() <= Radius && Mathf.Abs (position.Y - Spot.Y) <= HeightTolerance;
+    var spot = Spots[Mathf.Clamp (spotIndex, 0, Spots.Length - 1)];
+    var flat = new Vector2 (position.X - spot.X, position.Z - spot.Z);
+    return flat.Length() <= Radius && Mathf.Abs (position.Y - spot.Y) <= HeightTolerance;
   }
 
-  public static Hill Create()
+  public static Hill Create (int spotIndex)
   {
-    var hill = new Hill { Name = "Hill", Position = Spot };
+    var hill = new Hill { Name = "Hill", Position = Spots[Mathf.Clamp (spotIndex, 0, Spots.Length - 1)] };
     var glow = new StandardMaterial3D { AlbedoColor = Gold, Transparency = BaseMaterial3D.TransparencyEnum.Alpha, EmissionEnabled = true, Emission = new Color (1.0f, 0.7f, 0.1f), ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded };
     hill.AddChild (new MeshInstance3D { Mesh = new CylinderMesh { TopRadius = Radius, BottomRadius = Radius, Height = 0.1f }, Position = Vector3.Up * 0.06f, MaterialOverride = glow });
     // A tall beam so the hill reads from anywhere in the arena & the spawn room.
