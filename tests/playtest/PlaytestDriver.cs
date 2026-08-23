@@ -1560,6 +1560,10 @@ public partial class PlaytestDriver : Node
     await WaitUntil (() => !Self.HasBlowgun, 10, "X dropped the blowgun (#242)");
     Assert (Self.BlowgunDarts == 0, "losing the blowgun returned its darts to the level (#236)");
     var dart = DroppedNear (HeldWeapon.PoisonDart, floorSpot)!;
+    // Shed spawn armor FIRST (this flaked on two branches): an armed dart never
+    // touches an armored player (#248 eligibility), & the cooldown-reset respawns
+    // (#299) let the driver arrive here while the armor is still up.
+    await WaitUntil (() => !Self.SpawnArmor, 20, "spawn armor expired before the dart step (#248/#316)");
     Self.Position = dart.GlobalPosition with { Y = ShooterParkSpot.Y };
     await WaitUntil (() => Self.PoisonDarts >= 1, 30, "stepping on the landed dart without the blowgun poisoned us (#236/#248)");
     Self.Position = ShooterParkSpot;
