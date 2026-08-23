@@ -1644,13 +1644,23 @@ public partial class PlaytestDriver : Node
     ReleaseAction ("drop");
     await WaitUntil (() => !Self.HasBlowgun, 10, "X dropped the blowgun (#242)");
     Assert (Self.BlowgunDarts == 0, "losing the blowgun returned its darts to the level (#236)");
-    var dart = DroppedNear (HeldWeapon.PoisonDart, floorSpot)!;
     // Shed spawn armor FIRST (this flaked on two branches): an armed dart never
     // touches an armored player (#248 eligibility), & the cooldown-reset respawns
     // (#299) let the driver arrive here while the armor is still up.
     await WaitUntil (() => !Self.SpawnArmor, 20, "spawn armor expired before the dart step (#248/#316)");
-    Self.Position = dart.GlobalPosition with { Y = ShooterParkSpot.Y };
-    await WaitUntil (() => Self.PoisonDarts >= 1, 30, "stepping on the landed dart without the blowgun poisoned us (#236/#248)");
+    // CHASE the live dart (the #353 finale's red, & #356's cure): darts slide &
+    // the census can re-deal them during the armor wait, so a node captured once
+    // goes stale - re-find & re-park on an ARMED dart each second until the sting.
+    var stepDeadline = Time.GetTicksMsec() + 30_000;
+
+    while (Self.PoisonDarts == 0 && Time.GetTicksMsec() < stepDeadline)
+    {
+      var target = ArmedDartNear (floorSpot, DropSearchRadius);
+      if (target != null) Self.Position = target.GlobalPosition with { Y = ShooterParkSpot.Y };
+      await Task.Delay (1000);
+    }
+
+    Assert (Self.PoisonDarts >= 1, "stepping on the landed dart without the blowgun poisoned us (#236/#248)");
     Self.Position = ShooterParkSpot;
     await Task.Delay (300);
   }
