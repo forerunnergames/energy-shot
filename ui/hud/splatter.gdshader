@@ -14,8 +14,16 @@ uniform float crumbs = 0.0;
 
 const int CHUNKS = 24;
 
+// Sinless hash (issue #344): the old sin() hash fed arguments in the tens of
+// thousands, where fp32 sin precision collapses on some Windows GPU drivers - the
+// worst chunks re-rolled every frame & flickered wildly. This form (Dave Hoskins'
+// hash-without-sine) stays in [0,1) territory the whole way & renders identically
+// on every platform, every frame.
 float hash(float n) {
-	return fract(sin(n * 91.17 + seed * 13.73) * 43758.5453);
+	n = fract(n * 0.1031 + fract(seed * 0.1137));
+	n *= n + 33.33;
+	n *= n + n;
+	return fract(n);
 }
 
 vec2 hash2(float n) {
