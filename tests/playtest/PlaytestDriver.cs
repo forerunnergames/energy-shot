@@ -1450,7 +1450,24 @@ public partial class PlaytestDriver : Node
     Assert (Self.SlingshotAmmo == HeldWeapon.None, "the pouch is still EMPTY before stepping to the mine (#325)");
     var mineSpot = mine.GlobalPosition;
     Self.Position = new Vector3 (mineSpot.X, 31.3f, mineSpot.Z);
-    await WaitUntil (() => Self.SlingshotAmmo == HeldWeapon.PaperAirplane, 20, "the OPEN slingshot loaded the ARMED airplane as ammo (#286/#325)");
+    // Litter can BEAT the airplane to the pouch (the v0.8.117 follow-up red: a
+    // stray laser sat within claim range of the mine itself & loaded first) -
+    // sling any interloper far away & let the claim re-run until the airplane
+    // wins. Every spat piece is gone for good, so the loop converges.
+    var mineLoadDeadline = Time.GetTicksMsec() + 25_000;
+
+    while (Self.SlingshotAmmo != HeldWeapon.PaperAirplane && Time.GetTicksMsec() < mineLoadDeadline)
+    {
+      if (Self.SlingshotAmmo != HeldWeapon.None)
+      {
+        AimAt (Self.GlobalPosition + new Vector3 (0.0f, 25.0f, 30.0f));
+        await SlingAStone (drawMs: 300, "spat the litter that beat us to the pouch (#325)");
+      }
+
+      await Task.Delay (500);
+    }
+
+    Assert (Self.SlingshotAmmo == HeldWeapon.PaperAirplane, "the OPEN slingshot loaded the ARMED airplane as ammo (#286/#325)");
     // Dwell through the fuse window (CodeRabbit): a faulty load could trigger the
     // mine whose DAMAGE lands on a delayed tick - the instant health check would
     // pass right before the boom. The fuse detector is direct: a begun mine fuse
