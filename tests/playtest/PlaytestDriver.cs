@@ -1985,7 +1985,9 @@ public partial class PlaytestDriver : Node
   {
     var host = FindPlayer (HostName)!;
     var tossedNear = ShooterParkSpot + new Vector3 (0.0f, 0.0f, 3.0f); // The blowgun phase tossed it this way.
-    await WaitUntil (() => DroppedNear (HeldWeapon.Blowgun, tossedNear) != null, 20, "the dropped blowgun rests ahead as a pickup (#242/#316)");
+    // 6m ring, not the default 2 (2x today: the X-toss arcs & slides & the gun
+    // rests outside the tight ring while the wait starves).
+    await WaitUntil (() => DroppedNear (HeldWeapon.Blowgun, tossedNear, 6.0f) != null, 20, "the dropped blowgun rests ahead as a pickup (#242/#316)");
     // Park ON the pickup & CHASE it (the mine phase's lesson, plus #353's rerun:
     // an X-dropped gun tosses forward & keeps sliding, so a spot captured once
     // goes stale & the stand waits 30s beside a moved pickup). We are POISONED
@@ -1995,7 +1997,7 @@ public partial class PlaytestDriver : Node
 
     while (!Self.HasBlowgun && Time.GetTicksMsec() < reCollectDeadline)
     {
-      var gun = DroppedNear (HeldWeapon.Blowgun, tossedNear);
+      var gun = DroppedNear (HeldWeapon.Blowgun, tossedNear, 6.0f);
       if (gun != null) Self.Position = new Vector3 (gun.GlobalPosition.X, 31.3f, gun.GlobalPosition.Z);
       await Task.Delay (1000);
     }
