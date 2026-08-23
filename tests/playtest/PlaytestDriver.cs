@@ -1384,6 +1384,7 @@ public partial class PlaytestDriver : Node
     await RunRingPhase();
     await RunArmedMineLoadPhase();
     await RunBananaPhases (victim);
+    await RunSlungBreadPhase (victim);
   }
 
   // Aaron's report (issue #325): an OPEN slingshot - selected, never drawn - must
@@ -1510,6 +1511,51 @@ public partial class PlaytestDriver : Node
     await Task.Delay (300);
   }
 
+  // The bread row's last gap (#316): the universal pouch slings the LOAF & the
+  // slung hit lands like a punch (#229/#247/#270) - never a zap-out.
+  private async Task RunSlungBreadPhase (Player victim)
+  {
+    if (!Self.Holds (HeldWeapon.Slingshot))
+    {
+      Self.Position = WeaponSpawner.PlaytestSlingshotPosition + Vector3.Up * 0.5f;
+      await WaitUntil (() => Self.Holds (HeldWeapon.Slingshot), 30, "collected a slingshot for the slung loaf (#316)");
+    }
+
+    Self.Position = ShooterParkSpot;
+    await Task.Delay (300);
+    PressAction ("weapon_5");
+    await Task.Delay (100);
+    ReleaseAction ("weapon_5");
+    await EmptySlingshot();
+    // Our own spawn loaf becomes the payload: X-drop it ahead, then walk back onto
+    // it with the pouch open - the universal load (#190) makes anything ammo.
+    Assert (Self.Holds (HeldWeapon.Bread), "still carrying this life's loaf to sling (#190/#316)");
+    AimAt (ShooterParkSpot + new Vector3 (0.0f, 1.0f, -3.0f));
+    PressAction ("drop");
+    await Task.Delay (60);
+    ReleaseAction ("drop");
+    await WaitUntil (() => !Self.Holds (HeldWeapon.Bread), 10, "X dropped the loaf as the payload (#242/#316)");
+    var loafDeadline = Time.GetTicksMsec() + 30_000;
+
+    while (Self.SlingshotAmmo != HeldWeapon.Bread && Time.GetTicksMsec() < loafDeadline)
+    {
+      var loaf = DroppedNear (HeldWeapon.Bread, ShooterParkSpot, 6.0f);
+      if (loaf != null) Self.Position = new Vector3 (loaf.GlobalPosition.X, 31.3f, loaf.GlobalPosition.Z);
+      await Task.Delay (1000);
+    }
+
+    Assert (Self.SlingshotAmmo == HeldWeapon.Bread, "the open pouch loaded the dropped loaf (#190/#316)");
+    await WaitUntil (() => !victim.SpawnArmor && FlatDistance (victim.GlobalPosition, VictimParkSpot) < 2.0f && victim.Health == victim.MaxHealth, 120, "victim parked & clean for the slung loaf (#316)");
+    Self.Position = VictimParkSpot + new Vector3 (0.0f, 0.3f, 6.0f);
+    await Task.Delay (400);
+    AimAt (victim.GlobalPosition + Vector3.Up);
+    await SlingAStone (drawMs: 400, "slung the loaf at the victim (#229/#270)");
+    await WaitUntil (() => victim.Health < victim.MaxHealth, 15, "the slung loaf hit the victim like a punch (#229/#247)");
+    Assert (!victim.Fallen, "a slung loaf never zaps anyone out (#247)");
+    Self.Position = ShooterParkSpot;
+    await Task.Delay (300);
+  }
+
   private async Task RunEndOfRunVictimPhases()
   {
     await ResetLifeAndPark();
@@ -1524,6 +1570,8 @@ public partial class PlaytestDriver : Node
     await BeTheStickyTarget();
     await ResetLifeAndPark();
     await BeTheCatchTarget();
+    await ResetLifeAndPark();
+    await BeTheSlungBreadTarget();
   }
 
   // A fresh life on demand: the off-world fall respawns us (#108) with full health, a
@@ -1686,6 +1734,16 @@ public partial class PlaytestDriver : Node
     await WaitUntil (() => Self.SlingshotAmmo == HeldWeapon.None, 10, "the hot potato left our pouch (#251)");
     await Task.Delay (2500); // Its fuse pops far away, not on us.
     Assert (!Self.Fallen && Self.Health > 0, "fired it back out in time & lived (#251)");
+  }
+
+  // The slung-loaf target (#229/#247): parked at full health, the loaf lands like
+  // a punch - it hurts, it never zaps.
+  private async Task BeTheSlungBreadTarget()
+  {
+    await WaitUntil (() => !Self.SpawnArmor, 20, "spawn armor expired before the slung loaf (#48/#316)");
+    var healthBefore = Self.Health;
+    await WaitUntil (() => Self.Health < healthBefore, 120, "the slung loaf reached us (#229/#247)");
+    Assert (!Self.Fallen && Self.Health > 0, $"the slung loaf hurt like a punch, never a zap-out (#247), health {Self.Health}");
   }
 
   private async Task BeThePoisonTarget()
