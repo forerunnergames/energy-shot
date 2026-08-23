@@ -1523,18 +1523,24 @@ public partial class PlaytestDriver : Node
 
     Self.Position = ShooterParkSpot;
     await Task.Delay (300);
-    PressAction ("weapon_5");
-    await Task.Delay (100);
-    ReleaseAction ("weapon_5");
-    await EmptySlingshot();
-    // Our own spawn loaf becomes the payload: X-drop it ahead, then walk back onto
-    // it with the pouch open - the universal load (#190) makes anything ammo.
+    // Our own spawn loaf becomes the payload - & X drops what's IN YOUR HANDS
+    // (the first run's lesson: with the slingshot selected, X dropped the
+    // slingshot & the loaf never left the pack). Bring the loaf OUT first.
     Assert (Self.Holds (HeldWeapon.Bread), "still carrying this life's loaf to sling (#190/#316)");
+    PressAction ("weapon_0");
+    await Task.Delay (100);
+    ReleaseAction ("weapon_0");
+    Assert (Self.SelectedWeapon == SelectedWeapon.Bread, "loaf out for the payload drop (#209/#316)");
     AimAt (ShooterParkSpot + new Vector3 (0.0f, 1.0f, -3.0f));
     PressAction ("drop");
     await Task.Delay (60);
     ReleaseAction ("drop");
     await WaitUntil (() => !Self.Holds (HeldWeapon.Bread), 10, "X dropped the loaf as the payload (#242/#316)");
+    PressAction ("weapon_5");
+    await Task.Delay (100);
+    ReleaseAction ("weapon_5");
+    Assert (Self.SelectedWeapon == SelectedWeapon.Slingshot, "pouch out to load the payload (#316)");
+    await EmptySlingshot();
     var loafDeadline = Time.GetTicksMsec() + 30_000;
 
     while (Self.SlingshotAmmo != HeldWeapon.Bread && Time.GetTicksMsec() < loafDeadline)
