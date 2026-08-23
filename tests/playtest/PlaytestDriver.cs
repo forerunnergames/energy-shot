@@ -1419,6 +1419,9 @@ public partial class PlaytestDriver : Node
     // arrival condition.
     var mineSpot = mine.GlobalPosition;
     await WaitUntil (() => Self.SlingshotAmmo == HeldWeapon.PaperAirplane || WalkedTo (mineSpot), 20, "walked at the armed airplane with the slingshot out (#325)");
+    // PARK ON the mine (round 4: walk momentum can carry past the claim range &
+    // the stand ends out of reach): claims fire on eligibility, not movement.
+    if (Self.SlingshotAmmo == HeldWeapon.None) { Self.Position = new Vector3 (mineSpot.X, 31.3f, mineSpot.Z); await Task.Delay (300); }
     await WaitUntil (() => Self.SlingshotAmmo == HeldWeapon.PaperAirplane, 20, "the OPEN slingshot loaded the ARMED airplane as ammo - no detonation (#286/#325)");
     Assert (Self.Health == healthBefore, $"loading the mine cost no health (#325), was {healthBefore} now {Self.Health}");
     // Leave nothing nocked for whatever follows: fire it into the deck & let the caps recycle it.
