@@ -155,8 +155,19 @@ public partial class SlingshotStone : Node3D
   // sweepStart is the shooter's camera position: the stone spawns at the muzzle, but
   // the first sweep covers camera->muzzle too, so a wall closer than the muzzle
   // offset can't be skipped (issues #112 & #163).
+  // Unpredictable tumble (issue #288): every launch rolls its own spin axis, spin
+  // speed & spree cadence factor, so no two slung guns fly or fire alike. Darts &
+  // the paper airplane are exempt - they always fly dead straight, no spin.
+  private Vector3 _spinAxis = Vector3.Up;
+  private float _spinSpeed;
+  private float _cadenceFactor = 1.0f;
+  private bool SpinsInFlight => Ammo != HeldWeapon.PoisonDart && Ammo != HeldWeapon.PaperAirplane;
+
   public void Launch (Vector3 origin, Vector3 sweepStart, Vector3 direction, float speed, float gravity, float energy, bool isLive, CharacterBody3D shooter)
   {
+    _spinAxis = new Vector3 (GD.Randf() - 0.5f, GD.Randf() - 0.5f, GD.Randf() - 0.5f).Normalized(); // Issue #288: a fresh tumble every launch.
+    _spinSpeed = 4.0f + GD.Randf() * 8.0f;
+    _cadenceFactor = 0.7f + GD.Randf() * 0.8f;
     GlobalPosition = origin;
     _sweepStart = sweepStart;
     _velocity = direction.Normalized() * speed;
@@ -173,6 +184,7 @@ public partial class SlingshotStone : Node3D
     var dt = (float)delta;
     _age += dt;
     if (_age > MaxLifetimeSeconds) { End (victim: null); return; }
+    if (SpinsInFlight) Rotate (_spinAxis, _spinSpeed * dt); // Issue #288: the tumble; darts & airplanes stay straight.
     if (Sprays (Ammo)) UpdateSpree (dt); // Slung guns spray (issues #208 & #244).
     var from = _sweptFromStart ? GlobalPosition : _sweepStart;
     _sweptFromStart = true;
@@ -207,9 +219,9 @@ public partial class SlingshotStone : Node3D
     _spreeLeft -= dt;
     if (_spreeLeft > 0.0f) return;
     var direction = new Vector3 (GD.Randf() - 0.5f, GD.Randf() - 0.5f, GD.Randf() - 0.5f).Normalized();
-    if (Ammo == HeldWeapon.Banana) { _spreeLeft = BananaSpreeIntervalSeconds; SpreeBananaShot (direction); return; }
-    if (Ammo == HeldWeapon.Slingshot) { _spreeLeft = StoneSpreeIntervalSeconds; SpreeStoneShot (direction); return; }
-    _spreeLeft = SpreeIntervalSeconds;
+    if (Ammo == HeldWeapon.Banana) { _spreeLeft = BananaSpreeIntervalSeconds * _cadenceFactor; SpreeBananaShot (direction); return; }
+    if (Ammo == HeldWeapon.Slingshot) { _spreeLeft = StoneSpreeIntervalSeconds * _cadenceFactor; SpreeStoneShot (direction); return; }
+    _spreeLeft = SpreeIntervalSeconds * _cadenceFactor;
     var bolt = BoltScene.Instantiate <LaserBolt>();
     GetParent().AddChild (bolt);
     bolt.Launch (GlobalPosition, GlobalPosition, direction, SpreeEnergy, _isLive, shooter: null);

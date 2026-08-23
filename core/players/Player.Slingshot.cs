@@ -31,14 +31,18 @@ public partial class Player
   }
 
   private HeldWeapon _slingshotAmmo = HeldWeapon.None;
-  [Export] public float SlingshotMaxDrawSeconds = 1.2f;
+  // 3s, up from 1.2 (issue #288): a full stretch is a real charge-up.
+  [Export] public float SlingshotMaxDrawSeconds = 3.0f;
   // Fire-rate cap (issue #163): a sub-minimum release just relaxes the band (no
   // stone), & the band needs a beat between shots, so tap-spam does nothing.
   [Export] public float SlingshotMinDrawSeconds = 0.2f;
-  [Export] public float SlingshotCooldownSeconds = 0.5f;
-  [Export] public float SlingshotMinSpeed = 22.0f;
+  [Export] public float SlingshotCooldownSeconds = 0.35f; // Snappier taps (issue #288): close-range spam is a real option.
+  // 12, down from 22 (issue #288): a quick tap lobs a stone just past punch reach
+  // (~3m with the steeper tap gravity below) - range & damage traded for rate.
+  [Export] public float SlingshotMinSpeed = 12.0f;
   // Raised from 60 (issue #163): a full draw is a genuinely long shot.
-  [Export] public float SlingshotMaxSpeed = 90.0f;
+  // 140, up from 90 (issue #288, the dart-speed spirit): a full draw crosses the map quick.
+  [Export] public float SlingshotMaxSpeed = 140.0f;
   // 15-60 damage via CalculateHealthDecrease (issue #99): a nuisance at a tap,
   // a proper wallop at full draw, never a one-hit zap-out.
   [Export] public float SlingshotMinEnergy = 0.15f;
@@ -47,7 +51,7 @@ public partial class Player
   public const float SlungBulkEnergyCap = 0.9f; // Just under the one-shot threshold (issue #208).
   // Arc flattening (issue #163): stone gravity eases off as the draw rises, so
   // full-draw stones fly flat long shots while taps stay lobbed.
-  [Export] public float SlingshotMinDrawGravity = 24.0f;
+  [Export] public float SlingshotMinDrawGravity = 30.0f; // Steeper taps (issue #288): the spam lob drops fast.
   [Export] public float SlingshotMaxDrawGravity = 10.0f;
   // A slung paper airplane flies fast & dead straight - no arc, no homing (issue #191).
   [Export] public float SlungAirplaneSpeed = 110.0f;
@@ -155,12 +159,25 @@ public partial class Player
     FireSlingshotStone();
   }
 
+  private bool _slingshotLockedIn;
+
   private void AccumulateSlingshotDraw (float dt)
   {
     if (_slingshotCooldownLeft > 0.0f) return; // Fire-rate cap (issue #163): no new draw mid-cooldown.
-    if (_slingshotDrawSeconds <= 0.0f) _slingshotStretchSound.Play(); // Once per draw.
+    if (_slingshotDrawSeconds <= 0.0f) { _slingshotStretchSound.Play(); _slingshotLockedIn = false; } // Once per draw.
     _slingshotDrawSeconds = Mathf.Min (SlingshotMaxDrawSeconds, _slingshotDrawSeconds + dt);
+    // Full power announces itself unmistakably (issue #288): the first frame at
+    // full stretch clicks, flashes the held frame white, & the tremble stops dead.
+    if (!_slingshotLockedIn && SlingshotDrawFraction >= 1.0f) { _slingshotLockedIn = true; AnnounceSlingshotLockIn(); }
     ApplySlingshotDrawPose();
+  }
+
+  private void AnnounceSlingshotLockIn()
+  {
+    _weaponPickupSound.Play(); // The sharp click every player already knows.
+    var flash = CreateTween();
+    flash.TweenProperty (_slingshotHeld, "scale", Vector3.One * 1.18f, 0.06f);
+    flash.TweenProperty (_slingshotHeld, "scale", Vector3.One, 0.12f);
   }
 
   private void CancelSlingshotDraw()
@@ -176,7 +193,12 @@ public partial class Player
   // with them - snapping forward when the draw resets to zero (issue #163).
   private void ApplySlingshotDrawPose()
   {
-    _slingshotHeld.Position = SlingshotRestPosition + Vector3.Back * (SlingshotDrawPullMeters * SlingshotDrawFraction);
+    // The tremble (issue #288): the strain shakes the frame harder as the draw
+    // deepens - & holds dead steady the moment full power locks in.
+    var tremble = _slingshotLockedIn || SlingshotDrawFraction <= 0.0f
+      ? Vector3.Zero
+      : new Vector3 (_rng.Randf() - 0.5f, _rng.Randf() - 0.5f, 0.0f) * (0.016f * SlingshotDrawFraction);
+    _slingshotHeld.Position = SlingshotRestPosition + Vector3.Back * (SlingshotDrawPullMeters * SlingshotDrawFraction) + tremble;
     SlingshotStone.PoseBand (_slingshotHeld, SlingshotDrawFraction);
   }
 
