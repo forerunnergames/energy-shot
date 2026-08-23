@@ -1416,85 +1416,20 @@ public partial class PlaytestDriver : Node
       await WaitUntil (() => Self.Holds (HeldWeapon.PaperAirplane), 75, "collected the airplane for the mine-load phase (#325)");
     }
 
-    // A CLEAN lane (the first run's lesson): the drop phase leaves its laser at
-    // park + (0,0,-2), & the open slingshot loaded THAT en route - a full pouch
-    // can't collect, so the mine rightly popped. Field-relevant: a loaded pouch
-    // walks onto mines like anyone else (#286 covers EMPTY pouches only).
-    // Round 3's lesson: gliders HOME - a lane 2m from the parked victim got the
-    // throw locked onto them instead of landing. The west lane is 8m from the
-    // victim & 3m from the drop-phase litter.
-    var lane = ShooterParkSpot + new Vector3 (-3.0f, 0.0f, 0.0f);
-    Self.Position = lane;
-    await Task.Delay (300);
+    // OPEN GROUND (the terminal lesson of the whole saga: six rounds of deck-
+    // lane tuning lost to litter, fixtures, bodies, feeders & unseen walls - while
+    // the VICTIM's landmine phase, on the barren ground plane at y~0.9, passes
+    // every single run). The shooter's load test moves to the same proven
+    // terrain, well away from the victim's own mine ground & every fixture.
+    var mineGround = new Vector3 (20.0f, 1.4f, -50.0f);
+    Self.Position = mineGround;
+    await Task.Delay (400);
     PressAction ("weapon_6");
     await Task.Delay (100);
     ReleaseAction ("weapon_6");
     Assert (Self.SelectedWeapon == SelectedWeapon.PaperAirplane, "airplane equipped for the mine-load phase (#325)");
-    // Bystander-aware landing (main's v0.8.117 red: the idle host stood in the
-    // old fixed zone & stepped on the mine ONE SECOND after it landed - the load
-    // found the pickup gone & the host got zapped for its trouble): of the four
-    // compass lanes 4m out, land in the one farthest from both idle bodies (the
-    // #358 dart-step medicine).
-    var hostBody = FindPlayer (HostName)!;
-    var victimBody = FindPlayer (VictimName)!;
-    var landingZone = lane + new Vector3 (0.0f, 0.0f, -4.0f);
-    var bestClearance = -1.0f;
-
-    // Clearance counts BODIES & RESTOCKING FIXTURES alike (this round's second
-    // feeder: the +Z zone sits 0.5m from the laser spawner, which restocks
-    // unconditionally - sweep it, sling it, it respawns forever).
-    var fixtures = new[] { WeaponSpawner.PlaytestLaserPosition, WeaponSpawner.PlaytestBoomerangPosition, WeaponSpawner.PlaytestSlingshotPosition, WeaponSpawner.PlaytestBlowgunPosition, WeaponSpawner.PlaytestDartPosition, WeaponSpawner.PlaytestAirplanePosition };
-
-    foreach (var throwLane in new[] { new Vector3 (0.0f, 0.0f, -4.0f), new Vector3 (0.0f, 0.0f, 4.0f), new Vector3 (-4.0f, 0.0f, 0.0f), new Vector3 (4.0f, 0.0f, 0.0f) })
-    {
-      var candidate = lane + throwLane;
-      var clearance = Mathf.Min (FlatDistance (candidate, hostBody.GlobalPosition), FlatDistance (candidate, victimBody.GlobalPosition));
-      foreach (var fixture in fixtures) clearance = Mathf.Min (clearance, FlatDistance (candidate, fixture));
-      if (clearance <= bestClearance) continue;
-      bestClearance = clearance;
-      landingZone = candidate;
-    }
-
-    // PRE-THROW SWEEP (the terminal lesson of five rounds: sweeping AFTER the
-    // throw means standing near an armed mine by construction - litter loads,
-    // the full pouch is a stepper, the mine pops us. BEFORE the throw there is
-    // no mine, so the sweep is perfectly safe): with the open pouch, load each
-    // pickup out of the chosen zone & sling it far away, until the zone is bare.
-    PressAction ("weapon_5");
-    await Task.Delay (100);
-    ReleaseAction ("weapon_5");
-    Assert (Self.SelectedWeapon == SelectedWeapon.Slingshot, "pouch out for the pre-throw sweep (#325)");
-    var sweepDeadline = Time.GetTicksMsec() + 20_000;
-
-    while (Time.GetTicksMsec() < sweepDeadline)
-    {
-      if (Self.SlingshotAmmo != HeldWeapon.None)
-      {
-        Self.Position = lane;
-        await Task.Delay (300);
-        AimAt (Self.GlobalPosition + new Vector3 (0.0f, 25.0f, 30.0f));
-        await SlingAStone (drawMs: 300, "swept a straggler out of the landing zone (#325)");
-        await Task.Delay (500);
-        continue;
-      }
-
-      var straggler = _world.GetChildren().OfType <WeaponPickup>().FirstOrDefault (pickup => !pickup.IsQueuedForDeletion() && FlatDistance (pickup.GlobalPosition, landingZone) < 6.0f && fixtures.All (fixture => FlatDistance (pickup.GlobalPosition, fixture) > 1.0f));
-      if (straggler == null) break;
-      Self.Position = straggler.GlobalPosition + Vector3.Up * 0.3f;
-      await TryWaitUntil (() => Self.SlingshotAmmo != HeldWeapon.None, 5);
-      await Task.Delay (200);
-    }
-
-    Assert (Self.SlingshotAmmo == HeldWeapon.None, "the pouch is EMPTY after the pre-throw sweep (#325)");
-    Self.Position = lane;
-    await Task.Delay (300);
-
-    // Now the throw, into the cleaned zone.
-    PressAction ("weapon_6");
-    await Task.Delay (100);
-    ReleaseAction ("weapon_6");
-    Assert (Self.SelectedWeapon == SelectedWeapon.PaperAirplane, "airplane back out for the throw (#325)");
-    AimAt (new Vector3 (landingZone.X, 30.25f, landingZone.Z)); // Into the deck: a short flight & a fast come-down.
+    var landingZone = mineGround + new Vector3 (4.0f, 0.0f, 0.0f);
+    AimAt (landingZone with { Y = 0.9f }); // Into the bare floor: a short flight & a fast come-down.
     PressLeftClick();
     await Task.Delay (60);
     ReleaseLeftClick();
@@ -1504,8 +1439,8 @@ public partial class PlaytestDriver : Node
     await Task.Delay (100);
     ReleaseAction ("weapon_5");
     Assert (Self.SelectedWeapon == SelectedWeapon.Slingshot && Self.SlingshotAmmo == HeldWeapon.None, "open EMPTY slingshot out for the armed pickup (#325)");
-    // Chase the LIVE mine (it settles & slides like every pickup this week) with
-    // the pouch empty & the zone swept bare - nothing left to race the load.
+    // Chase the LIVE mine (it settles & slides like every pickup) - the barren
+    // ground has nothing to race the load & nobody to step on the mine first.
     var mineLoadDeadline = Time.GetTicksMsec() + 20_000;
 
     while (Self.SlingshotAmmo != HeldWeapon.PaperAirplane && Time.GetTicksMsec() < mineLoadDeadline)
