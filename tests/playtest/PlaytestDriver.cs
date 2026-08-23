@@ -925,8 +925,19 @@ public partial class PlaytestDriver : Node
     // only other banana in the level is the playtest one down in the arena, so
     // starting empty-handed is what makes the wait below mean "the drop was claimed".
     Assert (!Self.Holds (HeldWeapon.Banana), "reached the death-drop phase with no banana of our own (#169)");
-    Self.Position = drop.GlobalPosition;
-    await WaitUntil (() => Self.Holds (HeldWeapon.Banana), 30, "victim's dropped banana was claimable (#169)");
+    // CHASE the live drop (3x today after #370's carry: the kill's shove slides the
+    // dying victim to the deck EDGE - death y 0.9m below the deck - & a single
+    // teleport onto the edge pickup tumbled the shooter off it, 30s of nothing).
+    // Re-park just above the pickup each beat until the claim lands.
+    var claimDeadline = Time.GetTicksMsec() + 30_000;
+
+    while (!Self.Holds (HeldWeapon.Banana) && Time.GetTicksMsec() < claimDeadline)
+    {
+      if (IsInstanceValid (drop) && drop.IsInsideTree()) Self.Position = drop.GlobalPosition + Vector3.Up * 0.4f;
+      await Task.Delay (700);
+    }
+
+    Assert (Self.Holds (HeldWeapon.Banana), "victim's dropped banana was claimable (#169)");
     Self.Position = SpawnRoomCenter; // Back where the phases below expect to run.
     await Task.Delay (300); // Settle onto the floor.
     // That pickup auto-equipped the banana (#128) & the phases below count laser
