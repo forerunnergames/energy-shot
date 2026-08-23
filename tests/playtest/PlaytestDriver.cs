@@ -222,7 +222,21 @@ public partial class PlaytestDriver : Node
     // watchdog kills at 600s from process launch, so the tail budget is whatever is
     // left of 570 engine-seconds - a stall still fails by name, never by SIGKILL.
     var tailBudgetSeconds = Mathf.Max (30, 570 - (int)(Time.GetTicksMsec() / 1000));
-    await WaitUntil (() => _world.GetPlayers().Count() == 1, tailBudgetSeconds, "clients disconnected");
+    // The LEASH (today's recurring villain: the idle host, shoved around by the
+    // club calibration & every knockback - now carried 6m+ by #334's momentum
+    // window - kept wandering onto dart litter, mines & the airplane FIXTURE,
+    // where it stole the restock & starved the shooter's census wait): while
+    // idling out the clients' phases, re-park every few seconds if displaced.
+    var anchor = Self.GlobalPosition;
+    var leashDeadline = Time.GetTicksMsec() + (ulong)(tailBudgetSeconds * 1000);
+
+    while (_world.GetPlayers().Count() > 1 && Time.GetTicksMsec() < leashDeadline)
+    {
+      if (!Self.Fallen && FlatDistance (Self.GlobalPosition, anchor) > 3.0f) Self.Position = anchor;
+      await Task.Delay (3000);
+    }
+
+    Assert (_world.GetPlayers().Count() == 1, "clients disconnected");
     // The version line goes only to joining clients, never broadcast (#158), so the
     // host must never have seen one.
     Assert (_adminMessages.All (message => !message.Contains ("Running")), "version line was not broadcast to the host (#158)");
