@@ -1843,6 +1843,23 @@ public partial class PlaytestDriver : Node
     var before = Self.Health;
     var tick = Mathf.RoundToInt (Self.MaxHealth * Self.PoisonTickFractionPerDart);
     await WaitUntil (() => Self.Health <= before - tick, Self.PoisonTickSeconds + 4.0f, $"the poison ticked 10% ({tick}) within one tick period (#194/#236)");
+    // Bread heals THROUGH the poison (Aaron, 2026-08-24): a tick is not an
+    // attacker's swing, so the ritual survives one & the loaf lands.
+    if (Self.Holds (HeldWeapon.Bread))
+    {
+      PressAction ("weapon_0");
+      await Task.Delay (150);
+      ReleaseAction ("weapon_0");
+      PressLeftClick();
+      await Task.Delay (100);
+      ReleaseLeftClick();
+      await WaitUntil (() => Self.Health == Self.MaxHealth, 8, "bread healed us to full WHILE poisoned (#194)");
+      Assert (Self.PoisonDarts > 0, "bread healed but never cured the poison (#194)");
+    }
+
+    // Poison WEARS OFF (Aaron, 2026-08-24): every dart works its way out on its own
+    // clock, so the pincushion clears without dying for it.
+    await WaitUntil (() => Self.PoisonDarts == 0, Self.PoisonDartSeconds + Self.PoisonTickSeconds + 10.0f, "every dart worked its way out - poison never lasts forever (#194)");
   }
 
   private async Task RunBlowgunPhase (Player victim)
