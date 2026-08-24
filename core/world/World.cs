@@ -359,7 +359,8 @@ public partial class World : Node3D
     var isPlaytest = OS.GetCmdlineUserArgs().Contains ("--playtest");
     // --mode koth picks King of the Hill (issue #44); anything else is classic zaps.
     var mode = !isPlaytest && ParseArgValue ("--mode").ToLowerInvariant() == "koth" ? GameMode.KingOfTheHill : GameMode.Zaps;
-    ConfigureRound (isPlaytest ? 0 : Mathf.Clamp (ParseArgInt ("--round-minutes", Match.DefaultRoundMinutes), 0, Match.MaxRoundMinutes) * 60, isPlaytest ? 0 : Mathf.Clamp (ParseArgInt ("--zap-limit", Match.DefaultZapLimit), 0, Match.MaxZapLimit), mode);
+    _hillRotateSeconds = Mathf.Clamp (ParseArgInt ("--hill-rotate-seconds", Match.HillRotateSeconds), 0, 3600); // 0 = never move (Aaron: settings, not code).
+    ConfigureRound (isPlaytest ? 0 : Mathf.Clamp (ParseArgInt ("--round-minutes", Match.DefaultRoundMinutes), 0, Match.MaxRoundMinutes) * 60, isPlaytest ? 0 : Mathf.Clamp (ParseArgInt ("--zap-limit", Match.DefaultPointLimit (mode)), 0, Match.MaxZapLimit), mode); // KOTH scores per second, so its own default (issue #44).
     var peer = new ENetMultiplayerPeer();
     var error = peer.CreateServer (port);
 
@@ -622,7 +623,14 @@ public partial class World : Node3D
     AddChild (_hill);
   }
 
-  private void RollHillSpot() => _hillIndex = (int)(GD.Randi() % Hill.Spots.Length);
+  private float _hillHeldSeconds;
+  private int _hillRotateSeconds = Match.HillRotateSeconds; // --hill-rotate-seconds; 0 = the hill stays put.
+
+  private void RollHillSpot()
+  {
+    _hillIndex = Match.NextSpotIndex (_hillIndex, Hill.Spots.Length, (int)GD.Randi());
+    _hillHeldSeconds = 0.0f;
+  }
 
   // Sole occupant of the hill earns a point per tick (issue #44); a contest pays nobody.
   private string AwardHillPoint (List <Player> players)
@@ -643,6 +651,21 @@ public partial class World : Node3D
     var players = GetPlayers().ToList();
     if (players.Count < 2) return;
     _roundElapsed += 1.0f;
+
+    // The hill moves every minute (Aaron, 2026-08-24): hold it & it leaves. The
+    // index rides the clock broadcast, so every peer rebuilds the ring in step.
+    if (_mode == GameMode.KingOfTheHill)
+    {
+      _hillHeldSeconds += 1.0f;
+
+      if (_hillRotateSeconds > 0 && _hillHeldSeconds >= _hillRotateSeconds)
+      {
+        RollHillSpot();
+        EnsureHill (_hillIndex);
+        ServerLog.Event ($"hill rotated to spot {_hillIndex}");
+      }
+    }
+
     var holder = _mode == GameMode.KingOfTheHill ? AwardHillPoint (players) : string.Empty;
     var secondsLeft = _roundSeconds > 0 ? Mathf.Max (0, _roundSeconds - (int)_roundElapsed) : -1;
     Rpc (MethodName.ReceiveRoundClock, secondsLeft, _zapLimit, (int)_mode, holder, _hillIndex);
