@@ -38,6 +38,8 @@ public partial class World : Node3D
   [Signal] public delegate void ChatReceivedEventHandler (int senderId, string senderName, string text);
   [Signal] public delegate void KickedFromServerEventHandler (string reason);
   [Signal] public delegate void ServerShutDownEventHandler();
+  // Left on purpose (Aaron, 2026-08-24): the menu comes back with no scare text.
+  [Signal] public delegate void LeftGameEventHandler();
   private const int DefaultServerPort = 55556;
   // Build version (issue #170): the release workflow stamps the tag (without the
   // leading "v") into project.godot at export time; dev builds keep the "-dev" value.
@@ -67,7 +69,22 @@ public partial class World : Node3D
   public Player? SelfPlayer => _selfPlayer;
   private void OnGamePaused() => _selfPlayer?.SetInputEnabled (isEnabled: false);
   private void OnGameResumed() => _selfPlayer?.SetInputEnabled (isEnabled: true);
-  private void OnGameQuit() => GetTree().Quit();
+  // Esc > quit inside a game LEAVES the session & returns to the main menu (Aaron,
+  // 2026-08-24) - the app only exits from the menu's own Quit button. Closing the
+  // peer disconnects a host's clients, who take their usual server-shutdown path.
+  private void OnGameQuit()
+  {
+    if (Multiplayer.MultiplayerPeer is not ENetMultiplayerPeer) { GetTree().Quit(); return; } // Not in a session: the old behavior.
+    ServerLog.Event ("session left: returning to the main menu");
+    Multiplayer.MultiplayerPeer.Close();
+    Multiplayer.MultiplayerPeer = null; // Back to the engine's offline peer.
+    foreach (var player in GetPlayers().ToList()) player.QueueFree();
+    _selfPlayer = null;
+    _hill?.QueueFree();
+    _hill = null;
+    Input.MouseMode = Input.MouseModeEnum.Visible;
+    EmitSignal (SignalName.LeftGame);
+  }
   private static void OnClientConnectedToServer (long peerId) => ServerLog.Event (peerId, "connected");
   // Only a live ENet server session logs (issue #111): the engine's default
   // OfflineMultiplayerPeer also reports IsServer, which would spam clients in menus.
