@@ -107,7 +107,7 @@ public partial class SlingshotStone : Node3D
   {
     // The textured GLB the pickup & held views use (issue #284): the raw OBJ + a
     // flat override nocked an all-white gun standing on end.
-    HeldWeapon.Laser => Scaled (ResourceLoader.Load <PackedScene> ("res://assets/weapons/weapon-energy-handle.glb").Instantiate <Node3D>(), 0.25f),
+    HeldWeapon.Laser => PouchFit (Scaled (ResourceLoader.Load <PackedScene> ("res://assets/weapons/weapon-energy-handle.glb").Instantiate <Node3D>(), 0.25f)),
     HeldWeapon.Banana => MeshVisual ("res://assets/weapons/Banana_Rifle.obj", BananaYellow, 0.35f),
     HeldWeapon.Boomerang => Scaled (BoomerangProjectile.CreateVisual(), 0.6f),
     HeldWeapon.Slingshot => Scaled (CreateSlingshotVisual(), 0.6f),
@@ -124,6 +124,50 @@ public partial class SlingshotStone : Node3D
   {
     visual.Scale = Vector3.One * scale;
     return visual;
+  }
+
+  // Fit ANY imported layout into the pouch (issue #388, Escendrix & Jonathan's
+  // screenshot: the nocked laser's GLB pieces loomed over a quarter of the screen
+  // & floated detached above the frame - the model's internal node offsets sit far
+  // from its origin, so root-scaling alone leaves fragments scattered). The
+  // combined mesh AABB recenters on the origin & the longest side clamps to pouch
+  // size. Deferred: imported scenes report their AABBs only once inside the tree.
+  private const float NockedFitMeters = 0.55f;
+
+  private static Node3D PouchFit (Node3D visual)
+  {
+    var container = new Node3D();
+    container.AddChild (visual);
+    Callable.From (() => FitToPouch (container, visual)).CallDeferred();
+    return container;
+  }
+
+  private static void FitToPouch (Node3D container, Node3D visual)
+  {
+    if (!GodotObject.IsInstanceValid (container) || !container.IsInsideTree()) return;
+    var combined = new Aabb();
+    var first = true;
+
+    foreach (var mesh in MeshDescendants (visual))
+    {
+      var local = container.GlobalTransform.AffineInverse() * mesh.GlobalTransform;
+      var box = local * mesh.GetAabb();
+      combined = first ? box : combined.Merge (box);
+      first = false;
+    }
+
+    if (first) return; // No meshes to fit.
+    var longest = Mathf.Max (combined.Size.X, Mathf.Max (combined.Size.Y, combined.Size.Z));
+    var fit = longest > NockedFitMeters && longest > 0.0f ? NockedFitMeters / longest : 1.0f;
+    visual.Scale *= fit;
+    visual.Position -= combined.GetCenter() * fit;
+  }
+
+  private static System.Collections.Generic.IEnumerable <MeshInstance3D> MeshDescendants (Node root)
+  {
+    if (root is MeshInstance3D self) yield return self;
+    foreach (var child in root.GetChildren())
+      foreach (var mesh in MeshDescendants (child)) yield return mesh;
   }
 
   private static Node3D MeshVisual (string? meshPath, Color color, float scale)
