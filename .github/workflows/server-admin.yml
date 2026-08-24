@@ -21,9 +21,15 @@ on:
         type: boolean
         default: false
       restart:
-        description: "Restart the server to apply"
+        description: "Restart the server to apply (needed for mode/password to take effect)"
         type: boolean
-        default: true
+        default: false
+
+# One admin run at a time (CodeRabbit): two concurrent dispatches could interleave
+# the drop-in & env-file writes & leave a server state neither run asked for.
+concurrency:
+  group: server-admin
+  cancel-in-progress: false
 
 jobs:
   admin:
@@ -39,6 +45,10 @@ jobs:
           OPS_KEY: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPY/AXYCLCLVZ2fIcn1fOgOq+kQpdhUpfZC+QOSEtAtR aaron@energyshot-ops"
         run: |
           if [ -z "$DROPLET_HOST" ]; then echo "Deploy secrets absent"; exit 1; fi
+          # A dispatch input is NOT a registered secret, so nothing redacts it for
+          # us (CodeRabbit): register it with the runner before it can reach any log
+          # or error trace. Nothing below ever echoes the value itself.
+          if [ -n "$PASSWORD" ]; then echo "::add-mask::$PASSWORD"; fi
           trap 'rm -f droplet_key known_hosts' EXIT
           echo "${{ secrets.DROPLET_SSH_KEY }}" > droplet_key
           chmod 600 droplet_key
