@@ -232,7 +232,13 @@ public partial class PlaytestDriver : Node
     // re-parking onto OTHER phases' pickups - the shooter's dropped blowgun twice
     // & the airplane restock once). The anchor moves to bare ground far from
     // every phase zone; the club phase clubs it there, litter-free.
-    var anchor = new Vector3 (30.0f, 1.4f, -30.0f);
+    // Building8's ROOF (the empty quarter wasn't empty enough: a killed body's
+    // slide off the deck grounded its banana near the old ground anchor & the
+    // leashed host ate it - '[peer 1] weapon award: Banana'). Drops land at the
+    // dying body's (x,z), & no body ever dies on this 5x5 roof 45m+ from every
+    // phase zone; the club phase already chases host.GlobalPosition, so it
+    // calibrates up here with real footing.
+    var anchor = new Vector3 (75.0f, 2.6f, 30.0f);
     Self.Position = anchor;
     await Task.Delay (300);
     var leashDeadline = Time.GetTicksMsec() + (ulong)(tailBudgetSeconds * 1000);
