@@ -10,21 +10,35 @@ namespace com.forerunnergames.energyshot;
 public class PoisonTest
 {
   [TestCase]
-  public void AFreshDartIsNotExpired() => AssertBool (Player.DartExpired (1000, 1000, 20.0f)).IsFalse();
+  public void OneDartPoisonsYouThreeTimes()
+  {
+    var player = AutoFree (new Player())!;
+    AssertInt (player.PoisonTicksPerDart).IsEqual (3);
+  }
 
   [TestCase]
-  public void ADartSurvivesJustUnderItsLifetime() => AssertBool (Player.DartExpired (1000, 1000 + 19_999, 20.0f)).IsFalse();
+  public void OneDartCostsThirtyPercentOverItsLife()
+  {
+    var player = AutoFree (new Player())!;
+    AssertFloat (Player.DartLifetimeFraction (player.PoisonTicksPerDart, player.PoisonTickFractionPerDart)).IsEqualApprox (0.3f, 0.0001f);
+  }
 
   [TestCase]
-  public void ADartExpiresAtItsLifetime() => AssertBool (Player.DartExpired (1000, 1000 + 20_000, 20.0f)).IsTrue();
+  public void DartsAreCumulativeWithinATick()
+  {
+    var player = AutoFree (new Player())!;
+    AssertFloat (Player.TickFractionFor (1, player.PoisonTickFractionPerDart)).IsEqualApprox (0.1f, 0.0001f);
+    AssertFloat (Player.TickFractionFor (3, player.PoisonTickFractionPerDart)).IsEqualApprox (0.3f, 0.0001f);
+    AssertFloat (Player.TickFractionFor (5, player.PoisonTickFractionPerDart)).IsEqualApprox (0.5f, 0.0001f);
+  }
 
   [TestCase]
   public void PoisonEndsInFiniteTime()
   {
     // The spec's point: a pincushion clears on its own, it never rides you forever.
     var player = AutoFree (new Player())!;
-    AssertFloat (player.PoisonDartSeconds).IsGreater (0.0f);
-    AssertFloat (player.PoisonDartSeconds).IsLess (120.0f);
+    AssertInt (player.PoisonTicksPerDart).IsGreater (0);
+    AssertFloat (player.PoisonTicksPerDart * player.PoisonTickSeconds).IsLess (60.0f);
   }
 
   [TestCase]
