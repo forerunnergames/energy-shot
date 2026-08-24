@@ -12,6 +12,18 @@ on:
         type: choice
         options: [unchanged, koth, zaps]
         default: unchanged
+      round_minutes:
+        description: "Round length in minutes (blank = unchanged, 0 = no time limit)"
+        type: string
+        default: ""
+      point_limit:
+        description: "Points to win - zaps, or hill seconds in KOTH (blank = unchanged, 0 = none)"
+        type: string
+        default: ""
+      hill_rotate_seconds:
+        description: "KOTH: seconds before the hill moves (blank = unchanged, 0 = never)"
+        type: string
+        default: ""
       password:
         description: "New join password (blank = unchanged)"
         type: string
@@ -39,6 +51,9 @@ jobs:
         env:
           DROPLET_HOST: ${{ secrets.DROPLET_HOST }}
           MODE: ${{ inputs.mode }}
+          ROUND_MINUTES: ${{ inputs.round_minutes }}
+          POINT_LIMIT: ${{ inputs.point_limit }}
+          HILL_ROTATE: ${{ inputs.hill_rotate_seconds }}
           PASSWORD: ${{ inputs.password }}
           AUTHORIZE_KEY: ${{ inputs.authorize_ops_key }}
           RESTART: ${{ inputs.restart }}
@@ -57,22 +72,38 @@ jobs:
           # so nothing a field could contain can inject a shell command.
           ssh -i droplet_key -o UserKnownHostsFile=known_hosts -o StrictHostKeyChecking=yes \
             root@"$DROPLET_HOST" \
-            "MODE='$MODE' PASSWORD='$PASSWORD' AUTHORIZE_KEY='$AUTHORIZE_KEY' RESTART='$RESTART' OPS_KEY='$OPS_KEY' bash -s" <<'ADMIN'
+            "MODE='$MODE' ROUND_MINUTES='$ROUND_MINUTES' POINT_LIMIT='$POINT_LIMIT' HILL_ROTATE='$HILL_ROTATE' PASSWORD='$PASSWORD' AUTHORIZE_KEY='$AUTHORIZE_KEY' RESTART='$RESTART' OPS_KEY='$OPS_KEY' bash -s" <<'ADMIN'
           set -e
           ENV_FILE=/etc/energy-shot/server.env
 
-          # Mode: the server reads --mode from its command line (World.cs), so a
-          # systemd drop-in overrides ExecStart with the chosen mode appended. The
-          # base ExecStart is read from the real unit file, immune to this drop-in.
-          if [ "$MODE" != "unchanged" ]; then
+          # Game settings live in the server's ARGS, never in code (Aaron,
+          # 2026-08-24): the extra args are kept in one state file, edited flag by
+          # flag, & re-emitted as a systemd drop-in over the real unit's ExecStart.
+          # A run that changes one setting therefore keeps every other setting.
+          ARGS_FILE=/etc/energy-shot/extra-args
+          mkdir -p /etc/energy-shot
+          touch "$ARGS_FILE"
+          extra=$(cat "$ARGS_FILE")
+
+          set_arg() { # flag value
+            extra=$(printf '%s' "$extra" | sed -E "s| $1 [^ ]+||g")
+            [ -n "$2" ] && extra="$extra $1 $2"
+          }
+
+          [ "$MODE" != "unchanged" ] && set_arg --mode "$MODE"
+          [ -n "$ROUND_MINUTES" ] && set_arg --round-minutes "$ROUND_MINUTES"
+          [ -n "$POINT_LIMIT" ] && set_arg --zap-limit "$POINT_LIMIT"
+          [ -n "$HILL_ROTATE" ] && set_arg --hill-rotate-seconds "$HILL_ROTATE"
+
+          if [ "$MODE" != "unchanged" ] || [ -n "$ROUND_MINUTES" ] || [ -n "$POINT_LIMIT" ] || [ -n "$HILL_ROTATE" ]; then
+            printf '%s' "$extra" > "$ARGS_FILE"
             unit=$(systemctl show -p FragmentPath --value energy-shot)
             base=$(grep -m1 '^ExecStart=' "$unit" | sed 's/^ExecStart=//')
-            cleaned=$(printf '%s' "$base" | sed -E 's/ --mode [^ ]+//g')
             mkdir -p /etc/systemd/system/energy-shot.service.d
-            printf '[Service]\nExecStart=\nExecStart=%s --mode %s\n' "$cleaned" "$MODE" \
+            printf '[Service]\nExecStart=\nExecStart=%s%s\n' "$base" "$extra" \
               > /etc/systemd/system/energy-shot.service.d/mode.conf
             systemctl daemon-reload
-            echo "mode set to $MODE"
+            echo "settings now:$extra"
           fi
 
           # Password: the env file holds SERVER_PASSWORD (loaded via EnvironmentFile).
