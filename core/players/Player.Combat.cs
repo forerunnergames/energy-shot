@@ -341,7 +341,11 @@ public partial class Player
     // pool already is the handicap.
     Dancing = false; // Getting zapped mid-dance ends the groove on every peer (issue #103).
     _wasEatingWhenHit = Eating; // Death-message context, captured before the interrupt clears it (issue #192).
-    InterruptEating(); // YOU can't cancel the ritual; an attacker can - & the loaf is wasted (issue #192).
+    // An ATTACKER cancels the ritual (issue #192) - but a poison tick is not a
+    // swing (Aaron, 2026-08-24: bread never healed while poisoned). Ticks land
+    // every 5s & the ritual takes 3, so the loaf was doomed more often than not.
+    // Bread still cannot CURE the poison (issue #194) - it just heals, as specced.
+    if (LastDamageKind != DamageKind.Poison) InterruptEating();
     var attacker = GetParent().GetNodeOrNull <Player> ($"{attackerId}");
     var handicap = 1.0f + 0.5f * Mathf.Max (0, TierOf (MaxHealth) - TierOf (attacker?.MaxHealth ?? MaxHealth));
     var decrease = Mathf.RoundToInt (CalculateHealthDecrease (energy) * handicap);
