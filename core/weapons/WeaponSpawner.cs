@@ -234,19 +234,22 @@ public partial class WeaponSpawner : Node3D
   {
     if (_isPlaytest) return;
     var missing = MaxDarts - CountDarts (pickups, players);
-    var clusters = Mathf.CeilToInt (missing / (float)Mathf.Max (1, DartsPerCluster));
+    var perCluster = Mathf.Max (1, DartsPerCluster); // One validated size for divisor & ring (CodeRabbit on #395).
+    var clusters = Mathf.CeilToInt (missing / (float)perCluster);
 
     for (var cluster = 0; cluster < clusters && missing > 0; ++cluster)
     {
       var target = new Vector3 (_rng.RandfRange (-85.0f, 85.0f), 0.0f, _rng.RandfRange (-85.0f, 85.0f)); // The doubled floor (issue #293), with an edge margin.
       if (!TryFindGround (target, out var spot)) continue; // The next census retries this one.
 
-      // A little ring, so the three read as a stash instead of one fat dart.
-      for (var inCluster = 0; inCluster < DartsPerCluster && missing > 0; ++inCluster, --missing)
+      // A little ring, so the three read as a stash instead of one fat dart. An
+      // offset with no ground under it seats on the cluster's own grounded
+      // center instead - never at an unseated height (CodeRabbit on #395).
+      for (var inCluster = 0; inCluster < perCluster && missing > 0; ++inCluster, --missing)
       {
-        var angle = Mathf.Tau * inCluster / Mathf.Max (1, DartsPerCluster);
+        var angle = Mathf.Tau * inCluster / perCluster;
         var offset = new Vector3 (Mathf.Cos (angle), 0.0f, Mathf.Sin (angle)) * 0.45f;
-        Spawn (HeldWeapon.PoisonDart, TryFindGround (spot + offset, out var seated) ? seated : spot + offset, expires: false);
+        Spawn (HeldWeapon.PoisonDart, TryFindGround (spot + offset, out var seated) ? seated : spot, expires: false);
       }
     }
   }

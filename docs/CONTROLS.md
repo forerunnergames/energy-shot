@@ -94,7 +94,7 @@ Every player has a floating sensor dome above the body. A laser bolt or a slings
 
 ## Darts
 
-Ten darts exist in the level, no more, no less. A **floating, spinning** dart is a spawned pickup (it hovers well off the floor - no spawned item ever touches the ground): harmless, and only a player holding the blowgun can collect it (walk over it). A dart **lying flat** on the ground has landed - off a zapped-out victim, or a miss that hit a wall - and it's a hazard: step on it without the blowgun and it poisons you as if it hit you; with the blowgun in hand you pick it up as ammo. Slingshot players can load either kind and fire it; a slung dart poisons the same. Drop or lose the blowgun and its darts go back into the level. Darts that fall off the stage respawn.
+Thirty darts exist in the level, no more, no less, spawning in stashes of 3. A **floating, spinning** dart is a spawned pickup (it hovers well off the floor - no spawned item ever touches the ground): harmless, and only a player holding the blowgun can collect it (walk over it). A dart **lying flat** on the ground has landed - off a zapped-out victim, or a miss that hit a wall - and it's a hazard: step on it without the blowgun and it poisons you as if it hit you; with the blowgun in hand you pick it up as ammo. Slingshot players can load either kind and fire it; a slung dart poisons the same. Drop or lose the blowgun and its darts go back into the level. Darts that fall off the stage respawn.
 
 ## Settings
 

@@ -20,7 +20,8 @@ public class DartClusterTest
   public void TheLevelHoldsWholeClusters()
   {
     var spawner = AutoFree (new WeaponSpawner())!;
+    AssertInt (spawner.MaxDarts).IsEqual (30); // The exact contract (CodeRabbit on #395): 30 darts...
+    AssertInt (spawner.MaxDarts / spawner.DartsPerCluster).IsEqual (10); // ...in exactly 10 stashes.
     AssertInt (spawner.MaxDarts % spawner.DartsPerCluster).IsEqual (0);
-    AssertInt (spawner.MaxDarts / spawner.DartsPerCluster).IsGreaterEqual (3); // Several stashes to hunt, not one.
   }
 }
