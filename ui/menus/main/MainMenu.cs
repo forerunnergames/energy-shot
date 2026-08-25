@@ -34,6 +34,7 @@ public partial class MainMenu : Control
     _world.NewGameStarted += OnNewGameStarted;
     _world.KickedFromServer += OnKickedFromServer;
     _world.ServerShutDown += OnServerShutDown;
+    _world.LeftGame += OnLeftGame;
     _bottomMainMenuText.Text = string.Empty;
   }
 
@@ -41,6 +42,14 @@ public partial class MainMenu : Control
   {
     Hide();
     _bottomMainMenuText.Text = string.Empty;
+  }
+
+  // A voluntary exit is not a failure: no red text, just the menu (Aaron, 2026-08-24).
+  private void OnLeftGame()
+  {
+    _bottomMainMenuText.Text = string.Empty;
+    Input.MouseMode = Input.MouseModeEnum.Visible;
+    Show();
   }
 
   private void OnServerShutDown()
