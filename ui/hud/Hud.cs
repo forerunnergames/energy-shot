@@ -168,11 +168,13 @@ public partial class Hud : Control
     _world.SelfPlayerBreadInterrupted += OnSelfPlayerBreadInterrupted;
     GetNode <Timer> ("LeaderboardTimer").Timeout += UpdateLeaderboard;
     _quitDialog = GetNode <ConfirmationDialog2> ("QuitDialog");
+    _quitDialog.GetNode <Label> ("VBoxContainer/Title/Label").Text = "Leave the game?"; // It returns to the menu, it doesn't kill the app (Aaron, 2026-08-24).
     _quitDialog.Confirmed += () => EmitSignal (SignalName.GameQuit);
     _quitDialog.Canceled += CancelQuit;
     _quitDialog.Closed += CancelQuit;
     CreateSettingsDialog(); // Issue #297.
     _world.NewGameStarted += OnNewGameStarted;
+    _world.LeftGame += OnLeftGame; // Back to the menu (Aaron, 2026-08-24): the HUD goes with the session.
     _world.PlayerJoinedGame += OnPlayerJoinedGame;
     _world.PlayerLeftGame += OnPlayerLeftGame;
     _world.RemoteMessageReceived += OnRemoteMessageReceived;
@@ -680,6 +682,13 @@ public partial class Hud : Control
     _healthBar.Value = selfMaxHealth;
     UpdateVignette (selfMaxHealth);
     Show();
+  }
+
+  private void OnLeftGame()
+  {
+    _quitDialog.Hide();
+    _roundOverlay.Visible = false;
+    Hide();
   }
 
   private void OnPlayerJoinedGame (string playerName)

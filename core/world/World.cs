@@ -38,6 +38,8 @@ public partial class World : Node3D
   [Signal] public delegate void ChatReceivedEventHandler (int senderId, string senderName, string text);
   [Signal] public delegate void KickedFromServerEventHandler (string reason);
   [Signal] public delegate void ServerShutDownEventHandler();
+  // Left on purpose (Aaron, 2026-08-24): the menu comes back with no scare text.
+  [Signal] public delegate void LeftGameEventHandler();
   private const int DefaultServerPort = 55556;
   // Build version (issue #170): the release workflow stamps the tag (without the
   // leading "v") into project.godot at export time; dev builds keep the "-dev" value.
@@ -67,7 +69,22 @@ public partial class World : Node3D
   public Player? SelfPlayer => _selfPlayer;
   private void OnGamePaused() => _selfPlayer?.SetInputEnabled (isEnabled: false);
   private void OnGameResumed() => _selfPlayer?.SetInputEnabled (isEnabled: true);
-  private void OnGameQuit() => GetTree().Quit();
+  // Esc > quit inside a game LEAVES the session & returns to the main menu (Aaron,
+  // 2026-08-24) - the app only exits from the menu's own Quit button. Closing the
+  // peer disconnects a host's clients, who take their usual server-shutdown path.
+  private void OnGameQuit()
+  {
+    if (Multiplayer.MultiplayerPeer is not ENetMultiplayerPeer) { GetTree().Quit(); return; } // Not in a session: the old behavior.
+    ServerLog.Event ("session left: returning to the main menu");
+    Multiplayer.MultiplayerPeer.Close();
+    Multiplayer.MultiplayerPeer = null; // Back to the engine's offline peer.
+    foreach (var player in GetPlayers().ToList()) player.QueueFree();
+    _selfPlayer = null;
+    _hill?.QueueFree();
+    _hill = null;
+    Input.MouseMode = Input.MouseModeEnum.Visible;
+    EmitSignal (SignalName.LeftGame);
+  }
   private static void OnClientConnectedToServer (long peerId) => ServerLog.Event (peerId, "connected");
   // Only a live ENet server session logs (issue #111): the engine's default
   // OfflineMultiplayerPeer also reports IsServer, which would spam clients in menus.
@@ -359,7 +376,8 @@ public partial class World : Node3D
     var isPlaytest = OS.GetCmdlineUserArgs().Contains ("--playtest");
     // --mode koth picks King of the Hill (issue #44); anything else is classic zaps.
     var mode = !isPlaytest && ParseArgValue ("--mode").ToLowerInvariant() == "koth" ? GameMode.KingOfTheHill : GameMode.Zaps;
-    ConfigureRound (isPlaytest ? 0 : Mathf.Clamp (ParseArgInt ("--round-minutes", Match.DefaultRoundMinutes), 0, Match.MaxRoundMinutes) * 60, isPlaytest ? 0 : Mathf.Clamp (ParseArgInt ("--zap-limit", Match.DefaultZapLimit), 0, Match.MaxZapLimit), mode);
+    _hillRotateSeconds = Mathf.Clamp (ParseArgInt ("--hill-rotate-seconds", Match.HillRotateSeconds), 0, 3600); // 0 = never move (Aaron: settings, not code).
+    ConfigureRound (isPlaytest ? 0 : Mathf.Clamp (ParseArgInt ("--round-minutes", Match.DefaultRoundMinutes), 0, Match.MaxRoundMinutes) * 60, isPlaytest ? 0 : Mathf.Clamp (ParseArgInt ("--zap-limit", Match.DefaultPointLimit (mode)), 0, Match.MaxZapLimit), mode); // KOTH scores per second, so its own default (issue #44).
     var peer = new ENetMultiplayerPeer();
     var error = peer.CreateServer (port);
 
@@ -622,7 +640,14 @@ public partial class World : Node3D
     AddChild (_hill);
   }
 
-  private void RollHillSpot() => _hillIndex = (int)(GD.Randi() % Hill.Spots.Length);
+  private float _hillHeldSeconds;
+  private int _hillRotateSeconds = Match.HillRotateSeconds; // --hill-rotate-seconds; 0 = the hill stays put.
+
+  private void RollHillSpot()
+  {
+    _hillIndex = Match.NextSpotIndex (_hillIndex, Hill.Spots.Length, (int)GD.Randi());
+    _hillHeldSeconds = 0.0f;
+  }
 
   // Sole occupant of the hill earns a point per tick (issue #44); a contest pays nobody.
   private string AwardHillPoint (List <Player> players)
@@ -643,6 +668,21 @@ public partial class World : Node3D
     var players = GetPlayers().ToList();
     if (players.Count < 2) return;
     _roundElapsed += 1.0f;
+
+    // The hill moves every minute (Aaron, 2026-08-24): hold it & it leaves. The
+    // index rides the clock broadcast, so every peer rebuilds the ring in step.
+    if (_mode == GameMode.KingOfTheHill)
+    {
+      _hillHeldSeconds += 1.0f;
+
+      if (_hillRotateSeconds > 0 && _hillHeldSeconds >= _hillRotateSeconds)
+      {
+        RollHillSpot();
+        EnsureHill (_hillIndex);
+        ServerLog.Event ($"hill rotated to spot {_hillIndex}");
+      }
+    }
+
     var holder = _mode == GameMode.KingOfTheHill ? AwardHillPoint (players) : string.Empty;
     var secondsLeft = _roundSeconds > 0 ? Mathf.Max (0, _roundSeconds - (int)_roundElapsed) : -1;
     Rpc (MethodName.ReceiveRoundClock, secondsLeft, _zapLimit, (int)_mode, holder, _hillIndex);
