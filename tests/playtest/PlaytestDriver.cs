@@ -1859,7 +1859,7 @@ public partial class PlaytestDriver : Node
 
     // Poison WEARS OFF (Aaron, 2026-08-24): every dart works its way out on its own
     // clock, so the pincushion clears without dying for it.
-    await WaitUntil (() => Self.PoisonDarts == 0, Self.PoisonDartSeconds + Self.PoisonTickSeconds + 10.0f, "every dart worked its way out - poison never lasts forever (#194)");
+    await WaitUntil (() => Self.PoisonDarts == 0, Self.PoisonTicksPerDart * Self.PoisonTickSeconds + 15.0f, $"every dart ran out of poison after {Self.PoisonTicksPerDart} ticks - poison never lasts forever (#194)");
   }
 
   private async Task RunBlowgunPhase (Player victim)

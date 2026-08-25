@@ -30,18 +30,20 @@ public partial class Player
   [Export] public float PoisonWobbleRadiansPerDart = 0.25f;
   [Export] public float PoisonWobbleHz = 0.9f;
   [Export] public float PoisonTickFractionPerDart = 0.1f;
-  // Poison WEARS OFF (Aaron, 2026-08-24: "poison shouldnt last forever"): each dart
-  // works its way out on its own clock, so a pincushion clears dart by dart instead
-  // of riding you until your next zap-out. 20s = three ticks of that dart's 10%.
-  [Export] public float PoisonDartSeconds = 20.0f;
+  // Poison wears off by the TICK, not the clock (Aaron, 2026-08-24): one dart costs
+  // 10% of max health every 5s, three times, & then that dart is spent. Darts stack -
+  // three embedded darts cost 30% a tick - & each runs its own three-tick life.
+  [Export] public int PoisonTicksPerDart = 3;
   public static readonly Color PoisonGreen = new(0.35f, 0.72f, 0.2f);
   private int _poisonDarts;
   // Victim-side attribution, oldest dart first: each tick applies one damage packet
   // per dart through the standard sink, so handicap & scoring stay per-attacker.
-  private readonly List <(int Id, string Name, ulong EmbeddedMs)> _dartOwners = new();
+  private readonly List <(int Id, string Name, int TicksLeft)> _dartOwners = new();
 
-  // Pure for the unit tests: a dart's time is up.
-  public static bool DartExpired (ulong embeddedMs, ulong nowMs, float lifetimeSeconds) => nowMs >= embeddedMs + (ulong)(lifetimeSeconds * 1000.0f);
+  // Pure for the unit tests: what one dart costs you over its whole life, & what a
+  // cluster of them costs in a single tick - both as a fraction of max health.
+  public static float DartLifetimeFraction (int ticksPerDart, float fractionPerTick) => ticksPerDart * fractionPerTick;
+  public static float TickFractionFor (int darts, float fractionPerTick) => darts * fractionPerTick;
   private readonly List <Node3D> _dartVisuals = new();
   // Bumped on every respawn so a tick loop from a previous life stops - the burn
   // generation pattern (issue #191).
@@ -78,7 +80,7 @@ public partial class Player
     if (!IsMultiplayerAuthority()) return;
     if (SpawnArmor) return; // Armor shrugs darts off like everything else (issue #48).
     if (Fallen) return; // A body mid-death-sequence is scenery (issue #152).
-    _dartOwners.Add ((attackerId, attackerName, Time.GetTicksMsec()));
+    _dartOwners.Add ((attackerId, attackerName, Mathf.Max (1, PoisonTicksPerDart)));
     PoisonDarts = _dartOwners.Count;
     _damageSound.Play(); // The sting is the victim's only impact feedback.
     GD.Print ($"{DisplayName}: {attackerName}'s dart stuck in me! ({PoisonDarts} embedded)");
@@ -106,28 +108,39 @@ public partial class Player
   // standard damage sink, oldest first, each attributed to whoever blew it.
   private void ApplyPoisonTick()
   {
-    ShedExpiredDarts(); // Poison wears off dart by dart (Aaron, 2026-08-24).
-    if (!IsPoisoned) return;
     LastDamageKind = DamageKind.Poison; // Message context (issue #84).
     EmitSignal (SignalName.PoisonTicked); // The green vignette pulses in step (issue #261).
+
+    // Every embedded dart costs its own 10%, oldest first, attributed to whoever
+    // blew it - so darts are cumulative (three darts = 30% this tick).
     foreach (var (id, name, _) in _dartOwners.ToArray())
     {
       if (Fallen) return; // An earlier dart in this same tick already zapped us out.
       ApplyDamageFrom (id, MaxHealth * PoisonTickFractionPerDart / 100.0f, name, knockbackScale: 0.0f);
     }
+
+    ShedSpentDarts();
   }
 
-  // Each dart's own clock: the ones past their time work out, the rest keep ticking.
-  // The replicated count carries the change, so the pincushion, the green bar & the
+  // A dart poisons you three times & is then spent (Aaron, 2026-08-24). Each keeps
+  // its OWN count, so a dart taken later is still good for its full three ticks; the
+  // replicated total carries the change, so the pincushion, the green bar & the
   // drunk walk all ease off together.
-  private void ShedExpiredDarts()
+  private void ShedSpentDarts()
   {
-    var now = Time.GetTicksMsec();
     var before = _dartOwners.Count;
-    _dartOwners.RemoveAll (dart => DartExpired (dart.EmbeddedMs, now, PoisonDartSeconds));
+
+    for (var i = _dartOwners.Count - 1; i >= 0; --i)
+    {
+      var dart = _dartOwners[i];
+      var ticksLeft = dart.TicksLeft - 1;
+      if (ticksLeft > 0) { _dartOwners[i] = (dart.Id, dart.Name, ticksLeft); continue; }
+      _dartOwners.RemoveAt (i);
+    }
+
     if (_dartOwners.Count == before) return;
     PoisonDarts = _dartOwners.Count;
-    GD.Print ($"{DisplayName}: {before - _dartOwners.Count} dart(s) worked their way out ({PoisonDarts} left)");
+    GD.Print ($"{DisplayName}: {before - _dartOwners.Count} dart(s) ran out of poison ({PoisonDarts} left)");
   }
 
   // Death shakes the darts out (issues #194 & #236): they fall beside the body as
