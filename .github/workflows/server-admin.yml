@@ -28,6 +28,10 @@ on:
         description: "New join password (blank = unchanged)"
         type: string
         default: ""
+      verify_password:
+        description: "Verify: does this value match the LIVE join password? (read-only, prints MATCH/NO MATCH)"
+        type: string
+        default: ""
       authorize_ops_key:
         description: "Add the es-ops box's SSH key to game@"
         type: boolean
@@ -55,6 +59,7 @@ jobs:
           POINT_LIMIT: ${{ inputs.point_limit }}
           HILL_ROTATE: ${{ inputs.hill_rotate_seconds }}
           PASSWORD: ${{ inputs.password }}
+          VERIFY_PASSWORD: ${{ inputs.verify_password }}
           AUTHORIZE_KEY: ${{ inputs.authorize_ops_key }}
           RESTART: ${{ inputs.restart }}
           OPS_KEY: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPY/AXYCLCLVZ2fIcn1fOgOq+kQpdhUpfZC+QOSEtAtR aaron@energyshot-ops"
@@ -64,6 +69,7 @@ jobs:
           # us (CodeRabbit): register it with the runner before it can reach any log
           # or error trace. Nothing below ever echoes the value itself.
           if [ -n "$PASSWORD" ]; then echo "::add-mask::$PASSWORD"; fi
+          if [ -n "$VERIFY_PASSWORD" ]; then echo "::add-mask::$VERIFY_PASSWORD"; fi
           trap 'rm -f droplet_key known_hosts' EXIT
           echo "${{ secrets.DROPLET_SSH_KEY }}" > droplet_key
           chmod 600 droplet_key
@@ -72,7 +78,7 @@ jobs:
           # so nothing a field could contain can inject a shell command.
           ssh -i droplet_key -o UserKnownHostsFile=known_hosts -o StrictHostKeyChecking=yes \
             root@"$DROPLET_HOST" \
-            "MODE='$MODE' ROUND_MINUTES='$ROUND_MINUTES' POINT_LIMIT='$POINT_LIMIT' HILL_ROTATE='$HILL_ROTATE' PASSWORD='$PASSWORD' AUTHORIZE_KEY='$AUTHORIZE_KEY' RESTART='$RESTART' OPS_KEY='$OPS_KEY' bash -s" <<'ADMIN'
+            "MODE='$MODE' ROUND_MINUTES='$ROUND_MINUTES' POINT_LIMIT='$POINT_LIMIT' HILL_ROTATE='$HILL_ROTATE' PASSWORD='$PASSWORD' VERIFY_PASSWORD='$VERIFY_PASSWORD' AUTHORIZE_KEY='$AUTHORIZE_KEY' RESTART='$RESTART' OPS_KEY='$OPS_KEY' bash -s" <<'ADMIN'
           set -e
           ENV_FILE=/etc/energy-shot/server.env
 
@@ -117,6 +123,15 @@ jobs:
             fi
             chmod 600 "$ENV_FILE"
             echo "password updated (${#PASSWORD} chars)"
+          fi
+
+          # Read-only password verification (Aaron's ruling: a password may be
+          # announced ONLY once verified against the LIVE server, never from
+          # memory). Compares & prints a verdict - the value itself is masked on
+          # the runner & never printed here.
+          if [ -n "$VERIFY_PASSWORD" ]; then
+            LIVE=$(grep '^SERVER_PASSWORD=' "$ENV_FILE" | cut -d= -f2-)
+            if [ "$LIVE" = "$VERIFY_PASSWORD" ]; then echo "verify: MATCH - value is the live join password"; else echo "verify: NO MATCH (live password is ${#LIVE} chars)"; fi
           fi
 
           # Authorize the ops box's key on the game user (idempotent).
