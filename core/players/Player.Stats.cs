@@ -68,6 +68,13 @@ public partial class Player
     Falls = 0;
     Assists = 0;
     ForgetDamager();
+    // Everyone starts a round empty-handed (Aaron, 2026-08-24): whatever you were
+    // carrying returns to the level's caps, so a new round is a fresh scramble
+    // instead of last round's winner opening with a full loadout. The one-per-life
+    // loaf comes back with the respawn below, as it always does.
+    ClearHeldWeapons();
+    ClearPoison(); // Nor do embedded darts carry over (issue #194).
+    ClearBurning();
     if (!Fallen) Respawn();
   }
 }
