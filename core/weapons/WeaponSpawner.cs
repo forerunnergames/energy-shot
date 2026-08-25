@@ -29,7 +29,11 @@ public partial class WeaponSpawner : Node3D
   // The dart economy (issue #236): exactly this many darts exist, ever - in blowguns,
   // embedded in players, nocked in slingshots, flying, or on the ground. The census
   // below spawns floating pickups until the count is whole again (the void eats some).
-  [Export] public int MaxDarts = 10;
+  // 30 darts in 10 CLUSTERS of 3 (Aaron, 2026-08-24: "each dart spawn point has a
+  // cluster of 3 darts instead of 1") - finding a stash is a real reload, not one
+  // shot. The cap counts darts, embedded & loaded ones included.
+  [Export] public int MaxDarts = 30;
+  [Export] public int DartsPerCluster = 3;
   private const float DartFlightGraceSeconds = 7.0f; // A fired dart counts until it lands or hits (max lifetime + margin).
   private readonly List <ulong> _dartFlightsUntilMs = new();
   // Sanity bound on a death's dart scatter (issue #194): more embedded darts than
@@ -230,11 +234,20 @@ public partial class WeaponSpawner : Node3D
   {
     if (_isPlaytest) return;
     var missing = MaxDarts - CountDarts (pickups, players);
-    for (var i = 0; i < missing; ++i)
+    var clusters = Mathf.CeilToInt (missing / (float)Mathf.Max (1, DartsPerCluster));
+
+    for (var cluster = 0; cluster < clusters && missing > 0; ++cluster)
     {
       var target = new Vector3 (_rng.RandfRange (-85.0f, 85.0f), 0.0f, _rng.RandfRange (-85.0f, 85.0f)); // The doubled floor (issue #293), with an edge margin.
-      if (!TryFindGround (target, out var spot)) continue;
-      Spawn (HeldWeapon.PoisonDart, spot, expires: false);
+      if (!TryFindGround (target, out var spot)) continue; // The next census retries this one.
+
+      // A little ring, so the three read as a stash instead of one fat dart.
+      for (var inCluster = 0; inCluster < DartsPerCluster && missing > 0; ++inCluster, --missing)
+      {
+        var angle = Mathf.Tau * inCluster / Mathf.Max (1, DartsPerCluster);
+        var offset = new Vector3 (Mathf.Cos (angle), 0.0f, Mathf.Sin (angle)) * 0.45f;
+        Spawn (HeldWeapon.PoisonDart, TryFindGround (spot + offset, out var seated) ? seated : spot + offset, expires: false);
+      }
     }
   }
 
