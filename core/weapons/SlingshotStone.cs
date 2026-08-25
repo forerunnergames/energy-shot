@@ -138,13 +138,22 @@ public partial class SlingshotStone : Node3D
   {
     var container = new Node3D();
     container.AddChild (visual);
-    Callable.From (() => FitToPouch (container, visual)).CallDeferred();
+    // On TreeEntered, not one-shot-deferred (Aaron, 2026-08-24: "still visually
+    // glitched"): a deferred call lands once, & if the visual isn't in the tree
+    // yet at that instant the fit silently never ran - the giant unscaled gun
+    // was back for any caller that attaches a frame late. The signal fires
+    // whenever it actually enters, every time it re-enters, & deferred again so
+    // the imported meshes report real AABBs.
+    container.TreeEntered += () => Callable.From (() => FitToPouch (container, visual)).CallDeferred();
+    if (container.IsInsideTree()) Callable.From (() => FitToPouch (container, visual)).CallDeferred();
     return container;
   }
 
   private static void FitToPouch (Node3D container, Node3D visual)
   {
     if (!GodotObject.IsInstanceValid (container) || !container.IsInsideTree()) return;
+    if (container.HasMeta ("pouch_fitted")) return; // Re-entering the tree must not shrink it twice.
+    container.SetMeta ("pouch_fitted", true);
     var combined = new Aabb();
     var first = true;
 
