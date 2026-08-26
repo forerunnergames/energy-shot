@@ -22,14 +22,14 @@ public class KothRulesTest
   public void RotationNeverLandsOnTheSameSpot()
   {
     for (var current = 0; current < Hill.Spots.Length; ++current)
-      for (var roll = -50; roll < 50; ++roll) // Negative rolls too: GD.Randi cast to int is negative half the time (finding #2).
+      for (var roll = -50; roll < 50; ++roll) // Defensive: the helper stays correct for any roll, negative included (finding #2).
         AssertInt (Match.NextSpotIndex (current, Hill.Spots.Length, roll)).IsNotEqual (current);
   }
 
   [TestCase]
   public void RotationStaysInsideThePool()
   {
-    for (var roll = -50; roll < 50; ++roll) // Negative rolls stay in-pool, never a negative index broadcast to peers (finding #2).
+    for (var roll = -50; roll < 50; ++roll) // Defensive: every roll lands in-pool, so no negative index can ever be broadcast (finding #2).
     {
       var next = Match.NextSpotIndex (0, Hill.Spots.Length, roll);
       AssertInt (next).IsGreaterEqual (0);
