@@ -74,12 +74,29 @@ jobs:
           echo "${{ secrets.DROPLET_SSH_KEY }}" > droplet_key
           chmod 600 droplet_key
           echo "${{ secrets.DROPLET_HOST_KEY }}" > known_hosts
-          # Inputs pass as env values, never interpolated into the remote script,
-          # so nothing a field could contain can inject a shell command.
+          # base64-encode every value: the output is [A-Za-z0-9+/=] only, so passing
+          # it through the remote command line & decoding on the far side means NO
+          # value - a password with a quote, a crafted mode string - is ever parsed
+          # as shell syntax. Mask the encoded secrets too, so a trace can't leak them.
+          MODE_B64=$(printf %s "$MODE" | base64 -w0)
+          ROUND_MINUTES_B64=$(printf %s "$ROUND_MINUTES" | base64 -w0)
+          POINT_LIMIT_B64=$(printf %s "$POINT_LIMIT" | base64 -w0)
+          HILL_ROTATE_B64=$(printf %s "$HILL_ROTATE" | base64 -w0)
+          PASSWORD_B64=$(printf %s "$PASSWORD" | base64 -w0)
+          VERIFY_PASSWORD_B64=$(printf %s "$VERIFY_PASSWORD" | base64 -w0)
+          [ -n "$PASSWORD" ] && echo "::add-mask::$PASSWORD_B64"
+          [ -n "$VERIFY_PASSWORD" ] && echo "::add-mask::$VERIFY_PASSWORD_B64"
+          # AUTHORIZE_KEY & RESTART are booleans, OPS_KEY our own constant - no metachars.
           ssh -i droplet_key -o UserKnownHostsFile=known_hosts -o StrictHostKeyChecking=yes \
             root@"$DROPLET_HOST" \
-            "MODE='$MODE' ROUND_MINUTES='$ROUND_MINUTES' POINT_LIMIT='$POINT_LIMIT' HILL_ROTATE='$HILL_ROTATE' PASSWORD='$PASSWORD' VERIFY_PASSWORD='$VERIFY_PASSWORD' AUTHORIZE_KEY='$AUTHORIZE_KEY' RESTART='$RESTART' OPS_KEY='$OPS_KEY' bash -s" <<'ADMIN'
+            "MODE_B64='$MODE_B64' ROUND_MINUTES_B64='$ROUND_MINUTES_B64' POINT_LIMIT_B64='$POINT_LIMIT_B64' HILL_ROTATE_B64='$HILL_ROTATE_B64' PASSWORD_B64='$PASSWORD_B64' VERIFY_PASSWORD_B64='$VERIFY_PASSWORD_B64' AUTHORIZE_KEY='$AUTHORIZE_KEY' RESTART='$RESTART' OPS_KEY='$OPS_KEY' bash -s" <<'ADMIN'
           set -e
+          MODE=$(printf %s "$MODE_B64" | base64 -d)
+          ROUND_MINUTES=$(printf %s "$ROUND_MINUTES_B64" | base64 -d)
+          POINT_LIMIT=$(printf %s "$POINT_LIMIT_B64" | base64 -d)
+          HILL_ROTATE=$(printf %s "$HILL_ROTATE_B64" | base64 -d)
+          PASSWORD=$(printf %s "$PASSWORD_B64" | base64 -d)
+          VERIFY_PASSWORD=$(printf %s "$VERIFY_PASSWORD_B64" | base64 -d)
           ENV_FILE=/etc/energy-shot/server.env
 
           # Game settings live in the server's ARGS, never in code (Aaron,
@@ -91,8 +108,14 @@ jobs:
           touch "$ARGS_FILE"
           extra=$(cat "$ARGS_FILE")
 
-          set_arg() { # flag value
-            extra=$(printf '%s' "$extra" | sed -E "s| $1 [^ ]+||g")
+          set_arg() { # flag value - rebuild without sed (no metachars, no prefix collisions)
+            local out="" skip=0 tok
+            for tok in $extra; do
+              [ "$skip" = 1 ] && { skip=0; continue; }
+              [ "$tok" = "$1" ] && { skip=1; continue; }
+              out="$out $tok"
+            done
+            extra="${out# }"
             [ -n "$2" ] && extra="$extra $1 $2"
           }
 
@@ -116,11 +139,10 @@ jobs:
           if [ -n "$PASSWORD" ]; then
             mkdir -p "$(dirname "$ENV_FILE")"
             touch "$ENV_FILE"
-            if grep -q '^SERVER_PASSWORD=' "$ENV_FILE"; then
-              sed -i "s|^SERVER_PASSWORD=.*|SERVER_PASSWORD=$PASSWORD|" "$ENV_FILE"
-            else
-              echo "SERVER_PASSWORD=$PASSWORD" >> "$ENV_FILE"
-            fi
+            tmp=$(mktemp)
+            grep -v '^SERVER_PASSWORD=' "$ENV_FILE" > "$tmp" || true # keep every OTHER line
+            printf 'SERVER_PASSWORD=%s\n' "$PASSWORD" >> "$tmp"     # value is an arg, not sed/format text
+            mv "$tmp" "$ENV_FILE"
             chmod 600 "$ENV_FILE"
             echo "password updated (${#PASSWORD} chars)"
           fi
