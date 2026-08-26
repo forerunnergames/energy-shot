@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using com.forerunnergames.energyshot.weapons;
 using com.forerunnergames.energyshot.players;
 using com.forerunnergames.energyshot.ui;
 using com.forerunnergames.energyshot.ui.hud;
@@ -76,14 +77,34 @@ public partial class World : Node3D
   {
     if (Multiplayer.MultiplayerPeer is not ENetMultiplayerPeer) { GetTree().Quit(); return; } // Not in a session: the old behavior.
     ServerLog.Event ("session left: returning to the main menu");
+    // Host-only peer subscriptions come off FIRST (finding #6): left on, a later
+    // session double-handles disconnects, or a client runs host bookkeeping. A -=
+    // that was never subscribed is a harmless no-op, so this is safe for a client too.
+    Multiplayer.PeerConnected -= OnClientConnectedToServer;
+    Multiplayer.PeerDisconnected -= OnClientDisconnectedFromServer;
     Multiplayer.MultiplayerPeer.Close();
     Multiplayer.MultiplayerPeer = null; // Back to the engine's offline peer.
     foreach (var player in GetPlayers().ToList()) player.QueueFree();
     _selfPlayer = null;
     _hill?.QueueFree();
     _hill = null;
+    // The peer close frees no local nodes (finding #7): drop the session's pickups
+    // too, or the next hosted game miscounts caps & ghosts float on the next server.
+    foreach (var pickup in GetChildren().OfType <WeaponPickup>()) pickup.QueueFree();
+    ResetRoundState(); // No intermission, board, or score carries into the next game (finding #5).
     Input.MouseMode = Input.MouseModeEnum.Visible;
     EmitSignal (SignalName.LeftGame);
+  }
+
+  // Round bookkeeping that must not survive a session: cleared on leave & at the
+  // start of every hosted round, so a new game never inherits a stuck intermission,
+  // a stale scoreboard replayed to fresh joiners, or the last game's score.
+  private void ResetRoundState()
+  {
+    _intermission = false;
+    _lastBoard = string.Empty;
+    _score = 0;
+    _roundElapsed = 0.0f;
   }
   private static void OnClientConnectedToServer (long peerId) => ServerLog.Event (peerId, "connected");
   // Only a live ENet server session logs (issue #111): the engine's default
@@ -509,6 +530,7 @@ public partial class World : Node3D
 
   private void OnClientDisconnectedFromServer (long id)
   {
+    if (!IsActiveServer()) return; // Host-only bookkeeping; a stale subscription on a client is inert (finding #6).
     _lastChatMs.Remove (id); // Chat rate-limit state leaves with the peer (CodeRabbit on #224).
     RemovePlayer (id);
     _versionLinePeerIds.Remove ((int)id); // A rejoin counts as a fresh join (PR #166 review).
@@ -620,7 +642,7 @@ public partial class World : Node3D
     _roundSeconds = roundSeconds;
     _zapLimit = zapLimit;
     _mode = mode;
-    _roundElapsed = 0.0f;
+    ResetRoundState(); // A fresh hosted round starts clean even if the last one wasn't left cleanly (finding #5).
     RollHillSpot(); // The hill roams (issue #294).
     EnsureHill (_hillIndex);
     ServerLog.Event ($"rounds: {mode}, {(roundSeconds > 0 ? $"{roundSeconds / 60} min" : "no time limit")}, {(zapLimit > 0 ? $"first to {zapLimit}" : "no point limit")}");
