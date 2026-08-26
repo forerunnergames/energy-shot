@@ -116,7 +116,7 @@ public partial class Player
     foreach (var (id, name, _) in _dartOwners.ToArray())
     {
       if (Fallen) return; // An earlier dart in this same tick already zapped us out.
-      ApplyDamageFrom (id, MaxHealth * PoisonTickFractionPerDart / 100.0f, name, knockbackScale: 0.0f);
+      ApplyDamageFrom (id, MaxHealth * PoisonTickFractionPerDart / 100.0f, name, knockbackScale: 0.0f, interruptsEating: false); // Bread heals through poison (#194).
     }
 
     ShedSpentDarts();
