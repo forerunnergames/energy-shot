@@ -43,6 +43,7 @@ public partial class HostGameDialog : Control
     PlayerColors.Populate (_playerColor); // Selectable body color (issue #43).
     _maxPlayers = GetNode <SpinBox> ("PanelContainer/ScrollContainer/MarginContainer/VBoxContainer/MaxPlayers");
     _gameMode = GetNode <OptionButton> ("PanelContainer/ScrollContainer/MarginContainer/VBoxContainer/GameMode");
+    _gameMode.ItemSelected += mode => _zapLimit.Value = Settings.PointLimit ((core.world.GameMode)(int)mode); // Show that mode's own limit (issue #44).
     _roundMinutes = GetNode <SpinBox> ("PanelContainer/ScrollContainer/MarginContainer/VBoxContainer/RoundMinutes");
     _zapLimit = GetNode <SpinBox> ("PanelContainer/ScrollContainer/MarginContainer/VBoxContainer/ZapLimit");
     // A SpinBox's text lives in its INTERNAL LineEdit, which ignores the SpinBox
@@ -79,7 +80,7 @@ public partial class HostGameDialog : Control
     _maxPlayers.Value = Settings.MaxPlayers;
     _gameMode.Selected = Settings.GameMode;
     _roundMinutes.Value = Settings.RoundMinutes;
-    _zapLimit.Value = Settings.ZapLimit;
+    _zapLimit.Value = Settings.PointLimit ((core.world.GameMode)_gameMode.Selected); // KOTH & zaps each remember their own limit (issue #44).
     UpdateHostGameButtonState();
     Show();
     // UPnP discovery can take seconds; run it off the main thread so the UI stays responsive (see issue #25).
@@ -130,7 +131,7 @@ public partial class HostGameDialog : Control
     Settings.MaxPlayers = (int)_maxPlayers.Value;
     Settings.GameMode = _gameMode.Selected; // Read back by World.OnHostGameSuccess (issue #44).
     Settings.RoundMinutes = (int)_roundMinutes.Value; // Read back by World.OnHostGameSuccess (issue #153).
-    Settings.ZapLimit = (int)_zapLimit.Value;
+    Settings.SetPointLimit ((core.world.GameMode)_gameMode.Selected, (int)_zapLimit.Value); // Save under the selected mode.
     Settings.HostPassword = _password.Text;
     Hide();
     EmitSignal (SignalName.HostGameSuccess, _playerName.Text, _difficulty.Selected, (int)_maxPlayers.Value, _password.Text, _playerColor.Selected);
