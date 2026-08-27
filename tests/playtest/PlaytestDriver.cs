@@ -1532,7 +1532,12 @@ public partial class PlaytestDriver : Node
 
     // BLAST (#61/#83): the banana lands at the parked victim's feet - the blast
     // hurts & stuns but NEVER zaps a full-health player.
-    await WaitUntil (() => !victim.SpawnArmor && FlatDistance (victim.GlobalPosition, VictimParkSpot) < 2.0f && victim.Health == victim.MaxHealth, 120, "victim parked & clean for the blast (#316)");
+    // CLEAN means clean of POISON too (#409): the victim's poison phase parks at this
+    // same spot & now eats its loaf back to FULL health mid-phase, so parked-and-full
+    // was true there as well - the shooter fired the blast into the poison phase, a
+    // 10% tick passed as the blast's damage, & the victim's own blast phase started
+    // late & measured the STICKY instead. Darts tell the two apart.
+    await WaitUntil (() => !victim.SpawnArmor && FlatDistance (victim.GlobalPosition, VictimParkSpot) < 2.0f && victim.Health == victim.MaxHealth && victim.PoisonDarts == 0, 120, "victim parked & clean for the blast (#316/#409)");
     // CLOSE & STEEP (round 5's lesson: from 6m out the flat-ish lob bounced &
     // skidded meters away - it blasted the HOST at the radius edge & the victim
     // took nothing). From 3m, plunging at the offset point, the plop stays put.
@@ -1550,7 +1555,7 @@ public partial class PlaytestDriver : Node
 
     // STICKY (#83): a direct hit pins the banana, launches the victim across the
     // level, & the fuse one-hit-kills whatever it is stuck to.
-    await WaitUntil (() => !victim.SpawnArmor && FlatDistance (victim.GlobalPosition, VictimParkSpot) < 2.0f && victim.Health == victim.MaxHealth, 120, "victim parked fresh for the sticky (#316)");
+    await WaitUntil (() => !victim.SpawnArmor && FlatDistance (victim.GlobalPosition, VictimParkSpot) < 2.0f && victim.Health == victim.MaxHealth && victim.PoisonDarts == 0, 120, "victim parked fresh for the sticky (#316/#409)");
     await WaitUntil (() => Self.BananaReadyFraction >= 1.0f, 20, "launcher cooled for the sticky shot (#70)");
     Self.Position = VictimParkSpot + new Vector3 (0.0f, 0.3f, 6.0f);
     await Task.Delay (400);
