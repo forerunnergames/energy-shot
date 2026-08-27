@@ -23,9 +23,18 @@ public partial class HostGameDialog : Control
   private Label _bottomText = null!;
   private ENetMultiplayerPeer? _peer;
   private int _serverPort = -1;
+  private int _limitMode = -1; // The mode the shown limit belongs to (issue #44).
   private void OnPlayerNameTextChanged (string newText) => UpdateHostGameButtonState();
   private void OnPasswordTextChanged (string newText) => UpdateHostGameButtonState();
   private void OnServerAddressTextChanged (string newText) => UpdateHostGameButtonState();
+  // Keep what the host typed for the mode being left, then show the new mode's own limit (issue #44).
+  private void OnGameModeSelected (long mode)
+  {
+    if (_limitMode >= 0) Settings.SetPointLimit ((core.world.GameMode)_limitMode, (int)_zapLimit.Value);
+    _limitMode = (int)mode;
+    _zapLimit.Value = Settings.PointLimit ((core.world.GameMode)_limitMode);
+  }
+
   private void UpdateHostGameButtonState() => _hostGameButton.Disabled = !IsValid (_playerName.Text, _serverAddress.Text, _password.Text);
   // Hosted games always require a password (issue #90).
   private static bool IsValid (string playerName, string serverAddress, string password) => Tools.IsValidPlayerName (playerName) && Tools.IsValidServerAddress (serverAddress) && !string.IsNullOrEmpty (password);
@@ -43,6 +52,7 @@ public partial class HostGameDialog : Control
     PlayerColors.Populate (_playerColor); // Selectable body color (issue #43).
     _maxPlayers = GetNode <SpinBox> ("PanelContainer/ScrollContainer/MarginContainer/VBoxContainer/MaxPlayers");
     _gameMode = GetNode <OptionButton> ("PanelContainer/ScrollContainer/MarginContainer/VBoxContainer/GameMode");
+    _gameMode.ItemSelected += OnGameModeSelected; // Show that mode's own limit (issue #44).
     _roundMinutes = GetNode <SpinBox> ("PanelContainer/ScrollContainer/MarginContainer/VBoxContainer/RoundMinutes");
     _zapLimit = GetNode <SpinBox> ("PanelContainer/ScrollContainer/MarginContainer/VBoxContainer/ZapLimit");
     // A SpinBox's text lives in its INTERNAL LineEdit, which ignores the SpinBox
@@ -79,7 +89,8 @@ public partial class HostGameDialog : Control
     _maxPlayers.Value = Settings.MaxPlayers;
     _gameMode.Selected = Settings.GameMode;
     _roundMinutes.Value = Settings.RoundMinutes;
-    _zapLimit.Value = Settings.ZapLimit;
+    _limitMode = _gameMode.Selected;
+    _zapLimit.Value = Settings.PointLimit ((core.world.GameMode)_limitMode); // KOTH & zaps each remember their own limit (issue #44).
     UpdateHostGameButtonState();
     Show();
     // UPnP discovery can take seconds; run it off the main thread so the UI stays responsive (see issue #25).
@@ -130,7 +141,7 @@ public partial class HostGameDialog : Control
     Settings.MaxPlayers = (int)_maxPlayers.Value;
     Settings.GameMode = _gameMode.Selected; // Read back by World.OnHostGameSuccess (issue #44).
     Settings.RoundMinutes = (int)_roundMinutes.Value; // Read back by World.OnHostGameSuccess (issue #153).
-    Settings.ZapLimit = (int)_zapLimit.Value;
+    Settings.SetPointLimit ((core.world.GameMode)_gameMode.Selected, (int)_zapLimit.Value); // Save under the selected mode.
     Settings.HostPassword = _password.Text;
     Hide();
     EmitSignal (SignalName.HostGameSuccess, _playerName.Text, _difficulty.Selected, (int)_maxPlayers.Value, _password.Text, _playerColor.Selected);

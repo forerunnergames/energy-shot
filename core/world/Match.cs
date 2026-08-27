@@ -25,7 +25,13 @@ public static class Match
   public static int DefaultPointLimit (GameMode mode) => mode == GameMode.KingOfTheHill ? DefaultHillPointLimit : DefaultZapLimit;
   // The next hill is never the current one - a "rotation" that lands in place is
   // no rotation at all. roll is any non-negative random number.
-  public static int NextSpotIndex (int current, int spotCount, int roll) => spotCount <= 1 ? current : (current + 1 + roll % (spotCount - 1)) % spotCount;
+  public static int NextSpotIndex (int current, int spotCount, int roll)
+  {
+    if (spotCount <= 1) return current;
+    var span = spotCount - 1;
+    var step = ((roll % span) + span) % span; // Non-negative even for a negative roll (C# % keeps the sign).
+    return (current + 1 + step) % spotCount;
+  }
   public const int MaxRoundMinutes = 60;
   public const int MaxZapLimit = 200;
   public const float IntermissionSeconds = 10.0f;
