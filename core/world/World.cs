@@ -500,7 +500,8 @@ public partial class World : Node3D
   {
     _maxPlayers = Mathf.Clamp (maxPlayers, 2, MaxPlayers);
     _serverPassword = password;
-    ConfigureRound (Settings.RoundMinutes * 60, Settings.ZapLimit, (GameMode)Settings.GameMode); // Issues #153 & #44.
+    var hostMode = (GameMode)Settings.GameMode;
+    ConfigureRound (Settings.RoundMinutes * 60, Settings.PointLimit (hostMode), hostMode); // KOTH keeps its own 100-point limit, not the 20 zaps share (issues #153 & #44).
     Multiplayer.PeerConnected += OnClientConnectedToServer;
     Multiplayer.PeerDisconnected += OnClientDisconnectedFromServer;
     AddPlayer (Multiplayer.GetUniqueId(), playerName, Player.MaxHealthFor (difficulty), colorIndex);
@@ -643,8 +644,7 @@ public partial class World : Node3D
     _zapLimit = zapLimit;
     _mode = mode;
     ResetRoundState(); // A fresh hosted round starts clean even if the last one wasn't left cleanly (finding #5).
-    RollHillSpot(); // The hill roams (issue #294).
-    EnsureHill (_hillIndex);
+    EnsureHill (RollHillSpot()); // The hill roams (issue #294): EnsureHill assigns the index & builds the ring.
     ServerLog.Event ($"rounds: {mode}, {(roundSeconds > 0 ? $"{roundSeconds / 60} min" : "no time limit")}, {(zapLimit > 0 ? $"first to {zapLimit}" : "no point limit")}");
   }
 
@@ -665,10 +665,14 @@ public partial class World : Node3D
   private float _hillHeldSeconds;
   private int _hillRotateSeconds = Match.HillRotateSeconds; // --hill-rotate-seconds; 0 = the hill stays put.
 
-  private void RollHillSpot()
+  // The next spot for the roaming hill. EnsureHill is the ONLY thing that writes
+  // _hillIndex - if RollHillSpot wrote it, EnsureHill's "already there?" guard would
+  // see the new value & never rebuild the ring (the host camped a ring that scored
+  // nowhere). GD.Randi() >> 1 clears the sign bit so the roll is never negative.
+  private int RollHillSpot()
   {
-    _hillIndex = Match.NextSpotIndex (_hillIndex, Hill.Spots.Length, (int)GD.Randi());
     _hillHeldSeconds = 0.0f;
+    return Match.NextSpotIndex (_hillIndex, Hill.Spots.Length, (int)(GD.Randi() >> 1));
   }
 
   // Sole occupant of the hill earns a point per tick (issue #44); a contest pays nobody.
@@ -699,8 +703,7 @@ public partial class World : Node3D
 
       if (_hillRotateSeconds > 0 && _hillHeldSeconds >= _hillRotateSeconds)
       {
-        RollHillSpot();
-        EnsureHill (_hillIndex);
+        EnsureHill (RollHillSpot()); // Rebuild at the NEW spot: EnsureHill owns _hillIndex, so roll first, then move.
         ServerLog.Event ($"hill rotated to spot {_hillIndex}");
       }
     }
@@ -728,8 +731,7 @@ public partial class World : Node3D
 
   private void StartNewRound()
   {
-    RollHillSpot(); // The hill roams per round (issue #294).
-    EnsureHill (_hillIndex);
+    EnsureHill (RollHillSpot()); // The hill roams per round (issue #294).
     foreach (var player in GetPlayers())
     {
       if (player.NetworkId == Multiplayer.GetUniqueId()) { player.ResetForNewRound(); continue; }
