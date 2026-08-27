@@ -1848,6 +1848,13 @@ public partial class PlaytestDriver : Node
     // guarded: a breadless victim here means the setup broke, not that the spec
     // passed (the respawn in ResetLifeAndPark regrants the loaf) (finding #10).
     Assert (Self.Holds (HeldWeapon.Bread), "still holding the one-per-life loaf to test the heal-through (#194)");
+    // A tick has to land INSIDE the ritual or this phase proves nothing (CodeRabbit on
+    // #409): eating straight off a tick finishes 2s before the next one, so a
+    // regression that re-interrupts eating would still pass. Start the ritual late
+    // enough that the next tick lands mid-chew, & record it happening.
+    var tickedWhileEating = false;
+    Self.PoisonTicked += () => tickedWhileEating |= Self.Eating;
+    await Task.Delay (Mathf.RoundToInt ((Self.PoisonTickSeconds - Self.BreadEatSeconds + 1.0f) * 1000.0f));
     PressAction ("weapon_0");
     await Task.Delay (150);
     ReleaseAction ("weapon_0");
@@ -1856,6 +1863,7 @@ public partial class PlaytestDriver : Node
     ReleaseLeftClick();
     await WaitUntil (() => Self.Health == Self.MaxHealth, 8, "bread healed us to full WHILE poisoned (#194)");
     Assert (Self.PoisonDarts > 0, "bread healed but never cured the poison (#194)");
+    Assert (tickedWhileEating, "the poison ticked WHILE we were eating & the ritual survived it - that is the heal-through (#194)");
 
     // Poison WEARS OFF (Aaron, 2026-08-24): every dart works its way out on its own
     // clock, so the pincushion clears without dying for it.
