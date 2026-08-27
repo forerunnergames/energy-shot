@@ -70,6 +70,13 @@ public static class Settings
     set => Set ("zap_limit", value);
   }
 
+  // Each mode keeps its OWN point limit (issue #44): KOTH scores a point per second,
+  // so the 20 zaps default would end a KOTH round in twenty seconds. The host dialog
+  // reads & writes this by the selected mode; zaps stays on the legacy "zap_limit" key.
+  private static string PointLimitKey (core.world.GameMode mode) => mode == core.world.GameMode.KingOfTheHill ? "koth_point_limit" : "zap_limit";
+  public static int PointLimit (core.world.GameMode mode) => Mathf.Clamp (GetInt (PointLimitKey (mode), core.world.Match.DefaultPointLimit (mode)), 0, core.world.Match.MaxZapLimit);
+  public static void SetPointLimit (core.world.GameMode mode, int value) => Set (PointLimitKey (mode), value);
+
   // Game passwords (issue #90), remembered like the other dialog fields.
   public static string HostPassword
   {
