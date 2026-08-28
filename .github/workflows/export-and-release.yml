@@ -181,6 +181,10 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           generateReleaseNotes: true
           tag: ${{ github.ref_name }}
+          # A suffixed tag (v0.8.127-dev.1) is the test channel (issue #415): marked
+          # prerelease, so the releases/latest link every player holds keeps meaning
+          # "latest STABLE" - GitHub excludes prereleases from it.
+          prerelease: ${{ contains(github.ref_name, '-') }}
           artifacts: ${{ steps.export.outputs.archive_directory }}/*
 
       # Deploy the dedicated server build to the official game server droplet.
@@ -191,6 +195,7 @@ jobs:
           DROPLET_HOST: ${{ secrets.DROPLET_HOST }}
           REPO: ${{ github.repository }}
           TAG: ${{ github.ref_name }}
+          CHANNEL_DEV: ${{ contains(github.ref_name, '-') }}
         run: |
           # The secrets context isn't available in step `if` expressions, so the
           # no-credentials case is guarded here instead.
@@ -203,12 +208,43 @@ jobs:
           # TAG & REPO are passed as environment values (never interpolated into the
           # remote script) so a hostile ref name can't inject shell commands.
           ssh -i droplet_key -o UserKnownHostsFile=known_hosts -o StrictHostKeyChecking=yes \
-            root@"$DROPLET_HOST" "REPO='$REPO' TAG='$TAG' bash -s" <<'DEPLOY'
+            root@"$DROPLET_HOST" "REPO='$REPO' TAG='$TAG' CHANNEL_DEV='$CHANNEL_DEV' bash -s" <<'DEPLOY'
           set -e
+          # Two channels, one droplet (issue #415): a prerelease tag deploys the TEST
+          # server beside the stable one - own unit, own install dir, own version
+          # file, port 55557. A stable tag deploys exactly as before.
+          if [ "$CHANNEL_DEV" = "true" ]; then
+            UNIT=energy-shot-dev; DIR=/opt/energy-shot-dev
+            VERSION_FILE=/home/game/server-version-dev; ADMIN_MESSAGE=/home/game/admin-message-dev
+          else
+            UNIT=energy-shot; DIR=/opt/energy-shot
+            VERSION_FILE=/home/game/server-version; ADMIN_MESSAGE=/home/game/admin-message
+          fi
+          # The first dev deploy bootstraps its unit FROM the stable unit - same user,
+          # same hardening, same flags - with the dev paths & port swapped in, so the
+          # two units can't drift apart by hand-editing. Idempotent: only when absent.
+          if [ "$UNIT" = energy-shot-dev ] && [ ! -f /etc/systemd/system/energy-shot-dev.service ]; then
+            src=$(systemctl show -p FragmentPath --value energy-shot)
+            sed -e 's|/opt/energy-shot\b|/opt/energy-shot-dev|g' \
+                -e 's|/home/game/server-version\b|/home/game/server-version-dev|g' \
+                -e 's|/home/game/admin-message\b|/home/game/admin-message-dev|g' \
+                -e 's|/etc/energy-shot/server\.env\b|/etc/energy-shot/server-dev.env|g' \
+                -e 's|^ExecStart=.*|& --port 55557|' \
+                "$src" > /etc/systemd/system/energy-shot-dev.service
+            # Same join password as stable to start; the copy happens droplet-side,
+            # so no secret ever leaves the box.
+            if [ ! -f /etc/energy-shot/server-dev.env ]; then
+              cp /etc/energy-shot/server.env /etc/energy-shot/server-dev.env
+              chmod 600 /etc/energy-shot/server-dev.env
+            fi
+            systemctl daemon-reload
+            systemctl enable energy-shot-dev
+            if command -v ufw >/dev/null && ufw status 2>/dev/null | grep -q '^Status: active'; then ufw allow 55557/udp; fi
+          fi
           # Stage & validate the new build before touching the running server.
-          rm -rf /opt/energy-shot/staging
-          mkdir -p /opt/energy-shot/staging
-          cd /opt/energy-shot/staging
+          rm -rf "$DIR/staging"
+          mkdir -p "$DIR/staging"
+          cd "$DIR/staging"
           curl -sL -o server.zip "https://github.com/$REPO/releases/download/$TAG/EnergyShot-Linux.Server-$TAG.zip"
           unzip -oq server.zip && rm server.zip
           test -f energy-shot-server.x86_64 || { echo "server binary missing from archive"; exit 1; }
@@ -216,20 +252,24 @@ jobs:
           # Warn players in-game before the swap (issue #158): the running server
           # polls this file once a second (--admin-message-file on the systemd unit)
           # & broadcasts new content as a gold admin announcement, consuming the
-          # file (claimed by rename in the game user's home directory).
-          echo "Server updating to $TAG - back in about a minute!" > /home/game/admin-message
-          chown game:game /home/game/admin-message
+          # file (claimed by rename in the game user's home directory). Skipped when
+          # the unit isn't running yet - a channel's very first deploy.
+          if systemctl is-active --quiet "$UNIT"; then
+            echo "Server updating to $TAG - back in about a minute!" > "$ADMIN_MESSAGE"
+            chown game:game "$ADMIN_MESSAGE"
+            # Give players a moment to see the warning before the restart.
+            sleep 15
+          fi
           # Record the running version (issue #158): the new build reads this at
           # startup (--version-file) & shows each joining player "Running <tag>".
-          echo "$TAG" > /home/game/server-version
-          chown game:game /home/game/server-version
-          # Give players a moment to see the warning before the restart.
-          sleep 15
+          echo "$TAG" > "$VERSION_FILE"
+          chown game:game "$VERSION_FILE"
           # Swap in the validated build & restart.
-          rm -rf /opt/energy-shot/build
-          mv /opt/energy-shot/staging /opt/energy-shot/build
-          chown -R game:game /opt/energy-shot
-          systemctl restart energy-shot
+          rm -rf "$DIR/build"
+          mv "$DIR/staging" "$DIR/build"
+          chown -R game:game "$DIR"
+          free -m # Two servers share this droplet - keep the headroom visible in every deploy log.
+          systemctl restart "$UNIT"
           sleep 3
-          systemctl is-active energy-shot
+          systemctl is-active "$UNIT"
           DEPLOY

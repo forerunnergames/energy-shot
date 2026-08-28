@@ -2312,7 +2312,9 @@ public partial class PlaytestDriver : Node
     _world.KickedFromServer += reason => kickReason = reason;
     _world.StartClientSession (VictimName, difficulty: 0, _address, _port, Password, version: "0.0.0-spoofed");
     await WaitUntil (() => kickReason.Length > 0, 30, "wrong-version join was kicked");
-    var expected = $"Update required: server is v{World.GameVersion}, you have v0.0.0-spoofed.";
+    // The wire must deliver the server-composed refusal verbatim; the message
+    // CONTENT branches are pinned by ChannelTest (issue #415).
+    var expected = World.VersionKickMessage (World.GameVersion, "0.0.0-spoofed");
     Assert (kickReason == expected, $"kick reason is \"{expected}\", got \"{kickReason}\"");
     await WaitUntil (() => Multiplayer.MultiplayerPeer.GetConnectionStatus() != MultiplayerPeer.ConnectionStatus.Connected, 15, "kicked connection fully closed");
     await Task.Delay (500); // Let the peer teardown settle before reconnecting.
