@@ -19,6 +19,15 @@ public static class Match
   // King of the Hill scores a point per second held, so 20 would end a round in
   // twenty seconds: 100 points is a real hold (Aaron, 2026-08-24).
   public const int DefaultHillPointLimit = 100;
+  // Emptying the hill from OUTSIDE it pays a bounty (Aaron, 2026-08-28, issue #420):
+  // every time your zap removes the LAST player standing in the zone while you are
+  // not in it yourself, you earn this. Zaps only - knocking someone out of the zone,
+  // or the last occupant wandering off, pays nobody. Winning without ever zoning is
+  // a real strategy, by design.
+  public const int HillClearBonusPoints = 5;
+
+  public static bool IsHillClearBonus (bool victimInHill, bool attackerInHill, int othersStillInHill) => victimInHill && !attackerInHill && othersStillInHill == 0;
+
   // The hill ROTATES on its own clock, not just per round (Aaron, 2026-08-24):
   // hold it for a minute & it moves out from under you.
   public const int HillRotateSeconds = 60;

@@ -22,7 +22,7 @@ public class MessageGeneratorTest
     // + 12 end-of-round superlatives (issue #153).
     var templates = MessagePools.All.SelectMany (pool => pool).ToList();
     AssertInt (templates.Count).IsEqual (150);
-    AssertInt (templates.Distinct().Count()).IsEqual (150);
+    AssertInt (templates.Distinct().Count()).IsEqual (155);
   }
 
   [TestCase]
@@ -40,8 +40,8 @@ public class MessageGeneratorTest
   [TestCase]
   public void EveryPoolIsInTheRegistry()
   {
-    // 35 scenario pools registered, none empty.
-    AssertInt (MessagePools.All.Count).IsEqual (35);
+    // 36 scenario pools registered, none empty.
+    AssertInt (MessagePools.All.Count).IsEqual (36);
     foreach (var pool in MessagePools.All) AssertBool (pool.Count > 0).IsTrue();
   }
 

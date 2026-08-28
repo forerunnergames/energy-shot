@@ -23,6 +23,7 @@ public static class MessageGenerator
   public static string OnFallStreak (string victimName) => Fill (Pick (MessagePools.FallStreak), victimName, "");
   public static string OnTheftRevenge (string victimName, string zapperName) => Fill (Pick (MessagePools.TheftRevenge), victimName, zapperName);
   public static string OnAirplaneCatch (string throwerName, string catcherName) => Fill (Pick (MessagePools.AirplaneCatch), throwerName, catcherName);
+  public static string OnHillClear (string zapperName) => Fill (Pick (MessagePools.HillClear), "", zapperName); // The bounty (issue #420).
   public static string RoundTitle (List <string> pool, string honoree) => Fill (Pick (pool), honoree, honoree); // Issue #153.
   public static string OnZapped (string victimName, string zapperName, DeathContext context) => Fill (Pick (SelectZappedPool (context)), victimName, zapperName);
   private static string Fill (string template, string victimName, string zapperName) => Capitalize (template.Replace ("{v}", victimName).Replace ("{z}", zapperName));

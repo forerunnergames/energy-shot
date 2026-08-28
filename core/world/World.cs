@@ -35,6 +35,7 @@ public partial class World : Node3D
   [Signal] public delegate void AdminMessageReceivedEventHandler (string message);
   [Signal] public delegate void SelfPlayerPoisonTickedEventHandler(); // Issue #261.
   [Signal] public delegate void RoundClockUpdatedEventHandler (int secondsLeft, int zapLimit, int mode, string hillHolder);
+  [Signal] public delegate void HillClearedEventHandler (string message); // The bounty announcement (issue #420).
   [Signal] public delegate void RoundEndedEventHandler (string scoreboardBbcode);
   [Signal] public delegate void RoundStartedEventHandler();
   [Signal] public delegate void ChatReceivedEventHandler (int senderId, string senderName, string text);
@@ -213,6 +214,7 @@ public partial class World : Node3D
     _networkManager.PlayerRespawnedFell += playerName => OnPlayerRespawned (playerName, SignalName.PlayerRespawnedFell);
     // Deaths reach the server through these notifications on every path (issue #111).
     _networkManager.PlayerRespawnedShot += (playerName, shotByPlayerName) => { if (IsActiveServer()) ServerLog.Event (FindPlayerId (playerName), $"death: {playerName} zapped out by {shotByPlayerName}"); };
+    _networkManager.PlayerRespawnedShot += MaybeAwardHillClearBonus; // The hill-clear bounty (issue #420), server-decided.
     _networkManager.PlayerRespawnedFell += playerName => { if (IsActiveServer()) ServerLog.Event (FindPlayerId (playerName), $"death: {playerName} fell off the world"); };
     // Crown rules (issue #178): every peer sees these death broadcasts, so the
     // tied-incumbent handover stays consistent everywhere without new networking.
@@ -786,6 +788,39 @@ public partial class World : Node3D
     if (king.NetworkId == Multiplayer.GetUniqueId()) king.NotifyHillPoint();
     else king.RpcId (king.NetworkId, Player.MethodName.NotifyHillPoint);
     return king.DisplayName;
+  }
+
+  // The hill-clear bounty (issue #420): a zap that removes the LAST player standing
+  // in the hill, thrown from OUTSIDE it, pays Match.HillClearBonusPoints - every time
+  // it happens, so a sniper can win without ever zoning. Server-decided on the death
+  // notification (they reach the server on every path, issue #111): the victim's body
+  // still lies at the death spot, so its replicated position IS the where-it-happened.
+  // The victim is excluded from the remaining count by name, not by Fallen - the flag
+  // may not have replicated yet on the same frame as the notification.
+  private void MaybeAwardHillClearBonus (string victimName, string zapperName)
+  {
+    if (!IsActiveServer() || _mode != GameMode.KingOfTheHill || _intermission) return;
+    var players = GetPlayers().ToList();
+    var victim = players.FirstOrDefault (player => player.DisplayName == victimName);
+    var zapper = players.FirstOrDefault (player => player.DisplayName == zapperName);
+    if (victim == null || zapper == null || victim == zapper) return;
+    var victimInHill = Hill.Contains (_hillIndex, victim.GlobalPosition);
+    var zapperInHill = Hill.Contains (_hillIndex, zapper.GlobalPosition);
+    var othersStillInHill = players.Count (player => player != victim && !player.Fallen && Hill.Contains (_hillIndex, player.GlobalPosition));
+    if (!Match.IsHillClearBonus (victimInHill, zapperInHill, othersStillInHill)) return;
+    if (zapper.NetworkId == Multiplayer.GetUniqueId()) zapper.NotifyHillClearBonus();
+    else zapper.RpcId (zapper.NetworkId, Player.MethodName.NotifyHillClearBonus);
+    ServerLog.Event (zapper.NetworkId, $"hill cleared from outside by {zapperName} (+{Match.HillClearBonusPoints})");
+    Rpc (MethodName.ReceiveHillCleared, MessageGenerator.OnHillClear (zapperName)); // One text, every scroller (#53).
+  }
+
+  // Server-picked text so every peer scrolls the SAME line (#53); CallLocal covers
+  // the host's own scroller.
+  [Rpc (MultiplayerApi.RpcMode.AnyPeer, CallLocal = true)]
+  private void ReceiveHillCleared (string message)
+  {
+    if (Multiplayer.GetRemoteSenderId() is not (0 or 1)) return; // Peer-1 announcements only.
+    EmitSignal (SignalName.HillCleared, message);
   }
 
   private bool RoundsEnabled => _roundSeconds > 0 || _zapLimit > 0;
