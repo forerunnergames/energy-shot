@@ -767,8 +767,11 @@ public partial class World : Node3D
       player.RpcId (player.NetworkId, Player.MethodName.ResetForNewRound);
     }
 
-    _roundElapsed = 0.0f;
-    _intermission = false;
+    // ResetRoundState, not a partial copy of it (CodeRabbit on #408): this reset the
+    // elapsed clock & the intermission flag but left _score, so the first zap of round
+    // 2 announced the previous round's running total + 1. One definition of "a round
+    // starts clean", used by all three callers, cannot drift out of step again.
+    ResetRoundState();
     ServerLog.Event ("round start");
     Rpc (MethodName.ReceiveRoundStarted);
   }
