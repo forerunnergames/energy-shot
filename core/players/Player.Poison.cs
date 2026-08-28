@@ -30,6 +30,10 @@ public partial class Player
   [Export] public float PoisonWobbleRadiansPerDart = 0.25f;
   [Export] public float PoisonWobbleHz = 0.9f;
   [Export] public float PoisonTickFractionPerDart = 0.1f;
+  // The sting itself hurts now (Aaron, 2026-08-28, issue #421): a dart that sticks
+  // costs 5% of max health on impact, through the standard victim-side sink - same
+  // shape as the tick below, & separate from the poison dynamics on purpose.
+  [Export] public float DartImpactFraction = 0.05f;
   // Poison wears off by the TICK, not the clock (Aaron, 2026-08-24): one dart costs
   // 10% of max health every 5s, three times, & then that dart is spent. Darts stack -
   // three embedded darts cost 30% a tick - & each runs its own three-tick life.
@@ -38,7 +42,26 @@ public partial class Player
   private int _poisonDarts;
   // Victim-side attribution, oldest dart first: each tick applies one damage packet
   // per dart through the standard sink, so handicap & scoring stay per-attacker.
-  private readonly List <(int Id, string Name, int TicksLeft)> _dartOwners = new();
+  private readonly List <(int Id, string Name, int TicksLeft, int AngleDeg)> _dartOwners = new();
+
+  // Where each embedded dart sticks out (issue #425): the yaw, in the victim's LOCAL
+  // frame, of the side the shot came from - so every peer renders the pincushion on
+  // the hit side, perpendicular to the body, & it rides the body's rotation. A pipe-
+  // joined list replicated ALWAYS beside PoisonDarts; the setter re-renders, & a
+  // mismatch with the count self-heals to the old deterministic ring.
+  [Export]
+  public string DartAngles
+  {
+    get => _dartAngles;
+    set
+    {
+      _dartAngles = value;
+      ApplyPoisonVisuals();
+    }
+  }
+
+  private string _dartAngles = string.Empty;
+  private void SyncDartAngles() => DartAngles = string.Join ("|", _dartOwners.ConvertAll (dart => dart.AngleDeg));
 
   // Pure for the unit tests: what one dart costs you over its whole life, & what a
   // cluster of them costs in a single tick - both as a fraction of max health.
@@ -80,11 +103,28 @@ public partial class Player
     if (!IsMultiplayerAuthority()) return;
     if (SpawnArmor) return; // Armor shrugs darts off like everything else (issue #48).
     if (Fallen) return; // A body mid-death-sequence is scenery (issue #152).
-    _dartOwners.Add ((attackerId, attackerName, Mathf.Max (1, PoisonTicksPerDart)));
+    // The sting hurts on arrival (issue #421): 5% of max health through the standard
+    // sink (which plays the damage sound), before the dart even starts ticking. A
+    // real attack, so it interrupts a bread ritual like any other hit (#409's rule).
+    LastDamageKind = DamageKind.Poison; // A dart is a dart, for the death message (issue #84).
+    ApplyDamageFrom (attackerId, MaxHealth * DartImpactFraction / 100.0f, attackerName, knockbackScale: 0.0f);
+    if (Fallen) return; // The sting itself zapped us out: a body is scenery, no pincushion.
+    _dartOwners.Add ((attackerId, attackerName, Mathf.Max (1, PoisonTicksPerDart), StickAngleDeg (attackerId)));
     PoisonDarts = _dartOwners.Count;
-    _damageSound.Play(); // The sting is the victim's only impact feedback.
+    SyncDartAngles();
     GD.Print ($"{DisplayName}: {attackerName}'s dart stuck in me! ({PoisonDarts} embedded)");
     StartPoisonTicksIfIdle();
+  }
+
+  // The side the shot came from, as a yaw in OUR local frame (issue #425) - so the
+  // stick rides our body's rotation on every peer. An ownerless dart (stepped on)
+  // falls back to the old deterministic ring spread.
+  private int StickAngleDeg (int attackerId)
+  {
+    var attacker = attackerId > 0 ? GetParent().GetNodeOrNull <Player> ($"{attackerId}") : null;
+    if (attacker == null) return Mathf.RoundToInt (Mathf.RadToDeg (Mathf.Tau * 0.318f * _dartOwners.Count)) % 360;
+    var local = ToLocal (attacker.GlobalPosition);
+    return Mathf.PosMod (Mathf.RoundToInt (Mathf.RadToDeg (Mathf.Atan2 (local.X, local.Z))), 360);
   }
 
   private async void StartPoisonTicksIfIdle()
@@ -113,7 +153,7 @@ public partial class Player
 
     // Every embedded dart costs its own 10%, oldest first, attributed to whoever
     // blew it - so darts are cumulative (three darts = 30% this tick).
-    foreach (var (id, name, _) in _dartOwners.ToArray())
+    foreach (var (id, name, _, _) in _dartOwners.ToArray())
     {
       if (Fallen) return; // An earlier dart in this same tick already zapped us out.
       ApplyDamageFrom (id, MaxHealth * PoisonTickFractionPerDart / 100.0f, name, knockbackScale: 0.0f, interruptsEating: false); // Bread heals through poison (#194).
@@ -134,12 +174,13 @@ public partial class Player
     {
       var dart = _dartOwners[i];
       var ticksLeft = dart.TicksLeft - 1;
-      if (ticksLeft > 0) { _dartOwners[i] = (dart.Id, dart.Name, ticksLeft); continue; }
+      if (ticksLeft > 0) { _dartOwners[i] = (dart.Id, dart.Name, ticksLeft, dart.AngleDeg); continue; }
       _dartOwners.RemoveAt (i);
     }
 
     if (_dartOwners.Count == before) return;
     PoisonDarts = _dartOwners.Count;
+    SyncDartAngles();
     GD.Print ($"{DisplayName}: {before - _dartOwners.Count} dart(s) ran out of poison ({PoisonDarts} left)");
   }
 
@@ -159,6 +200,7 @@ public partial class Player
     ++_poisonGeneration;
     _dartOwners.Clear();
     PoisonDarts = 0;
+    SyncDartAngles();
   }
 
   // Drunk walk (issue #261): rotate the input direction by a slow sine, scaled by the
@@ -178,26 +220,37 @@ public partial class Player
     UpdateOverheadBarPoisonTint();
   }
 
+  private string _renderedDartKey = string.Empty;
+
   private void UpdateDartSticks()
   {
-    while (_dartVisuals.Count > _poisonDarts)
-    {
-      _dartVisuals[^1].QueueFree();
-      _dartVisuals.RemoveAt (_dartVisuals.Count - 1);
-    }
+    if (_mesh == null) return; // Pre-_Ready sync; the ALWAYS-mode re-fire self-heals.
+    // Idempotent per state (the ALWAYS-mode sync re-fires this constantly, issue
+    // #131): rebuild only when the count or the angles actually changed (issue #425).
+    var key = $"{_poisonDarts}:{_dartAngles}";
+    if (key == _renderedDartKey) return;
+    _renderedDartKey = key;
+    foreach (var visual in _dartVisuals) visual.QueueFree();
+    _dartVisuals.Clear();
+
+    var angles = _dartAngles.Length == 0 ? System.Array.Empty <string>() : _dartAngles.Split ('|');
 
     while (_dartVisuals.Count < _poisonDarts)
     {
       var stick = BlowgunDart.CreateDartVisual();
-      // Deterministic ring around the torso by index, so every peer renders the
-      // same pincushion without replicating positions.
-      var angle = Mathf.Tau * 0.318f * _dartVisuals.Count; // Golden-angle-ish spread.
-      var direction = new Vector3 (Mathf.Cos (angle), 0.0f, Mathf.Sin (angle));
-      stick.Position = direction * 0.34f + Vector3.Up * (1.05f + 0.12f * (_dartVisuals.Count % 3));
-      // Rotation set directly (LookAt needs the node in the tree): the dart's shaft
-      // points outward along its ring direction, tuft toward the body.
+      // The replicated hit-side yaw (issue #425), falling back to the old
+      // deterministic ring when the angle list hasn't caught up with the count.
+      var index = _dartVisuals.Count;
+      var angle = index < angles.Length && int.TryParse (angles[index], out var degrees) ? Mathf.DegToRad (degrees) : Mathf.Tau * 0.318f * index;
+      var direction = new Vector3 (Mathf.Sin (angle), 0.0f, Mathf.Cos (angle));
+      stick.Position = direction * 0.34f + Vector3.Up * (1.05f + 0.12f * (index % 3));
+      // Rotation set directly (LookAt needs the node in the tree): the shaft sticks
+      // straight out of the body - perpendicular, on the side the shot came from.
       stick.Rotation = new Vector3 (0.0f, Mathf.Atan2 (direction.X, direction.Z), 0.0f);
-      AddChild (stick);
+      // Children of the MESH, not the root (issue #425): the fall animation & the
+      // crouch squash move the mesh, & darts parented to the root stayed upright on
+      // a body lying sideways - the "weird angles" report.
+      _mesh.AddChild (stick);
       _dartVisuals.Add (stick);
     }
   }

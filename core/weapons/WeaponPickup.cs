@@ -53,6 +53,11 @@ public partial class WeaponPickup : Area3D
   // Who dropped this weapon (issue #84), for theft-revenge messages. Server-side
   // only - the server reads it when awarding the pickup; empty for spawn-point pickups.
   public string PreviousOwner { get; set; } = string.Empty;
+  // Darts riding inside a blowgun pickup (issue #421): a FRESH spawner gun carries a
+  // preload; a dropped gun carries none (its darts went back to the level census on
+  // the drop). Server-side only - the server reads it at claim time & sends the
+  // number down the ConfirmPickup path, so it never needs to replicate.
+  public int DartPayload { get; set; }
   [Export] public float ExpirySeconds = 5.0f;
 
   // Where a punched-loose item left the victim's hands (issue #193); zero = a normal
