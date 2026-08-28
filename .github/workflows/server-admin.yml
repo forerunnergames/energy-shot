@@ -110,11 +110,17 @@ jobs:
 
           set_arg() { # flag value - rebuild without sed (no metachars, no prefix collisions)
             local out="" skip=0 tok
+            # Word-splitting is wanted here, GLOBBING is not: unquoted $extra also
+            # expands *, ? & [...] against the cwd, so a point-limit of "*" rewrote
+            # the args file as the directory listing. Dropping sed removed the
+            # metacharacter risk; it must not hand it back to the shell.
+            set -f
             for tok in $extra; do
               [ "$skip" = 1 ] && { skip=0; continue; }
               [ "$tok" = "$1" ] && { skip=1; continue; }
               out="$out $tok"
             done
+            set +f
             extra="${out# }"
             [ -n "$2" ] && extra="$extra $1 $2"
           }
@@ -139,7 +145,10 @@ jobs:
           if [ -n "$PASSWORD" ]; then
             mkdir -p "$(dirname "$ENV_FILE")"
             touch "$ENV_FILE"
-            tmp=$(mktemp)
+            # Same directory, not /tmp: the replace is then a real atomic rename, &
+            # the password never exists outside the 0600 directory it belongs in.
+            tmp=$(mktemp -p "$(dirname "$ENV_FILE")")
+            chmod 600 "$tmp"
             grep -v '^SERVER_PASSWORD=' "$ENV_FILE" > "$tmp" || true # keep every OTHER line
             printf 'SERVER_PASSWORD=%s\n' "$PASSWORD" >> "$tmp"     # value is an arg, not sed/format text
             mv "$tmp" "$ENV_FILE"
