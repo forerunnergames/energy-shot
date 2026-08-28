@@ -91,6 +91,10 @@ public partial class World : Node3D
     // The peer close frees no local nodes (finding #7): drop the session's pickups
     // too, or the next hosted game miscounts caps & ghosts float on the next server.
     foreach (var pickup in GetChildren().OfType <WeaponPickup>()) pickup.QueueFree();
+    // Freeing the pickup nodes is only half of it (finding #7): the caps also count
+    // escrowed cargo, pending grants, nocked ammo, armed airplanes & darts in flight,
+    // none of which is a node. Stranded, they shrink every later game's caps.
+    GetNodeOrNull <WeaponSpawner> ("WeaponSpawner")?.ResetSessionState();
     ResetRoundState(); // No intermission, board, or score carries into the next game (finding #5).
     Input.MouseMode = Input.MouseModeEnum.Visible;
     EmitSignal (SignalName.LeftGame);

@@ -138,6 +138,23 @@ public partial class WeaponSpawner : Node3D
   // A direct (non-RPC) call means the host itself sent it, so there's no remote sender.
   private int SenderOrSelf() => Multiplayer.GetRemoteSenderId() == 0 ? Multiplayer.GetUniqueId() : Multiplayer.GetRemoteSenderId();
 
+  // Leaving a session frees the pickup & player NODES, but the caps also count
+  // weapons that exist only as a ledger entry: boomerang cargo, a pending grant,
+  // nocked ammo, an armed airplane, a dart in flight. Those records have no node
+  // to free, so leaving mid-flight strands them - & since World (& this spawner)
+  // survive the trip to the menu, every later hosted game in the same process
+  // counts them forever & spawns one fewer of that weapon, permanently. Clear
+  // what belongs to the session; _laserPoints is spawn geometry & stays.
+  public void ResetSessionState()
+  {
+    _escrow.Clear();
+    _pendingGrants.Clear();
+    _ammoEscrow.Clear();
+    _airplaneHazards.Clear();
+    _airplaneFlights.Clear();
+    _dartFlightsUntilMs.Clear();
+  }
+
   public override void _Ready()
   {
     _rng.Randomize();
