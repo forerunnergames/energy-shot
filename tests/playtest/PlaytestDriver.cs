@@ -1532,7 +1532,12 @@ public partial class PlaytestDriver : Node
 
     // BLAST (#61/#83): the banana lands at the parked victim's feet - the blast
     // hurts & stuns but NEVER zaps a full-health player.
-    await WaitUntil (() => !victim.SpawnArmor && FlatDistance (victim.GlobalPosition, VictimParkSpot) < 2.0f && victim.Health == victim.MaxHealth, 120, "victim parked & clean for the blast (#316)");
+    // CLEAN means clean of POISON too (#409): the victim's poison phase parks at this
+    // same spot & now eats its loaf back to FULL health mid-phase, so parked-and-full
+    // was true there as well - the shooter fired the blast into the poison phase, a
+    // 10% tick passed as the blast's damage, & the victim's own blast phase started
+    // late & measured the STICKY instead. Darts tell the two apart.
+    await WaitUntil (() => !victim.SpawnArmor && FlatDistance (victim.GlobalPosition, VictimParkSpot) < 2.0f && victim.Health == victim.MaxHealth && victim.PoisonDarts == 0, 120, "victim parked & clean for the blast (#316/#409)");
     // CLOSE & STEEP (round 5's lesson: from 6m out the flat-ish lob bounced &
     // skidded meters away - it blasted the HOST at the radius edge & the victim
     // took nothing). From 3m, plunging at the offset point, the plop stays put.
@@ -1550,7 +1555,7 @@ public partial class PlaytestDriver : Node
 
     // STICKY (#83): a direct hit pins the banana, launches the victim across the
     // level, & the fuse one-hit-kills whatever it is stuck to.
-    await WaitUntil (() => !victim.SpawnArmor && FlatDistance (victim.GlobalPosition, VictimParkSpot) < 2.0f && victim.Health == victim.MaxHealth, 120, "victim parked fresh for the sticky (#316)");
+    await WaitUntil (() => !victim.SpawnArmor && FlatDistance (victim.GlobalPosition, VictimParkSpot) < 2.0f && victim.Health == victim.MaxHealth && victim.PoisonDarts == 0, 120, "victim parked fresh for the sticky (#316/#409)");
     await WaitUntil (() => Self.BananaReadyFraction >= 1.0f, 20, "launcher cooled for the sticky shot (#70)");
     Self.Position = VictimParkSpot + new Vector3 (0.0f, 0.3f, 6.0f);
     await Task.Delay (400);
@@ -1844,18 +1849,26 @@ public partial class PlaytestDriver : Node
     var tick = Mathf.RoundToInt (Self.MaxHealth * Self.PoisonTickFractionPerDart);
     await WaitUntil (() => Self.Health <= before - tick, Self.PoisonTickSeconds + 4.0f, $"the poison ticked 10% ({tick}) within one tick period (#194/#236)");
     // Bread heals THROUGH the poison (Aaron, 2026-08-24): a tick is not an
-    // attacker's swing, so the ritual survives one & the loaf lands.
-    if (Self.Holds (HeldWeapon.Bread))
-    {
-      PressAction ("weapon_0");
-      await Task.Delay (150);
-      ReleaseAction ("weapon_0");
-      PressLeftClick();
-      await Task.Delay (100);
-      ReleaseLeftClick();
-      await WaitUntil (() => Self.Health == Self.MaxHealth, 8, "bread healed us to full WHILE poisoned (#194)");
-      Assert (Self.PoisonDarts > 0, "bread healed but never cured the poison (#194)");
-    }
+    // attacker's swing, so the ritual survives one & the loaf lands. Asserted, not
+    // guarded: a breadless victim here means the setup broke, not that the spec
+    // passed (the respawn in ResetLifeAndPark regrants the loaf) (finding #10).
+    Assert (Self.Holds (HeldWeapon.Bread), "still holding the one-per-life loaf to test the heal-through (#194)");
+    // A tick has to land INSIDE the ritual or this phase proves nothing (CodeRabbit on
+    // #409): eating straight off a tick finishes 2s before the next one, so a
+    // regression that re-interrupts eating would still pass. Start the ritual late
+    // enough that the next tick lands mid-chew, & record it happening.
+    var tickedWhileEating = false;
+    Self.PoisonTicked += () => tickedWhileEating |= Self.Eating;
+    await Task.Delay (Mathf.RoundToInt ((Self.PoisonTickSeconds - Self.BreadEatSeconds + 1.0f) * 1000.0f));
+    PressAction ("weapon_0");
+    await Task.Delay (150);
+    ReleaseAction ("weapon_0");
+    PressLeftClick();
+    await Task.Delay (100);
+    ReleaseLeftClick();
+    await WaitUntil (() => Self.Health == Self.MaxHealth, 8, "bread healed us to full WHILE poisoned (#194)");
+    Assert (Self.PoisonDarts > 0, "bread healed but never cured the poison (#194)");
+    Assert (tickedWhileEating, "the poison ticked WHILE we were eating & the ritual survived it - that is the heal-through (#194)");
 
     // Poison WEARS OFF (Aaron, 2026-08-24): every dart works its way out on its own
     // clock, so the pincushion clears without dying for it.
