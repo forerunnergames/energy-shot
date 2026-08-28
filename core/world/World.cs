@@ -572,6 +572,18 @@ public partial class World : Node3D
   // from that menu inherits all of it (CodeRabbit on #408).
   private void OnServerDisconnected()
   {
+    // ONLY if we are actually out. This handler used to just raise a signal, so a
+    // late or stale disconnect cost nothing; now it destroys a session, so it must
+    // not destroy the WRONG one. A dropped probe can be reported after a fresh peer
+    // has already replaced it - the playtest gets kicked on a wrong password & then
+    // immediately joins for real - & tearing down there would kill the live session
+    // instead of the dead one. A peer that is connected or still connecting is not a
+    // server that went away.
+    if (Multiplayer.MultiplayerPeer is ENetMultiplayerPeer peer && peer.GetConnectionStatus() != MultiplayerPeer.ConnectionStatus.Disconnected)
+    {
+      EmitSignal (SignalName.ServerShutDown);
+      return;
+    }
     TearDownSession();
     EmitSignal (SignalName.ServerShutDown);
   }
