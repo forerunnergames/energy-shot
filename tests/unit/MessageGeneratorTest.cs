@@ -12,16 +12,16 @@ public class MessageGeneratorTest
   private static DeathContext Laser (float energy = 0.5f) => new() { Kind = DamageKind.Laser, Energy = energy };
 
   [TestCase]
-  public void ExactlyOneHundredFiftyUniqueMessageTemplates()
+  public void ExactlyOneHundredFiftyFiveUniqueMessageTemplates()
   {
     // 100 from the content wave (issue #84) + 3 through-wall zaps (issue #94)
     // + 4 boomerang zap-outs (issue #98) + 4 slingshot zap-outs (issue #99)
     // + 6 paper airplane zap-outs & 3 airplane catches (issues #102 & #191)
     // + 4 slung-item zap-outs (issue #190) + 4 landmines (issue #191)
     // + 6 zapped-mid-bread-ritual (issue #192) + 4 poison zap-outs (issue #194)
-    // + 12 end-of-round superlatives (issue #153).
+    // + 12 end-of-round superlatives (issue #153) + 5 hill clears (issue #420).
     var templates = MessagePools.All.SelectMany (pool => pool).ToList();
-    AssertInt (templates.Count).IsEqual (150);
+    AssertInt (templates.Count).IsEqual (155);
     AssertInt (templates.Distinct().Count()).IsEqual (155);
   }
 
