@@ -97,6 +97,25 @@ jobs:
           HILL_ROTATE=$(printf %s "$HILL_ROTATE_B64" | base64 -d)
           PASSWORD=$(printf %s "$PASSWORD_B64" | base64 -d)
           VERIFY_PASSWORD=$(printf %s "$VERIFY_PASSWORD_B64" | base64 -d)
+
+          # base64 stops these being read as SHELL syntax; it does nothing about the
+          # CONFIG files they end up in (CodeRabbit on #410). The settings are joined
+          # into ExecStart in a systemd drop-in & the password becomes a line in an
+          # EnvironmentFile - so a value carrying a newline writes a directive of the
+          # caller's choosing (User=root, ExecStartPre=...) or extra environment
+          # variables, both of which the server then runs as root. Validate shape
+          # BEFORE anything is written: settings are whole numbers, mode is one of
+          # three words, & no value may contain a line break.
+          die() { echo "$1" >&2; exit 1; }
+          is_uint() { case "$1" in "" | *[!0-9]*) return 1 ;; *) [ "${#1}" -le 6 ] ;; esac; }
+          has_break() { case "$1" in *[$'\n\r']*) return 0 ;; *) return 1 ;; esac; }
+          case "$MODE" in unchanged | koth | zaps) ;; *) die "mode must be unchanged, koth or zaps" ;; esac
+          [ -z "$ROUND_MINUTES" ] || is_uint "$ROUND_MINUTES" || die "round-minutes must be a whole number"
+          [ -z "$POINT_LIMIT" ] || is_uint "$POINT_LIMIT" || die "point-limit must be a whole number"
+          [ -z "$HILL_ROTATE" ] || is_uint "$HILL_ROTATE" || die "hill-rotate-seconds must be a whole number"
+          has_break "$PASSWORD" && die "password cannot contain a line break"
+          has_break "$VERIFY_PASSWORD" && die "verify-password cannot contain a line break"
+
           ENV_FILE=/etc/energy-shot/server.env
 
           # Game settings live in the server's ARGS, never in code (Aaron,
@@ -149,7 +168,14 @@ jobs:
             # the password never exists outside the 0600 directory it belongs in.
             tmp=$(mktemp -p "$(dirname "$ENV_FILE")")
             chmod 600 "$tmp"
-            grep -v '^SERVER_PASSWORD=' "$ENV_FILE" > "$tmp" || true # keep every OTHER line
+            # grep exits 1 for "matched nothing" & 2 for a READ ERROR; `|| true` took
+            # both, so an unreadable env file became an empty temp file & the mv then
+            # replaced every other setting with just the password (CodeRabbit on #410).
+            set +e
+            grep -v '^SERVER_PASSWORD=' "$ENV_FILE" > "$tmp"
+            grep_status=$?
+            set -e
+            [ "$grep_status" -le 1 ] || { rm -f "$tmp"; die "could not read $ENV_FILE (grep exit $grep_status)"; }
             printf 'SERVER_PASSWORD=%s\n' "$PASSWORD" >> "$tmp"     # value is an arg, not sed/format text
             mv "$tmp" "$ENV_FILE"
             chmod 600 "$ENV_FILE"
