@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using com.forerunnergames.energyshot.weapons;
 using com.forerunnergames.energyshot.players;
 using com.forerunnergames.energyshot.ui;
@@ -96,8 +97,24 @@ public partial class World : Node3D
     // none of which is a node. Stranded, they shrink every later game's caps.
     GetNodeOrNull <WeaponSpawner> ("WeaponSpawner")?.ResetSessionState();
     ResetRoundState(); // No intermission, board, or score carries into the next game (finding #5).
+    ++_sessionGeneration; // Anything still awaiting belongs to the session we just left.
     Input.MouseMode = Input.MouseModeEnum.Visible;
     EmitSignal (SignalName.LeftGame);
+  }
+
+  // Every awaited continuation in this class resumes into WHATEVER session is running
+  // when its timer fires - World is never torn down, so "still the server" is true
+  // again after a rehost & the stale continuation acts on the NEW game (CodeRabbit on
+  // #408: an intermission timer from the abandoned round resetting the new round's
+  // players; the kick delay disconnecting whoever inherited that peer id). The counter
+  // says which session we started in, so no future await has to remember the rule.
+  private ulong _sessionGeneration;
+
+  private async Task <bool> StillThisSession (double seconds)
+  {
+    var generation = _sessionGeneration;
+    await ToSignal (GetTree().CreateTimer (seconds), SceneTreeTimer.SignalName.Timeout);
+    return generation == _sessionGeneration && IsInsideTree();
   }
 
   // Round bookkeeping that must not survive a session: cleared on leave & at the
@@ -311,7 +328,7 @@ public partial class World : Node3D
   private async void SendVersionToAfterFallbackDelay (int peerId)
   {
     if (_serverVersion.Length == 0) return;
-    await ToSignal (GetTree().CreateTimer (10.0), SceneTreeTimer.SignalName.Timeout);
+    if (!await StillThisSession (10.0)) return;
     if (!Multiplayer.GetPeers().Contains (peerId)) return; // Already left.
     SendVersionTo (peerId);
   }
@@ -495,7 +512,7 @@ public partial class World : Node3D
   {
     ServerLog.Event (peerId, $"kicked: {reason}");
     RpcId (peerId, MethodName.OnKickedFromServer, reason);
-    await ToSignal (GetTree().CreateTimer (0.5), SceneTreeTimer.SignalName.Timeout);
+    if (!await StillThisSession (0.5)) return; // A rehost may have handed this id to someone new.
     if (!Multiplayer.GetPeers().Contains (peerId)) return;
     Multiplayer.MultiplayerPeer.DisconnectPeer (peerId);
   }
@@ -728,8 +745,8 @@ public partial class World : Node3D
     ServerLog.Event ($"round over: {string.Join (", ", stats.Select (s => $"{s.Name} {s.Zaps}/{s.ZapOuts}/{s.Assists}/{s.Falls}"))}");
     _lastBoard = board;
     Rpc (MethodName.ReceiveRoundEnded, board);
-    await ToSignal (GetTree().CreateTimer (Match.IntermissionSeconds), SceneTreeTimer.SignalName.Timeout);
-    if (!IsInsideTree() || !IsActiveServer()) return;
+    if (!await StillThisSession (Match.IntermissionSeconds)) return;
+    if (!IsActiveServer()) return;
     StartNewRound();
   }
 
