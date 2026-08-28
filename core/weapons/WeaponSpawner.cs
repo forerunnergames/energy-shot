@@ -153,6 +153,12 @@ public partial class WeaponSpawner : Node3D
     _airplaneHazards.Clear();
     _airplaneFlights.Clear();
     _dartFlightsUntilMs.Clear();
+    // The reconcile countdown too (CodeRabbit on #408): teardown now removes every
+    // pickup, so reconcile is what refills the arena - & a session left mid-countdown
+    // makes the NEXT game wait out that leftover interval with nothing to pick up.
+    // Zero means the first server tick restocks. This only started mattering when the
+    // pickups began being cleared; before that they simply persisted.
+    _reconcileIn = 0.0f;
   }
 
   public override void _Ready()
