@@ -115,6 +115,12 @@ public partial class Player
     _nockedAmmoVisual.Name = SlingshotStone.NockedAmmoNodeName; // PoseBand rides it on the pouch.
     _nockedAmmoVisual.Scale *= 0.55f;
     _slingshotHeld.AddChild (_nockedAmmoVisual);
+    // The first-person overlay ran ONCE at _Ready (issue #124), so ammo nocked later
+    // never joined it - & the overlay-painted frame, bands & hands (no depth test)
+    // draw OVER a normal-depth item wherever they overlap on screen. At full draw
+    // the pouch pulls back right between them, which is the "laser turns invisible
+    // at max draw" report (issue #424). Every late-nocked item gets the overlay now.
+    if (IsMultiplayerAuthority()) ApplyOverlayMaterials (_nockedAmmoVisual);
     ApplySlingshotDrawPose();
   }
 
