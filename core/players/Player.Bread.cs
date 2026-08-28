@@ -98,6 +98,7 @@ public partial class Player
   private void TryStartEating()
   {
     if (Health >= MaxHealth) { DenyEat ("Already at full health"); return; }
+    if (Crouching) { DenyEat ("Stand up to eat"); return; } // Standing only (Aaron, 2026-08-28, issue #429); crouch DURING the ritual is already swallowed (#192).
     if (IsTooBusyToEat()) { DenyEat ("Stand still to eat"); return; }
     StartEating();
   }

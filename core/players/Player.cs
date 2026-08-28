@@ -180,6 +180,7 @@ public partial class Player : CharacterBody3D
     if (IsMultiplayerAuthority()) return;
     if (_nameTag != null) _nameTag.Visible = !_crouching;
     if (_healthTag != null) _healthTag.Visible = !_crouching;
+    ApplyCrownVisibility(); // The king's crown is a giveaway too (issue #426).
   }
 
   // Current zap streak, replicated so every peer can render the "on fire" glow &

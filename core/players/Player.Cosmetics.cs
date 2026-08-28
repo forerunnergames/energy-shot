@@ -118,13 +118,26 @@ public partial class Player
   private const float CrownNameTagSpacing = 0.6f;
   private Node3D? _crown;
   private Tween? _crownSpin;
-  public bool IsCrowned => _crown is { Visible: true };
+  private bool _isCrowned;
+  // State, not the node's visibility (issue #426): stealth hides the crown MESH on a
+  // crouched king, & the leaderboard's crown marker must keep reading crowned.
+  public bool IsCrowned => _isCrowned;
 
   public void SetCrowned (bool isCrowned)
   {
+    if (_isCrowned == isCrowned) return;
+    _isCrowned = isCrowned;
+    ApplyCrownVisibility();
+  }
+
+  // The crown is a floating giveaway like the tags (issue #426): a crouched king
+  // hides it on every OTHER peer - your own third-person crown stays, you know you
+  // are crouching. Re-run on crouch changes & on crowning either way.
+  private void ApplyCrownVisibility()
+  {
     _crown ??= GetNodeOrNull <Node3D> ("Crown");
-    if (_crown == null || _crown.Visible == isCrowned) return;
-    _crown.Visible = isCrowned;
+    if (_crown == null) return;
+    _crown.Visible = _isCrowned && !(_crouching && !IsMultiplayerAuthority());
     UpdateCrownSpin();
   }
 
