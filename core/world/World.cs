@@ -60,6 +60,9 @@ public partial class World : Node3D
     if (!IsDevChannel (clientVersion) && IsDevChannel (serverVersion)) return $"This is the test server, running work-in-progress builds (v{serverVersion}). The regular game plays on the main server - or grab a test build to join here!";
     return $"Version mix-up! This server is v{serverVersion} & your game is v{clientVersion}. Download the newest version & come right back!";
   }
+
+  // A legacy client can't say its version at all - same tone, no comparison (#170/#415).
+  public static string LegacyVersionKickMessage (string serverVersion) => $"Your game is a few updates behind this server (v{serverVersion}) - download the newest version & come right back!";
   // Hard engine limit on players per game (issue #73); hosts can choose fewer.
   public const int MaxPlayers = 12;
   private NetworkManager _networkManager = null!;
@@ -422,7 +425,7 @@ public partial class World : Node3D
     if (!Multiplayer.IsServer()) return;
     var senderId = Multiplayer.GetRemoteSenderId();
     ServerLog.Event (senderId, $"join denied: [{playerName}] legacy versionless join (server {GameVersion})");
-    Kick (senderId, $"Your game is a few updates behind this server (v{GameVersion}) - download the newest version & come right back!");
+    Kick (senderId, LegacyVersionKickMessage (GameVersion));
   }
 
   // Versioned join handshake (issue #170); the version parameter is why this can't

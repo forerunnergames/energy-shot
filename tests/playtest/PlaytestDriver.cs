@@ -2297,7 +2297,7 @@ public partial class PlaytestDriver : Node
     _world.KickedFromServer += reason => kickReason = reason;
     _world.StartLegacyClientSession (VictimName, difficulty: 0, _address, _port, Password);
     await WaitUntil (() => kickReason.Length > 0, 30, "legacy versionless join was kicked");
-    var expected = $"Update required: server is v{World.GameVersion}, you have an older version.";
+    var expected = World.LegacyVersionKickMessage (World.GameVersion);
     Assert (kickReason == expected, $"kick reason is \"{expected}\", got \"{kickReason}\"");
     await WaitUntil (() => Multiplayer.MultiplayerPeer.GetConnectionStatus() != MultiplayerPeer.ConnectionStatus.Connected, 15, "kicked connection fully closed");
     await Task.Delay (500); // Let the peer teardown settle before reconnecting.

@@ -58,6 +58,14 @@ public class ChannelTest
   }
 
   [TestCase]
+  public void LegacyClientIsAskedForTheNewestVersion()
+  {
+    var message = World.LegacyVersionKickMessage ("0.8.126");
+    AssertBool (message.Contains ("0.8.126")).IsTrue();
+    AssertBool (message.Contains ("newest")).IsTrue();
+  }
+
+  [TestCase]
   public void DevToDevMismatchIsAnUpdatePromptToo()
   {
     var message = World.VersionKickMessage ("0.8.127-dev.2", "0.8.127-dev.1");
