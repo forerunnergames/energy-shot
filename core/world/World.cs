@@ -97,6 +97,13 @@ public partial class World : Node3D
     // none of which is a node. Stranded, they shrink every later game's caps.
     GetNodeOrNull <WeaponSpawner> ("WeaponSpawner")?.ResetSessionState();
     ResetRoundState(); // No intermission, board, or score carries into the next game (finding #5).
+    // Peer-keyed bookkeeping goes too (CodeRabbit on #408). Both are keyed by peer id
+    // & only ever pruned on a per-peer disconnect, which leaving does not fire for
+    // everyone - so entries pile up across sessions, & a client that inherits a
+    // recycled id in the next game is read as somebody else: already sent its version
+    // line (so it never gets one), or rate-limited by a stranger's last chat message.
+    _versionLinePeerIds.Clear();
+    _lastChatMs.Clear();
     ++_sessionGeneration; // Anything still awaiting belongs to the session we just left.
     Input.MouseMode = Input.MouseModeEnum.Visible;
     EmitSignal (SignalName.LeftGame);
@@ -123,6 +130,7 @@ public partial class World : Node3D
   private void ResetRoundState()
   {
     _intermission = false;
+    _crownHolderName = string.Empty; // No incumbent on the hill in a round nobody has played yet (#408).
     _lastBoard = string.Empty;
     _score = 0;
     _roundElapsed = 0.0f;
