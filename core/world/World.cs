@@ -58,6 +58,13 @@ public partial class World : Node3D
   private readonly System.Collections.Generic.HashSet <int> _versionLinePeerIds = new();
   private UI _ui = null!;
   private Callable _onServerDisconnectedCallable;
+  // The join handshake is a ONE-SHOT that only fires if the connection succeeds, so a
+  // join that never lands - canceled, refused, a server that died mid-handshake -
+  // leaves it connected. The next successful session then fires it with the PREVIOUS
+  // attempt's name, difficulty & password (CodeRabbit on #408). Held so it can be
+  // dropped when the attempt ends, whichever way it ends.
+  private Callable _pendingJoinCallable;
+  private bool _hasPendingJoin;
   private PackedScene _playerScene = null!;
   private Player? _selfPlayer;
   private string _selfPlayerName = string.Empty;
@@ -78,12 +85,27 @@ public partial class World : Node3D
   {
     if (Multiplayer.MultiplayerPeer is not ENetMultiplayerPeer) { GetTree().Quit(); return; } // Not in a session: the old behavior.
     ServerLog.Event ("session left: returning to the main menu");
+    TearDownSession();
+    Input.MouseMode = Input.MouseModeEnum.Visible;
+    EmitSignal (SignalName.LeftGame);
+  }
+
+  // EVERY route out of a session runs this, not just the deliberate quit (CodeRabbit
+  // on #408). A server that vanishes took OnServerDisconnected, which only raised the
+  // signal that shows the menu - so the player could host again with the whole of the
+  // last session still in place: spawner ledgers, peer maps, round state, & a
+  // generation counter that never advanced, leaving stale continuations live.
+  // Idempotent, because the two paths can overlap: a quit races the disconnect that
+  // follows it.
+  private void TearDownSession()
+  {
     // Host-only peer subscriptions come off FIRST (finding #6): left on, a later
     // session double-handles disconnects, or a client runs host bookkeeping. A -=
     // that was never subscribed is a harmless no-op, so this is safe for a client too.
     Multiplayer.PeerConnected -= OnClientConnectedToServer;
     Multiplayer.PeerDisconnected -= OnClientDisconnectedFromServer;
-    Multiplayer.MultiplayerPeer.Close();
+    DropPendingJoinCallback();
+    if (Multiplayer.MultiplayerPeer is ENetMultiplayerPeer peer) peer.Close();
     Multiplayer.MultiplayerPeer = null; // Back to the engine's offline peer.
     foreach (var player in GetPlayers().ToList()) player.QueueFree();
     _selfPlayer = null;
@@ -105,8 +127,6 @@ public partial class World : Node3D
     _versionLinePeerIds.Clear();
     _lastChatMs.Clear();
     ++_sessionGeneration; // Anything still awaiting belongs to the session we just left.
-    Input.MouseMode = Input.MouseModeEnum.Visible;
-    EmitSignal (SignalName.LeftGame);
   }
 
   // Every awaited continuation in this class resumes into WHATEVER session is running
@@ -374,7 +394,7 @@ public partial class World : Node3D
     Multiplayer.MultiplayerPeer = peer;
     // One-shot: a retried session (e.g. the playtest's wrong-password probe, issue
     // #109) must not replay stale credentials from an earlier attempt's handler.
-    Multiplayer.Connect (MultiplayerApi.SignalName.ConnectedToServer, Callable.From (() => RequestSlot (playerName, difficulty, password, colorIndex, version ?? GameVersion)), (uint)ConnectFlags.OneShot);
+    ConnectJoinCallback (Callable.From (() => RequestSlot (playerName, difficulty, password, colorIndex, version ?? GameVersion)));
   }
 
   // Playtest-only probe (issue #170): joins exactly the way a pre-#170 client does -
@@ -385,7 +405,7 @@ public partial class World : Node3D
     var error = peer.CreateClient (address, port);
     if (error != Error.Ok) GD.PrintErr ($"Playtest join failed: {error}");
     Multiplayer.MultiplayerPeer = peer;
-    Multiplayer.Connect (MultiplayerApi.SignalName.ConnectedToServer, Callable.From (() => RpcId (1, MethodName.RequestPlayerSlot, playerName, difficulty, password, 0)), (uint)ConnectFlags.OneShot);
+    ConnectJoinCallback (Callable.From (() => RpcId (1, MethodName.RequestPlayerSlot, playerName, difficulty, password, 0)));
   }
 
   // Dedicated-server exports carry the feature tag, so the server binary needs no flag;
@@ -548,14 +568,37 @@ public partial class World : Node3D
     RpcId (1, MethodName.RequestPlayerSlotV2, playerName, difficulty, password, colorIndex, version);
   }
 
-  private void OnServerDisconnected() => EmitSignal (SignalName.ServerShutDown);
+  // The server went away: tear the session down before the menu appears, or hosting
+  // from that menu inherits all of it (CodeRabbit on #408).
+  private void OnServerDisconnected()
+  {
+    TearDownSession();
+    EmitSignal (SignalName.ServerShutDown);
+  }
 
   // A canceled join (issue #91) drops the connection on purpose; unhooking first
   // keeps the resulting disconnect from reading as a server shutdown.
   private void OnJoinCanceled()
   {
+    DropPendingJoinCallback(); // A canceled attempt must not replay its credentials later.
     if (!Multiplayer.IsConnected (MultiplayerApi.SignalName.ServerDisconnected, _onServerDisconnectedCallable)) return;
     Multiplayer.Disconnect (MultiplayerApi.SignalName.ServerDisconnected, _onServerDisconnectedCallable);
+  }
+
+  // One pending handshake at a time: registering a new attempt drops the old one.
+  private void ConnectJoinCallback (Callable callable)
+  {
+    DropPendingJoinCallback();
+    _pendingJoinCallable = callable;
+    _hasPendingJoin = true;
+    Multiplayer.Connect (MultiplayerApi.SignalName.ConnectedToServer, callable, (uint)ConnectFlags.OneShot);
+  }
+
+  private void DropPendingJoinCallback()
+  {
+    if (!_hasPendingJoin) return;
+    if (Multiplayer.IsConnected (MultiplayerApi.SignalName.ConnectedToServer, _pendingJoinCallable)) Multiplayer.Disconnect (MultiplayerApi.SignalName.ConnectedToServer, _pendingJoinCallable);
+    _hasPendingJoin = false;
   }
 
   private void OnClientDisconnectedFromServer (long id)
@@ -798,6 +841,13 @@ public partial class World : Node3D
   private void ReceiveRoundStarted()
   {
     if (Multiplayer.GetRemoteSenderId() != 1) return;
+    // Clients keep their OWN copy of this bookkeeping (CodeRabbit on #408): _score
+    // counts the LOCAL player's zaps on every peer, & StartNewRound runs on the
+    // server alone - so resetting it there cleaned the host & left every client
+    // announcing round 2's first zap as the previous round's total plus one. The
+    // server has already reset before sending this, & a local call reads sender 0
+    // & returns above, so this only ever runs on a client.
+    ResetRoundState();
     _selfPlayer?.SetInputEnabled (isEnabled: true);
     EmitSignal (SignalName.RoundStarted);
   }
