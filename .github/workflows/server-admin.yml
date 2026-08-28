@@ -109,9 +109,13 @@ jobs:
           [ -n "$PASSWORD" ] && echo "::add-mask::$PASSWORD_B64"
           [ -n "$VERIFY_PASSWORD" ] && echo "::add-mask::$VERIFY_PASSWORD_B64"
           # AUTHORIZE_KEY & RESTART are booleans, OPS_KEY our own constant - no metachars.
-          ssh -i droplet_key -o UserKnownHostsFile=known_hosts -o StrictHostKeyChecking=yes \
-            root@"$DROPLET_HOST" \
-            "MODE_B64='$MODE_B64' ROUND_MINUTES_B64='$ROUND_MINUTES_B64' POINT_LIMIT_B64='$POINT_LIMIT_B64' HILL_ROTATE_B64='$HILL_ROTATE_B64' PASSWORD_B64='$PASSWORD_B64' VERIFY_PASSWORD_B64='$VERIFY_PASSWORD_B64' AUTHORIZE_KEY='$AUTHORIZE_KEY' RESTART='$RESTART' OPS_KEY='$OPS_KEY' bash -s" <<'ADMIN'
+          # The passwords never touch the remote COMMAND LINE (CodeRabbit on #410):
+          # anything in ssh's argv is world-readable in `ps` on the droplet for the
+          # life of the command, & base64 hides nothing from that. They ride stdin
+          # instead: one line ahead of the script (printf is a shell builtin, so no
+          # runner-side argv either), consumed by a `read` before `bash -s` takes
+          # the rest of stdin as the script. Non-secret settings stay in argv.
+          { printf '%s %s\n' "$PASSWORD_B64" "$VERIFY_PASSWORD_B64"; cat <<'ADMIN'
           set -e
           MODE=$(printf %s "$MODE_B64" | base64 -d)
           ROUND_MINUTES=$(printf %s "$ROUND_MINUTES_B64" | base64 -d)
@@ -235,3 +239,6 @@ jobs:
             systemctl show -p ExecStart --value energy-shot | grep -o -- '--mode [a-z]*' || echo "(no --mode = zaps default)"
           fi
           ADMIN
+          } | ssh -i droplet_key -o UserKnownHostsFile=known_hosts -o StrictHostKeyChecking=yes \
+            root@"$DROPLET_HOST" \
+            "MODE_B64='$MODE_B64' ROUND_MINUTES_B64='$ROUND_MINUTES_B64' POINT_LIMIT_B64='$POINT_LIMIT_B64' HILL_ROTATE_B64='$HILL_ROTATE_B64' AUTHORIZE_KEY='$AUTHORIZE_KEY' RESTART='$RESTART' OPS_KEY='$OPS_KEY' bash -c 'read -r PASSWORD_B64 VERIFY_PASSWORD_B64 && export PASSWORD_B64 VERIFY_PASSWORD_B64 && exec bash -s'"
