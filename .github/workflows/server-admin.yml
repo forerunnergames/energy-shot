@@ -65,6 +65,23 @@ jobs:
           OPS_KEY: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPY/AXYCLCLVZ2fIcn1fOgOq+kQpdhUpfZC+QOSEtAtR aaron@energyshot-ops"
         run: |
           if [ -z "$DROPLET_HOST" ]; then echo "Deploy secrets absent"; exit 1; fi
+          # Shape checks belong HERE, on the runner, BEFORE ::add-mask:: & before the
+          # values are encoded (CodeRabbit on #410). Two reasons, both of which the
+          # droplet-side copies of these checks are too late to cover:
+          #   - the mask registers ONE string, so a newline inside a password would
+          #     print the remainder as a separate, UNMASKED log line - leaked by the
+          #     very step meant to hide it;
+          #   - `$(... | base64 -d)` strips trailing newlines, so a droplet-side check
+          #     cannot see a value that ENDED in one. Here the values are untouched.
+          fail() { echo "$1" >&2; exit 1; }
+          case "$PASSWORD$VERIFY_PASSWORD" in *[$'\n\r']*) fail "password cannot contain a line break" ;; esac
+          # systemd's EnvironmentFile parser gives quotes & backslashes meaning, so a
+          # password holding them LOADS as a different string than the one typed - the
+          # server would then refuse the very password its owner handed out, & the
+          # verify comparison (which reads the file's raw text) would disagree with it.
+          # Refused rather than quoted: quoting the value would break that comparison,
+          # & this box cannot test the parser's exact rules against the droplet.
+          case "$PASSWORD" in *[\'\"\\[:space:]]*) fail "password cannot contain quotes, backslashes or spaces" ;; esac
           # A dispatch input is NOT a registered secret, so nothing redacts it for
           # us (CodeRabbit): register it with the runner before it can reach any log
           # or error trace. Nothing below ever echoes the value itself.
