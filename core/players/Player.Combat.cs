@@ -330,7 +330,7 @@ public partial class Player
 
   // Split from ApplyDamage so delayed damage (the sticky banana fuse) can carry the
   // attacker id captured while the RPC context still existed (issue #83).
-  private void ApplyDamageFrom (int attackerId, float energy, string attackerName, float knockbackScale, bool isSurvivableAtFullHealth = false, bool throughBarrier = false, bool isHeadshot = false)
+  private void ApplyDamageFrom (int attackerId, float energy, string attackerName, float knockbackScale, bool isSurvivableAtFullHealth = false, bool throughBarrier = false, bool isHeadshot = false, bool interruptsEating = true)
   {
     // Already zapped out (issue #152): a body lying through its death sequence takes
     // no further damage - late stickies, blasts, & punches land on scenery.
@@ -341,11 +341,13 @@ public partial class Player
     // pool already is the handicap.
     Dancing = false; // Getting zapped mid-dance ends the groove on every peer (issue #103).
     _wasEatingWhenHit = Eating; // Death-message context, captured before the interrupt clears it (issue #192).
-    // An ATTACKER cancels the ritual (issue #192) - but a poison tick is not a
-    // swing (Aaron, 2026-08-24: bread never healed while poisoned). Ticks land
-    // every 5s & the ritual takes 3, so the loaf was doomed more often than not.
-    // Bread still cannot CURE the poison (issue #194) - it just heals, as specced.
-    if (LastDamageKind != DamageKind.Poison) InterruptEating();
+    // An ATTACKER cancels the ritual (issue #192); a poison tick does not - bread
+    // heals THROUGH poison (Aaron, 2026-08-24), it just can't cure it (issue #194).
+    // The caller says which it is: every real attack interrupts by default, only the
+    // poison tick opts out. Sniffing LastDamageKind here instead let delayed hits
+    // (a burn tick, a sticky-banana boom) that never set the field skip the
+    // interrupt whenever a poison tick had set it last - healing through a real hit.
+    if (interruptsEating) InterruptEating();
     var attacker = GetParent().GetNodeOrNull <Player> ($"{attackerId}");
     var handicap = 1.0f + 0.5f * Mathf.Max (0, TierOf (MaxHealth) - TierOf (attacker?.MaxHealth ?? MaxHealth));
     var decrease = Mathf.RoundToInt (CalculateHealthDecrease (energy) * handicap);
