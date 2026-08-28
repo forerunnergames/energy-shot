@@ -82,6 +82,11 @@ jobs:
           # Refused rather than quoted: quoting the value would break that comparison,
           # & this box cannot test the parser's exact rules against the droplet.
           case "$PASSWORD" in *[\'\"\\[:space:]]*) fail "password cannot contain quotes, backslashes or spaces" ;; esac
+          # Dispatch declares these type: boolean, but they are interpolated into the
+          # remote command line - so hold the guarantee here rather than trusting the
+          # caller's side of the API to have enforced it (CodeRabbit on #410).
+          case "$AUTHORIZE_KEY" in true | false) ;; *) fail "authorize_ops_key must be true or false" ;; esac
+          case "$RESTART" in true | false) ;; *) fail "restart must be true or false" ;; esac
           # A dispatch input is NOT a registered secret, so nothing redacts it for
           # us (CodeRabbit): register it with the runner before it can reach any log
           # or error trace. Nothing below ever echoes the value itself.
