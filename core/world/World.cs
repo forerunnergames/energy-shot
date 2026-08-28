@@ -579,11 +579,10 @@ public partial class World : Node3D
     // immediately joins for real - & tearing down there would kill the live session
     // instead of the dead one. A peer that is connected or still connecting is not a
     // server that went away.
-    if (Multiplayer.MultiplayerPeer is ENetMultiplayerPeer peer && peer.GetConnectionStatus() != MultiplayerPeer.ConnectionStatus.Disconnected)
-    {
-      EmitSignal (SignalName.ServerShutDown);
-      return;
-    }
+    // Silently, signal & all (CodeRabbit on #408): this report belongs to a DEAD
+    // connection, & the ServerShutDown handler shows the menu - popping it over the
+    // live session the player is in would be the stale callback winning after all.
+    if (Multiplayer.MultiplayerPeer is ENetMultiplayerPeer peer && peer.GetConnectionStatus() != MultiplayerPeer.ConnectionStatus.Disconnected) return;
     TearDownSession();
     EmitSignal (SignalName.ServerShutDown);
   }
