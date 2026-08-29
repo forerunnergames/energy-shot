@@ -46,6 +46,25 @@ public partial class World : Node3D
   // Build version (issue #170): the release workflow stamps the tag (without the
   // leading "v") into project.godot at export time; dev builds keep the "-dev" value.
   public static string GameVersion => (string)ProjectSettings.GetSetting ("application/config/version", "unknown");
+  // Release channels (issue #415): a stable tag stamps a clean X.Y.Z, so any version
+  // carrying a suffix - the editor's own 0.8.15-dev, a v0.8.127-dev.2 build - is the
+  // test channel. The suffix picks the default port, & the version kick below
+  // explains a mismatch in player words, not dev words.
+  public const int DevServerPort = 55557;
+  public static bool IsDevChannel (string version) => version.Contains ('-');
+  public static int DefaultPortFor (string version) => IsDevChannel (version) ? DevServerPort : DefaultServerPort;
+
+  // Kid-readable join refusals (issue #415): name the world the player knocked on &
+  // say what to do next. Pure & static so the unit tests can pin every branch.
+  public static string VersionKickMessage (string serverVersion, string clientVersion)
+  {
+    if (IsDevChannel (clientVersion) && !IsDevChannel (serverVersion)) return $"This is the main server, & your game is a test build (v{clientVersion}). Test builds play on the test server - or grab the regular game to join here!";
+    if (!IsDevChannel (clientVersion) && IsDevChannel (serverVersion)) return $"This is the test server, running work-in-progress builds (v{serverVersion}). The regular game plays on the main server - or grab a test build to join here!";
+    return $"Version mix-up! This server is v{serverVersion} & your game is v{clientVersion}. Download the newest version & come right back!";
+  }
+
+  // A legacy client can't say its version at all - same tone, no comparison (#170/#415).
+  public static string LegacyVersionKickMessage (string serverVersion) => $"Your game is a few updates behind this server (v{serverVersion}) - download the newest version & come right back!";
   // Hard engine limit on players per game (issue #73); hosts can choose fewer.
   public const int MaxPlayers = 12;
   private NetworkManager _networkManager = null!;
@@ -416,8 +435,8 @@ public partial class World : Node3D
   {
     var args = OS.GetCmdlineUserArgs();
     var index = System.Array.IndexOf (args, "--port");
-    if (index == -1 || index + 1 >= args.Length) return DefaultServerPort;
-    if (!int.TryParse (args[index + 1], out var port) || port is <= 0 or > 65535) return DefaultServerPort;
+    if (index == -1 || index + 1 >= args.Length) return DefaultPortFor (GameVersion);
+    if (!int.TryParse (args[index + 1], out var port) || port is <= 0 or > 65535) return DefaultPortFor (GameVersion);
     return port;
   }
 
@@ -476,7 +495,7 @@ public partial class World : Node3D
     if (!Multiplayer.IsServer()) return;
     var senderId = Multiplayer.GetRemoteSenderId();
     ServerLog.Event (senderId, $"join denied: [{playerName}] legacy versionless join (server {GameVersion})");
-    Kick (senderId, $"Update required: server is v{GameVersion}, you have an older version.");
+    Kick (senderId, LegacyVersionKickMessage (GameVersion));
   }
 
   // Versioned join handshake (issue #170); the version parameter is why this can't
@@ -493,7 +512,7 @@ public partial class World : Node3D
     if (version != GameVersion)
     {
       ServerLog.Event (senderId, $"join denied: [{playerName}] version mismatch (server {GameVersion}, client {version})");
-      Kick (senderId, $"Update required: server is v{GameVersion}, you have v{version}.");
+      Kick (senderId, VersionKickMessage (GameVersion, version));
       return;
     }
 
