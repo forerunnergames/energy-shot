@@ -115,7 +115,11 @@ jobs:
           # instead: one line ahead of the script (printf is a shell builtin, so no
           # runner-side argv either), consumed by a `read` before `bash -s` takes
           # the rest of stdin as the script. Non-secret settings stay in argv.
-          { printf '%s %s\n' "$PASSWORD_B64" "$VERIFY_PASSWORD_B64"; cat <<'ADMIN'
+          # Two RECORDS, not two fields (CodeRabbit on #410): with password empty &
+          # verify set, a space-joined line made whitespace-delimited read assign the
+          # VERIFY value to PASSWORD - which the script then WROTE as the live join
+          # password. One value per line, one IFS= read -r per line, order fixed.
+          { printf '%s\n' "$PASSWORD_B64"; printf '%s\n' "$VERIFY_PASSWORD_B64"; cat <<'ADMIN'
           set -e
           MODE=$(printf %s "$MODE_B64" | base64 -d)
           ROUND_MINUTES=$(printf %s "$ROUND_MINUTES_B64" | base64 -d)
@@ -241,4 +245,4 @@ jobs:
           ADMIN
           } | ssh -i droplet_key -o UserKnownHostsFile=known_hosts -o StrictHostKeyChecking=yes \
             root@"$DROPLET_HOST" \
-            "MODE_B64='$MODE_B64' ROUND_MINUTES_B64='$ROUND_MINUTES_B64' POINT_LIMIT_B64='$POINT_LIMIT_B64' HILL_ROTATE_B64='$HILL_ROTATE_B64' AUTHORIZE_KEY='$AUTHORIZE_KEY' RESTART='$RESTART' OPS_KEY='$OPS_KEY' bash -c 'read -r PASSWORD_B64 VERIFY_PASSWORD_B64 && export PASSWORD_B64 VERIFY_PASSWORD_B64 && exec bash -s'"
+            "MODE_B64='$MODE_B64' ROUND_MINUTES_B64='$ROUND_MINUTES_B64' POINT_LIMIT_B64='$POINT_LIMIT_B64' HILL_ROTATE_B64='$HILL_ROTATE_B64' AUTHORIZE_KEY='$AUTHORIZE_KEY' RESTART='$RESTART' OPS_KEY='$OPS_KEY' bash -c 'IFS= read -r PASSWORD_B64 && IFS= read -r VERIFY_PASSWORD_B64 && export PASSWORD_B64 VERIFY_PASSWORD_B64 && exec bash -s'"
