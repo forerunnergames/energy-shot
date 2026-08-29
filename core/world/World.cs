@@ -797,16 +797,28 @@ public partial class World : Node3D
   // still lies at the death spot, so its replicated position IS the where-it-happened.
   // The victim is excluded from the remaining count by name, not by Fallen - the flag
   // may not have replicated yet on the same frame as the notification.
+  // Rapid double-zaps outrun replication (CodeRabbit on #431): the second death
+  // notification can arrive before the FIRST victim's Fallen flag replicates, so the
+  // count below would see the earlier body still standing & refuse a valid clear.
+  // The notifications themselves are the authoritative death feed (issue #111), so
+  // the server keeps its own short ledger of who just went down - entries outlive
+  // the replication gap by design & expire well inside the 5s lie-down.
+  private readonly System.Collections.Generic.Dictionary <string, ulong> _recentZapOuts = new();
+  private const float RecentZapOutSeconds = 4.0f;
+
+  private bool RecentlyZappedOut (string playerName) => _recentZapOuts.TryGetValue (playerName, out var until) && Time.GetTicksMsec() < until;
+
   private void MaybeAwardHillClearBonus (string victimName, string zapperName)
   {
     if (!IsActiveServer() || _mode != GameMode.KingOfTheHill || _intermission) return;
+    _recentZapOuts[victimName] = Time.GetTicksMsec() + (ulong)(RecentZapOutSeconds * 1000.0f);
     var players = GetPlayers().ToList();
     var victim = players.FirstOrDefault (player => player.DisplayName == victimName);
     var zapper = players.FirstOrDefault (player => player.DisplayName == zapperName);
     if (victim == null || zapper == null || victim == zapper) return;
     var victimInHill = Hill.Contains (_hillIndex, victim.GlobalPosition);
     var zapperInHill = Hill.Contains (_hillIndex, zapper.GlobalPosition);
-    var othersStillInHill = players.Count (player => player != victim && !player.Fallen && Hill.Contains (_hillIndex, player.GlobalPosition));
+    var othersStillInHill = players.Count (player => player != victim && !player.Fallen && !RecentlyZappedOut (player.DisplayName) && Hill.Contains (_hillIndex, player.GlobalPosition));
     if (!Match.IsHillClearBonus (victimInHill, zapperInHill, othersStillInHill)) return;
     if (zapper.NetworkId == Multiplayer.GetUniqueId()) zapper.NotifyHillClearBonus();
     else zapper.RpcId (zapper.NetworkId, Player.MethodName.NotifyHillClearBonus);
