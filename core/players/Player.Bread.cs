@@ -97,8 +97,8 @@ public partial class Player
   // centered above the bread meter.
   private void TryStartEating()
   {
+    if (Crouching) { DenyEat ("Stand up to eat"); return; } // Standing only (Aaron, 2026-08-28, issue #429) - & FIRST, so a crouched-at-full-health player hears the stance reason (CodeRabbit); crouch DURING the ritual is already swallowed (#192).
     if (Health >= MaxHealth) { DenyEat ("Already at full health"); return; }
-    if (Crouching) { DenyEat ("Stand up to eat"); return; } // Standing only (Aaron, 2026-08-28, issue #429); crouch DURING the ritual is already swallowed (#192).
     if (IsTooBusyToEat()) { DenyEat ("Stand still to eat"); return; }
     StartEating();
   }
