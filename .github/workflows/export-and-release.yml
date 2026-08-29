@@ -64,7 +64,11 @@ jobs:
         run: |
           # Refuse to stamp anything that isn't a release version tag: a malformed
           # tag would ship builds whose versions never match & lock everyone out.
-          echo "$TAG" | grep -Eq '^v?[0-9]+\.[0-9]+\.[0-9]+([-.].+)?$' || { echo "Refusing to stamp non-version tag [$TAG]"; exit 1; }
+          # The CHANNEL grammar exactly (issue #415, CodeRabbit on #416): stable
+          # vX.Y.Z or dev vX.Y.Z-dev.N & nothing else. The old permissive suffix let
+          # v1.2.3.foo build & DEPLOY AS STABLE (no dash = stable channel), & let a
+          # crafted suffix reach the deploy step's remote command line.
+          echo "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-dev\.[0-9]+)?$' || { echo "Refusing to stamp non-channel tag [$TAG]"; exit 1; }
           VERSION="${TAG#v}"
           sed -i "s|^config/version=.*|config/version=\"$VERSION\"|" project.godot
           grep "^config/version=" project.godot
@@ -200,6 +204,11 @@ jobs:
           # The secrets context isn't available in step `if` expressions, so the
           # no-credentials case is guarded here instead.
           if [ -z "$DROPLET_HOST" ]; then echo "Deploy secrets absent; skipping deploy"; exit 0; fi
+          # Same grammar the stamp step enforces, re-checked HERE because this step
+          # interpolates $TAG into a remote command line as root (CodeRabbit on #416):
+          # a tag like v1.2.3-'$(id)' is a valid git ref, & only this shape check
+          # stands between a pushed tag & command execution on the droplet.
+          echo "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-dev\.[0-9]+)?$' || { echo "Refusing to deploy non-channel tag [$TAG]"; exit 1; }
           # Key is removed on every exit path; host key is pinned, not trusted-on-first-use.
           trap 'rm -f droplet_key known_hosts' EXIT
           echo "${{ secrets.DROPLET_SSH_KEY }}" > droplet_key
