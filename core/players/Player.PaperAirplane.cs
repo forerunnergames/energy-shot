@@ -23,6 +23,9 @@ public partial class Player
   // ~0.1s, so anything tighter made well-timed catches lose the race to the hit -
   // at the old 3m a catch had to land inside a single frame's worth of travel.
   [Export] public float AirplaneCatchRadiusMeters = 4.0f;
+  // The catch needs your eyes (caleb, 2026-08-28, issue #427): the punch only grabs
+  // an airplane inside this facing cone of the crosshair - ~35 degrees off-center.
+  [Export] public float AirplaneCatchFacingMinDot = 0.82f;
   // How long a swing keeps grabbing after it misses (issue #102): about one punch
   // animation, so catching rewards timing instead of frame luck.
   [Export] public float AirplaneCatchWindowSeconds = 0.35f;
@@ -233,9 +236,18 @@ public partial class Player
   // reach - incoming, passing by, or even your own - grabs it out of the air
   // instead of punching. The thrower's peer owns the live flight, so the catch is
   // requested from them & the server hands the airplane over.
+  // Pure for the unit tests (issue #427): is the target inside the facing cone?
+  public static bool IsFacing (Vector3 lookDirection, Vector3 toTarget, float minDot) => toTarget.LengthSquared() > 0.000001f && lookDirection.Normalized().Dot (toTarget.Normalized()) >= minDot;
+
+  private bool FacingAirplane (PaperAirplaneProjectile airplane) => IsFacing (AimDirection(), airplane.GlobalPosition - _camera.GlobalPosition, AirplaneCatchFacingMinDot);
+
   private bool TryCatchPaperAirplane()
   {
     if (TryGrabAirplane()) return true;
+    // The open-swing window (issue #102) needs the eyes too (issue #427): a blind
+    // swing must not become a catch when the flight's authority settles a mid-swing
+    // impact against the replicated CatchingAirplane flag.
+    if (!FacingAnyAirplane()) return false;
     // Nothing in reach yet, so the swing stays "open" briefly (issue #102): an
     // instantaneous proximity test made catching frame-perfect, since a loaded
     // frame can advance the glider more than a meter - a well-timed swing kept
@@ -274,10 +286,18 @@ public partial class Player
     foreach (var node in GetParent().GetChildren())
     {
       if (node is not PaperAirplaneProjectile airplane) continue;
+      if (!FacingAirplane (airplane)) continue; // No blind grabs (issue #427).
       if (airplane.GlobalPosition.DistanceTo (GlobalPosition + Vector3.Up) <= AirplaneCatchRadiusMeters) return airplane;
     }
 
     return null;
+  }
+
+  private bool FacingAnyAirplane()
+  {
+    foreach (var node in GetParent().GetChildren())
+      if (node is PaperAirplaneProjectile airplane && FacingAirplane (airplane)) return true;
+    return false;
   }
 
   // Runs on the thrower's authority (issue #102): it owns the live flight & the

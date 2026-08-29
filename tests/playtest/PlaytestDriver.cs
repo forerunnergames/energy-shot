@@ -2297,7 +2297,7 @@ public partial class PlaytestDriver : Node
     _world.KickedFromServer += reason => kickReason = reason;
     _world.StartLegacyClientSession (VictimName, difficulty: 0, _address, _port, Password);
     await WaitUntil (() => kickReason.Length > 0, 30, "legacy versionless join was kicked");
-    var expected = $"Update required: server is v{World.GameVersion}, you have an older version.";
+    var expected = World.LegacyVersionKickMessage (World.GameVersion);
     Assert (kickReason == expected, $"kick reason is \"{expected}\", got \"{kickReason}\"");
     await WaitUntil (() => Multiplayer.MultiplayerPeer.GetConnectionStatus() != MultiplayerPeer.ConnectionStatus.Connected, 15, "kicked connection fully closed");
     await Task.Delay (500); // Let the peer teardown settle before reconnecting.
@@ -2312,7 +2312,9 @@ public partial class PlaytestDriver : Node
     _world.KickedFromServer += reason => kickReason = reason;
     _world.StartClientSession (VictimName, difficulty: 0, _address, _port, Password, version: "0.0.0-spoofed");
     await WaitUntil (() => kickReason.Length > 0, 30, "wrong-version join was kicked");
-    var expected = $"Update required: server is v{World.GameVersion}, you have v0.0.0-spoofed.";
+    // The wire must deliver the server-composed refusal verbatim; the message
+    // CONTENT branches are pinned by ChannelTest (issue #415).
+    var expected = World.VersionKickMessage (World.GameVersion, "0.0.0-spoofed");
     Assert (kickReason == expected, $"kick reason is \"{expected}\", got \"{kickReason}\"");
     await WaitUntil (() => Multiplayer.MultiplayerPeer.GetConnectionStatus() != MultiplayerPeer.ConnectionStatus.Connected, 15, "kicked connection fully closed");
     await Task.Delay (500); // Let the peer teardown settle before reconnecting.
@@ -2334,6 +2336,8 @@ public partial class PlaytestDriver : Node
       // Punch just outside the catch radius: input processing eats a frame or two
       // while the glider closes ~0.4m/frame, & the catch RPC still needs a few
       // more frames to reach the thrower before the hit lands.
+      if (airplane != null) AimAt (airplane.GlobalPosition); // The catch needs your eyes now (#427).
+
       if (airplane != null && airplane.GlobalPosition.DistanceTo (Self.GlobalPosition + Vector3.Up) <= 4.4f)
       {
         PressAction ("punch");

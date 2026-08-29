@@ -1,3 +1,4 @@
+using com.forerunnergames.energyshot.core.world;
 using com.forerunnergames.energyshot.ui.dialogs;
 using com.forerunnergames.energyshot.ui.hud;
 using com.forerunnergames.energyshot.ui.menus;
@@ -27,6 +28,9 @@ public partial class UI : CanvasLayer
 
   public override void _Ready()
   {
+    // A test build points itself at the test server (issue #415): channel comes from
+    // the version string, so nobody types a port to play the next build.
+    if (World.IsDevChannel (World.GameVersion)) ServerPort = World.DevServerPort;
     _mainMenu = GetNode <MainMenu> ("MainMenu");
     _hud = GetNode <Hud> ("Hud");
     _hostGameDialog = GetNode <HostGameDialog> ("HostGameDialog");
