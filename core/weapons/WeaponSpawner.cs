@@ -133,7 +133,14 @@ public partial class WeaponSpawner : Node3D
   private void TrackPendingGrant (int collectorId, HeldWeapon type, int dartPayload = 0) => _pendingGrants.Add (new PendingGrant (collectorId, type, Time.GetTicksMsec() + (ulong)(PendingGrantTimeoutSeconds * 1000.0f), dartPayload)); // Issue #154; the payload keeps counting through the bridge (CodeRabbit on #430).
   // A pending grant ends when the collector's replicated HeldWeapon shows the weapon
   // (it counts as held from then on) or the timeout passes (issue #154).
-  private void PrunePendingGrants (List <Player> players) => _pendingGrants.RemoveAll (grant => Time.GetTicksMsec() > grant.ExpiresAtMs || players.Any (player => player.NetworkId == grant.CollectorId && player.Holds (grant.Type)));
+  // A blowgun grant's payload bridge holds until the AMMO replicates too (CodeRabbit
+  // on #430): the weapon flag & the dart count are separate replicated properties, &
+  // pruning on the flag alone drops the payload from the census for the gap between
+  // them. BlowgunDarts > 0 is the confirmation (the 1.5s fire cooldown means at most
+  // ~2 darts can be spent inside the 3s timeout, so a real preload can't hit zero
+  // first); a zero-payload grant - a dropped, empty gun - keeps the old flag-only
+  // prune via the timeout at worst, which over-counts briefly in the SAFE direction.
+  private void PrunePendingGrants (List <Player> players) => _pendingGrants.RemoveAll (grant => Time.GetTicksMsec() > grant.ExpiresAtMs || players.Any (player => player.NetworkId == grant.CollectorId && player.Holds (grant.Type) && (grant.DartPayload == 0 || player.BlowgunDarts > 0)));
   private void GrantToSelf (int type, string previousOwner, int dartPayload = 0) => (GetParent() as World)?.SelfPlayer?.GrantWeapon ((HeldWeapon)type, previousOwner, dartPayload);
   [Rpc] private void ConfirmPickup (int type, string previousOwner, int dartPayload) => GrantToSelf (type, previousOwner, dartPayload);
   // A direct (non-RPC) call means the host itself sent it, so there's no remote sender.
@@ -250,7 +257,7 @@ public partial class WeaponSpawner : Node3D
   private int CountDarts (List <WeaponPickup> pickups, List <Player> players)
   {
     _dartFlightsUntilMs.RemoveAll (until => Time.GetTicksMsec() > until);
-    return pickups.Count (pickup => pickup.Weapon == HeldWeapon.PoisonDart) + pickups.Where (pickup => pickup.Weapon == HeldWeapon.Blowgun).Sum (pickup => pickup.DartPayload) + players.Sum (player => player.BlowgunDarts + player.PoisonDarts) + _ammoEscrow.Count (ammo => ammo.Type == HeldWeapon.PoisonDart) + _ammoEscrow.Sum (ammo => ammo.DartPayload) + _escrow.Sum (cargo => cargo.DartPayload) + _pendingGrants.Sum (grant => grant.DartPayload) + _dartFlightsUntilMs.Count;
+    return pickups.Count (pickup => pickup.Weapon == HeldWeapon.PoisonDart) + pickups.Where (pickup => pickup.Weapon == HeldWeapon.Blowgun).Sum (pickup => pickup.DartPayload) + players.Sum (player => player.BlowgunDarts + player.PoisonDarts) + _ammoEscrow.Count (ammo => ammo.Type == HeldWeapon.PoisonDart) + _ammoEscrow.Sum (ammo => ammo.DartPayload) + _escrow.Count (cargo => cargo.Type == HeldWeapon.PoisonDart) + _escrow.Sum (cargo => cargo.DartPayload) + _pendingGrants.Sum (grant => grant.DartPayload) + _dartFlightsUntilMs.Count;
   }
 
   // Floating (spawned) darts scatter over the arena floor, not the weapon points: only
