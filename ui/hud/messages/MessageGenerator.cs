@@ -26,11 +26,13 @@ public static class MessageGenerator
   public static string OnHillClear (string zapperName) => Fill (Pick (MessagePools.HillClear), "", zapperName); // The bounty (issue #420).
   public static string RoundTitle (List <string> pool, string honoree) => Fill (Pick (pool), honoree, honoree); // Issue #153.
   public static string OnZapped (string victimName, string zapperName, DeathContext context) => Fill (Pick (SelectZappedPool (context)), victimName, zapperName);
-  private static string Fill (string template, string victimName, string zapperName) => Capitalize (template.Replace ("{v}", victimName).Replace ("{z}", zapperName));
+  // Names are player input & the scroller's history label renders BBCode (CodeRabbit
+  // on #420): a bracketed name must land as text, never as markup.
+  private static string Fill (string template, string victimName, string zapperName) => Capitalize (template.Replace ("{v}", ChatBox.EscapeBbcode (victimName)).Replace ("{z}", ChatBox.EscapeBbcode (zapperName)));
   private static string Capitalize (string message) => char.ToUpper (message[0]) + message[1..];
   private static string Pick (List <string> pool) => pool[Rng.RandiRange (0, pool.Count - 1)];
   private static string GetFallMessage (string youOrThey, int index) => MessagePools.Fall[index].Replace ("{youOrThey}", youOrThey);
-  private static string YouOrNameCapital (bool isSelf, string playerName) => isSelf ? "You" : playerName;
+  private static string YouOrNameCapital (bool isSelf, string playerName) => isSelf ? "You" : ChatBox.EscapeBbcode (playerName); // The fall path's name rides outside Fill (same escape rule).
   private static string YouOrThey (bool isSelf, string playerName) => isSelf ? "you" : "they";
   // @formatter:on
 

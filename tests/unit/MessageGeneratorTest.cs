@@ -35,6 +35,16 @@ public class MessageGeneratorTest
   }
 
   [TestCase]
+  public void BracketedNamesLandAsTextNotMarkup()
+  {
+    // The scroller's history renders BBCode (CodeRabbit on #420): a name like
+    // "[b]Zapper[/b]" must not style the announcement.
+    var message = MessageGenerator.OnHillClear ("[b]Sneaky[/b]");
+    AssertBool (message.Contains ("[b]")).IsFalse();
+    AssertBool (message.Contains ("Sneaky")).IsTrue();
+  }
+
+  [TestCase]
   public void PoisonPoolSelectedByDamageKind() => AssertObject (MessageGenerator.SelectZappedPool (new DeathContext { Kind = DamageKind.Poison })).IsSame (MessagePools.Poison);
 
   [TestCase]
