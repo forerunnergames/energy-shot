@@ -35,6 +35,7 @@ public partial class WeaponSpawner : Node3D
   [Export] public int MaxDarts = 60; // Room for preloaded guns AND real stashes (issue #421).
   [Export] public int DartsPerCluster = 10; // Stashes of 10, no more 2s & 3s (Aaron, 2026-08-28, issue #421).
   [Export] public int DartsPerGunPreload = 10; // A fresh spawner blowgun comes loaded (issue #421).
+  [Export] public float PickupClaimRangeMeters = 8.0f; // Server-enforced reach on claims (#430): walk-over is ~2m; the slack absorbs replication lag.
   private const float DartFlightGraceSeconds = 7.0f; // A fired dart counts until it lands or hits (max lifetime + margin).
   private readonly List <ulong> _dartFlightsUntilMs = new();
   // Sanity bound on a death's dart scatter (issue #194): more embedded darts than
@@ -392,6 +393,25 @@ public partial class WeaponSpawner : Node3D
     if (pickup == null || pickup.IsQueuedForDeletion())
     {
       ServerLog.Event (collectorId, $"weapon deny: pickup [{pickupName}] {(pickup == null ? "no longer exists" : "is already claimed")}");
+      return;
+    }
+
+    // The server has both positions, so it enforces REACH (CodeRabbit on #430): a
+    // peer naming a pickup across the map gets nothing - with the preload riding
+    // pickups, a remote claim would be a free loaded gun. Generous slack over the
+    // real walk-over radius covers replication lag on a sprinting collector.
+    if (collector != null && collector.GlobalPosition.DistanceTo (pickup.GlobalPosition) > PickupClaimRangeMeters)
+    {
+      ServerLog.Event (collectorId, $"weapon deny: pickup [{pickupName}] claimed from {collector.GlobalPosition.DistanceTo (pickup.GlobalPosition):0.0}m away");
+      return;
+    }
+
+    // Holding it already means a normal collect cannot happen (#190's rule; the
+    // slingshot pouch-load is a different request): a duplicate claim would only
+    // despawn the pickup - denying others - & double a blowgun's payload (#430).
+    if (collector != null && pickup.Weapon != HeldWeapon.PoisonDart && collector.Holds (pickup.Weapon))
+    {
+      ServerLog.Event (collectorId, $"weapon deny: pickup [{pickupName}] while already holding {pickup.Weapon}");
       return;
     }
 
