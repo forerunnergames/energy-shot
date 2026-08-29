@@ -1,5 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
+using com.forerunnergames.energyshot.weapons;
 using com.forerunnergames.energyshot.players;
 using com.forerunnergames.energyshot.ui;
 using com.forerunnergames.energyshot.ui.hud;
@@ -56,6 +58,13 @@ public partial class World : Node3D
   private readonly System.Collections.Generic.HashSet <int> _versionLinePeerIds = new();
   private UI _ui = null!;
   private Callable _onServerDisconnectedCallable;
+  // The join handshake is a ONE-SHOT that only fires if the connection succeeds, so a
+  // join that never lands - canceled, refused, a server that died mid-handshake -
+  // leaves it connected. The next successful session then fires it with the PREVIOUS
+  // attempt's name, difficulty & password (CodeRabbit on #408). Held so it can be
+  // dropped when the attempt ends, whichever way it ends.
+  private Callable _pendingJoinCallable;
+  private bool _hasPendingJoin;
   private PackedScene _playerScene = null!;
   private Player? _selfPlayer;
   private string _selfPlayerName = string.Empty;
@@ -76,14 +85,75 @@ public partial class World : Node3D
   {
     if (Multiplayer.MultiplayerPeer is not ENetMultiplayerPeer) { GetTree().Quit(); return; } // Not in a session: the old behavior.
     ServerLog.Event ("session left: returning to the main menu");
-    Multiplayer.MultiplayerPeer.Close();
+    TearDownSession();
+    Input.MouseMode = Input.MouseModeEnum.Visible;
+    EmitSignal (SignalName.LeftGame);
+  }
+
+  // EVERY route out of a session runs this, not just the deliberate quit (CodeRabbit
+  // on #408). A server that vanishes took OnServerDisconnected, which only raised the
+  // signal that shows the menu - so the player could host again with the whole of the
+  // last session still in place: spawner ledgers, peer maps, round state, & a
+  // generation counter that never advanced, leaving stale continuations live.
+  // Idempotent, because the two paths can overlap: a quit races the disconnect that
+  // follows it.
+  private void TearDownSession()
+  {
+    // Host-only peer subscriptions come off FIRST (finding #6): left on, a later
+    // session double-handles disconnects, or a client runs host bookkeeping. A -=
+    // that was never subscribed is a harmless no-op, so this is safe for a client too.
+    Multiplayer.PeerConnected -= OnClientConnectedToServer;
+    Multiplayer.PeerDisconnected -= OnClientDisconnectedFromServer;
+    DropPendingJoinCallback();
+    if (Multiplayer.MultiplayerPeer is ENetMultiplayerPeer peer) peer.Close();
     Multiplayer.MultiplayerPeer = null; // Back to the engine's offline peer.
     foreach (var player in GetPlayers().ToList()) player.QueueFree();
     _selfPlayer = null;
     _hill?.QueueFree();
     _hill = null;
-    Input.MouseMode = Input.MouseModeEnum.Visible;
-    EmitSignal (SignalName.LeftGame);
+    // The peer close frees no local nodes (finding #7): drop the session's pickups
+    // too, or the next hosted game miscounts caps & ghosts float on the next server.
+    foreach (var pickup in GetChildren().OfType <WeaponPickup>()) pickup.QueueFree();
+    // Freeing the pickup nodes is only half of it (finding #7): the caps also count
+    // escrowed cargo, pending grants, nocked ammo, armed airplanes & darts in flight,
+    // none of which is a node. Stranded, they shrink every later game's caps.
+    GetNodeOrNull <WeaponSpawner> ("WeaponSpawner")?.ResetSessionState();
+    ResetRoundState(); // No intermission, board, or score carries into the next game (finding #5).
+    // Peer-keyed bookkeeping goes too (CodeRabbit on #408). Both are keyed by peer id
+    // & only ever pruned on a per-peer disconnect, which leaving does not fire for
+    // everyone - so entries pile up across sessions, & a client that inherits a
+    // recycled id in the next game is read as somebody else: already sent its version
+    // line (so it never gets one), or rate-limited by a stranger's last chat message.
+    _versionLinePeerIds.Clear();
+    _lastChatMs.Clear();
+    ++_sessionGeneration; // Anything still awaiting belongs to the session we just left.
+  }
+
+  // Every awaited continuation in this class resumes into WHATEVER session is running
+  // when its timer fires - World is never torn down, so "still the server" is true
+  // again after a rehost & the stale continuation acts on the NEW game (CodeRabbit on
+  // #408: an intermission timer from the abandoned round resetting the new round's
+  // players; the kick delay disconnecting whoever inherited that peer id). The counter
+  // says which session we started in, so no future await has to remember the rule.
+  private ulong _sessionGeneration;
+
+  private async Task <bool> StillThisSession (double seconds)
+  {
+    var generation = _sessionGeneration;
+    await ToSignal (GetTree().CreateTimer (seconds), SceneTreeTimer.SignalName.Timeout);
+    return generation == _sessionGeneration && IsInsideTree();
+  }
+
+  // Round bookkeeping that must not survive a session: cleared on leave & at the
+  // start of every hosted round, so a new game never inherits a stuck intermission,
+  // a stale scoreboard replayed to fresh joiners, or the last game's score.
+  private void ResetRoundState()
+  {
+    _intermission = false;
+    _crownHolderName = string.Empty; // No incumbent on the hill in a round nobody has played yet (#408).
+    _lastBoard = string.Empty;
+    _score = 0;
+    _roundElapsed = 0.0f;
   }
   private static void OnClientConnectedToServer (long peerId) => ServerLog.Event (peerId, "connected");
   // Only a live ENet server session logs (issue #111): the engine's default
@@ -286,7 +356,7 @@ public partial class World : Node3D
   private async void SendVersionToAfterFallbackDelay (int peerId)
   {
     if (_serverVersion.Length == 0) return;
-    await ToSignal (GetTree().CreateTimer (10.0), SceneTreeTimer.SignalName.Timeout);
+    if (!await StillThisSession (10.0)) return;
     if (!Multiplayer.GetPeers().Contains (peerId)) return; // Already left.
     SendVersionTo (peerId);
   }
@@ -324,7 +394,7 @@ public partial class World : Node3D
     Multiplayer.MultiplayerPeer = peer;
     // One-shot: a retried session (e.g. the playtest's wrong-password probe, issue
     // #109) must not replay stale credentials from an earlier attempt's handler.
-    Multiplayer.Connect (MultiplayerApi.SignalName.ConnectedToServer, Callable.From (() => RequestSlot (playerName, difficulty, password, colorIndex, version ?? GameVersion)), (uint)ConnectFlags.OneShot);
+    ConnectJoinCallback (Callable.From (() => RequestSlot (playerName, difficulty, password, colorIndex, version ?? GameVersion)));
   }
 
   // Playtest-only probe (issue #170): joins exactly the way a pre-#170 client does -
@@ -335,7 +405,7 @@ public partial class World : Node3D
     var error = peer.CreateClient (address, port);
     if (error != Error.Ok) GD.PrintErr ($"Playtest join failed: {error}");
     Multiplayer.MultiplayerPeer = peer;
-    Multiplayer.Connect (MultiplayerApi.SignalName.ConnectedToServer, Callable.From (() => RpcId (1, MethodName.RequestPlayerSlot, playerName, difficulty, password, 0)), (uint)ConnectFlags.OneShot);
+    ConnectJoinCallback (Callable.From (() => RpcId (1, MethodName.RequestPlayerSlot, playerName, difficulty, password, 0)));
   }
 
   // Dedicated-server exports carry the feature tag, so the server binary needs no flag;
@@ -470,7 +540,7 @@ public partial class World : Node3D
   {
     ServerLog.Event (peerId, $"kicked: {reason}");
     RpcId (peerId, MethodName.OnKickedFromServer, reason);
-    await ToSignal (GetTree().CreateTimer (0.5), SceneTreeTimer.SignalName.Timeout);
+    if (!await StillThisSession (0.5)) return; // A rehost may have handed this id to someone new.
     if (!Multiplayer.GetPeers().Contains (peerId)) return;
     Multiplayer.MultiplayerPeer.DisconnectPeer (peerId);
   }
@@ -498,18 +568,53 @@ public partial class World : Node3D
     RpcId (1, MethodName.RequestPlayerSlotV2, playerName, difficulty, password, colorIndex, version);
   }
 
-  private void OnServerDisconnected() => EmitSignal (SignalName.ServerShutDown);
+  // The server went away: tear the session down before the menu appears, or hosting
+  // from that menu inherits all of it (CodeRabbit on #408).
+  private void OnServerDisconnected()
+  {
+    // ONLY if we are actually out. This handler used to just raise a signal, so a
+    // late or stale disconnect cost nothing; now it destroys a session, so it must
+    // not destroy the WRONG one. A dropped probe can be reported after a fresh peer
+    // has already replaced it - the playtest gets kicked on a wrong password & then
+    // immediately joins for real - & tearing down there would kill the live session
+    // instead of the dead one. A peer that is connected or still connecting is not a
+    // server that went away.
+    // Silently, signal & all (CodeRabbit on #408): this report belongs to a DEAD
+    // connection, & the ServerShutDown handler shows the menu - popping it over the
+    // live session the player is in would be the stale callback winning after all.
+    if (Multiplayer.MultiplayerPeer is ENetMultiplayerPeer peer && peer.GetConnectionStatus() != MultiplayerPeer.ConnectionStatus.Disconnected) return;
+    TearDownSession();
+    EmitSignal (SignalName.ServerShutDown);
+  }
 
   // A canceled join (issue #91) drops the connection on purpose; unhooking first
   // keeps the resulting disconnect from reading as a server shutdown.
   private void OnJoinCanceled()
   {
+    DropPendingJoinCallback(); // A canceled attempt must not replay its credentials later.
     if (!Multiplayer.IsConnected (MultiplayerApi.SignalName.ServerDisconnected, _onServerDisconnectedCallable)) return;
     Multiplayer.Disconnect (MultiplayerApi.SignalName.ServerDisconnected, _onServerDisconnectedCallable);
   }
 
+  // One pending handshake at a time: registering a new attempt drops the old one.
+  private void ConnectJoinCallback (Callable callable)
+  {
+    DropPendingJoinCallback();
+    _pendingJoinCallable = callable;
+    _hasPendingJoin = true;
+    Multiplayer.Connect (MultiplayerApi.SignalName.ConnectedToServer, callable, (uint)ConnectFlags.OneShot);
+  }
+
+  private void DropPendingJoinCallback()
+  {
+    if (!_hasPendingJoin) return;
+    if (Multiplayer.IsConnected (MultiplayerApi.SignalName.ConnectedToServer, _pendingJoinCallable)) Multiplayer.Disconnect (MultiplayerApi.SignalName.ConnectedToServer, _pendingJoinCallable);
+    _hasPendingJoin = false;
+  }
+
   private void OnClientDisconnectedFromServer (long id)
   {
+    if (!IsActiveServer()) return; // Host-only bookkeeping; a stale subscription on a client is inert (finding #6).
     _lastChatMs.Remove (id); // Chat rate-limit state leaves with the peer (CodeRabbit on #224).
     RemovePlayer (id);
     _versionLinePeerIds.Remove ((int)id); // A rejoin counts as a fresh join (PR #166 review).
@@ -621,7 +726,7 @@ public partial class World : Node3D
     _roundSeconds = roundSeconds;
     _zapLimit = zapLimit;
     _mode = mode;
-    _roundElapsed = 0.0f;
+    ResetRoundState(); // A fresh hosted round starts clean even if the last one wasn't left cleanly (finding #5).
     EnsureHill (RollHillSpot()); // The hill roams (issue #294): EnsureHill assigns the index & builds the ring.
     ServerLog.Event ($"rounds: {mode}, {(roundSeconds > 0 ? $"{roundSeconds / 60} min" : "no time limit")}, {(zapLimit > 0 ? $"first to {zapLimit}" : "no point limit")}");
   }
@@ -702,8 +807,8 @@ public partial class World : Node3D
     ServerLog.Event ($"round over: {string.Join (", ", stats.Select (s => $"{s.Name} {s.Zaps}/{s.ZapOuts}/{s.Assists}/{s.Falls}"))}");
     _lastBoard = board;
     Rpc (MethodName.ReceiveRoundEnded, board);
-    await ToSignal (GetTree().CreateTimer (Match.IntermissionSeconds), SceneTreeTimer.SignalName.Timeout);
-    if (!IsInsideTree() || !IsActiveServer()) return;
+    if (!await StillThisSession (Match.IntermissionSeconds)) return;
+    if (!IsActiveServer()) return;
     StartNewRound();
   }
 
@@ -716,8 +821,11 @@ public partial class World : Node3D
       player.RpcId (player.NetworkId, Player.MethodName.ResetForNewRound);
     }
 
-    _roundElapsed = 0.0f;
-    _intermission = false;
+    // ResetRoundState, not a partial copy of it (CodeRabbit on #408): this reset the
+    // elapsed clock & the intermission flag but left _score, so the first zap of round
+    // 2 announced the previous round's running total + 1. One definition of "a round
+    // starts clean", used by all three callers, cannot drift out of step again.
+    ResetRoundState();
     ServerLog.Event ("round start");
     Rpc (MethodName.ReceiveRoundStarted);
   }
@@ -744,6 +852,13 @@ public partial class World : Node3D
   private void ReceiveRoundStarted()
   {
     if (Multiplayer.GetRemoteSenderId() != 1) return;
+    // Clients keep their OWN copy of this bookkeeping (CodeRabbit on #408): _score
+    // counts the LOCAL player's zaps on every peer, & StartNewRound runs on the
+    // server alone - so resetting it there cleaned the host & left every client
+    // announcing round 2's first zap as the previous round's total plus one. The
+    // server has already reset before sending this, & a local call reads sender 0
+    // & returns above, so this only ever runs on a client.
+    ResetRoundState();
     _selfPlayer?.SetInputEnabled (isEnabled: true);
     EmitSignal (SignalName.RoundStarted);
   }
