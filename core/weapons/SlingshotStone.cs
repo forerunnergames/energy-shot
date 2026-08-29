@@ -55,6 +55,7 @@ public partial class SlingshotStone : Node3D
   private const float PouchPullMeters = 0.4f;
   private const float SurfaceClearance = 0.3f;
   private Vector3 _velocity;
+  public Vector3 TravelDirection => _velocity.Normalized(); // The true flight at impact, for the dart stick angle (issue #425).
   private Vector3 _sweepStart;
   private bool _sweptFromStart;
   private float _energy;

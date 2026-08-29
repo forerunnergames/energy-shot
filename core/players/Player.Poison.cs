@@ -83,7 +83,7 @@ public partial class Player
   // A dart found us (issue #194). The impact itself does no damage - it plants the
   // next tick's problem. Runs only on the victim's own authority.
   [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
-  private void ReceiveDartHit (string shotByPlayerName) => EmbedDart (Multiplayer.GetRemoteSenderId(), shotByPlayerName);
+  private void ReceiveDartHit (string shotByPlayerName, Vector3 travelDirection) => EmbedDart (Multiplayer.GetRemoteSenderId(), shotByPlayerName, travelDirection);
 
   // Stepping on a landed (armed) dart without the blowgun (issues #236 & #248): the
   // server despawned it & tells us to take it as if it hit us - ownerless, like a
@@ -95,10 +95,10 @@ public partial class Player
   {
     var sender = Multiplayer.GetRemoteSenderId();
     if (sender != 1 && sender != 0) return;
-    EmbedDart (0, "a dart on the ground");
+    EmbedDart (0, "a dart on the ground", Vector3.Zero); // No flight: the ring fallback places it.
   }
 
-  private void EmbedDart (int attackerId, string attackerName)
+  private void EmbedDart (int attackerId, string attackerName, Vector3 travelDirection)
   {
     if (!IsMultiplayerAuthority()) return;
     if (SpawnArmor) return; // Armor shrugs darts off like everything else (issue #48).
@@ -109,7 +109,7 @@ public partial class Player
     LastDamageKind = DamageKind.Poison; // A dart is a dart, for the death message (issue #84).
     ApplyDamageFrom (attackerId, MaxHealth * DartImpactFraction / 100.0f, attackerName, knockbackScale: 0.0f);
     if (Fallen) return; // The sting itself zapped us out: a body is scenery, no pincushion.
-    _dartOwners.Add ((attackerId, attackerName, Mathf.Max (1, PoisonTicksPerDart), StickAngleDeg (attackerId)));
+    _dartOwners.Add ((attackerId, attackerName, Mathf.Max (1, PoisonTicksPerDart), StickAngleDeg (travelDirection)));
     PoisonDarts = _dartOwners.Count;
     SyncDartAngles();
     GD.Print ($"{DisplayName}: {attackerName}'s dart stuck in me! ({PoisonDarts} embedded)");
@@ -117,14 +117,15 @@ public partial class Player
   }
 
   // The side the shot came from, as a yaw in OUR local frame (issue #425) - so the
-  // stick rides our body's rotation on every peer. An ownerless dart (stepped on)
+  // stick rides our body's rotation on every peer. Derived from the dart's TRUE
+  // travel direction at impact (CodeRabbit on #430): the shooter's position at embed
+  // time lies whenever they moved after firing. A directionless dart (stepped on)
   // falls back to the old deterministic ring spread.
-  private int StickAngleDeg (int attackerId)
+  private int StickAngleDeg (Vector3 travelDirection)
   {
-    var attacker = attackerId > 0 ? GetParent().GetNodeOrNull <Player> ($"{attackerId}") : null;
-    if (attacker == null) return Mathf.RoundToInt (Mathf.RadToDeg (Mathf.Tau * 0.318f * _dartOwners.Count)) % 360;
-    var local = ToLocal (attacker.GlobalPosition);
-    return Mathf.PosMod (Mathf.RoundToInt (Mathf.RadToDeg (Mathf.Atan2 (local.X, local.Z))), 360);
+    if (travelDirection.LengthSquared() < 0.0001f) return Mathf.RoundToInt (Mathf.RadToDeg (Mathf.Tau * 0.318f * _dartOwners.Count)) % 360;
+    var towardShooter = GlobalTransform.Basis.Inverse() * -travelDirection; // The side the shot came FROM, in our frame.
+    return Mathf.PosMod (Mathf.RoundToInt (Mathf.RadToDeg (Mathf.Atan2 (towardShooter.X, towardShooter.Z))), 360);
   }
 
   private async void StartPoisonTicksIfIdle()

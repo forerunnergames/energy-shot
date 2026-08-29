@@ -176,11 +176,11 @@ public partial class Player
   }
 
   // Victim-authoritative like every damage path: the shooter only reports the hit.
-  private void OnDartHitPlayer (Player victim)
+  private void OnDartHitPlayer (Player victim, Vector3 travelDirection)
   {
     PlayHitmarker (false);
     if (victim.NetworkId == Multiplayer.GetUniqueId()) return; // Can't dart yourself.
-    victim.RpcId (victim.NetworkId, MethodName.ReceiveDartHit, DisplayName);
+    victim.RpcId (victim.NetworkId, MethodName.ReceiveDartHit, DisplayName, travelDirection);
   }
 
   // Losing the blowgun (drop, theft, death) returns its darts to the level's census:

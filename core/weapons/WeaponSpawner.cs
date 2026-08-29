@@ -80,20 +80,20 @@ public partial class WeaponSpawner : Node3D
   private const float OccupiedRadius = 1.0f;
   // Cargo riding a boomerang home (issue #98): stolen & scooped weapons live here
   // between the grab & the thrower's catch, so the caps still count them.
-  private readonly record struct BoomerangCargo (int OwnerId, HeldWeapon Type, string PreviousOwner);
+  private readonly record struct BoomerangCargo (int OwnerId, HeldWeapon Type, string PreviousOwner, int DartPayload = 0);
   private readonly List <BoomerangCargo> _escrow = new();
   // Award->replication bridge (issue #154): between despawning a claimed pickup (or
   // delivering escrowed cargo) & the collector's replicated HeldWeapon showing the
   // weapon, the count dips below the cap - a reconcile pass in that window would
   // spawn a duplicate. Pending grants keep the weapon counted until the flag lands;
   // the timeout covers a collector that vanishes mid-grant (the caps then respawn it).
-  private readonly record struct PendingGrant (int CollectorId, HeldWeapon Type, ulong ExpiresAtMs);
+  private readonly record struct PendingGrant (int CollectorId, HeldWeapon Type, ulong ExpiresAtMs, int DartPayload = 0);
   private readonly List <PendingGrant> _pendingGrants = new();
   private const float PendingGrantTimeoutSeconds = 3.0f;
   // Universal slingshot ammo (issue #190): a world item loaded into a slingshot
   // exists nowhere else until it lands, so the caps count it here - exactly like
   // boomerang cargo. One nocked item per loader.
-  private readonly record struct LoadedAmmo (int LoaderId, HeldWeapon Type, string PreviousOwner);
+  private readonly record struct LoadedAmmo (int LoaderId, HeldWeapon Type, string PreviousOwner, int DartPayload = 0);
   private readonly List <LoadedAmmo> _ammoEscrow = new();
   // A paper airplane mid-hazard (issue #191): from the mine trigger (or a slingshot
   // strike) until the target pops, the airplane isn't a pickup & isn't ammo - this
@@ -130,7 +130,7 @@ public partial class WeaponSpawner : Node3D
   // Loaded slingshot ammo (issue #190) & airplane hazards in progress (issue #191)
   // count the same way, so nothing over-spawns while an item is mid-transition.
   private int Count (HeldWeapon type, List <WeaponPickup> pickups, List <Player> players) => pickups.Count (pickup => pickup.Weapon == type) + players.Count (player => (player.HeldOrRecentlyHeld & type) != 0) + _escrow.Count (cargo => cargo.Type == type) + _pendingGrants.Count (grant => grant.Type == type) + _ammoEscrow.Count (ammo => ammo.Type == type) + (type == HeldWeapon.PaperAirplane ? _airplaneHazards.Count : 0);
-  private void TrackPendingGrant (int collectorId, HeldWeapon type) => _pendingGrants.Add (new PendingGrant (collectorId, type, Time.GetTicksMsec() + (ulong)(PendingGrantTimeoutSeconds * 1000.0f))); // Issue #154.
+  private void TrackPendingGrant (int collectorId, HeldWeapon type, int dartPayload = 0) => _pendingGrants.Add (new PendingGrant (collectorId, type, Time.GetTicksMsec() + (ulong)(PendingGrantTimeoutSeconds * 1000.0f), dartPayload)); // Issue #154; the payload keeps counting through the bridge (CodeRabbit on #430).
   // A pending grant ends when the collector's replicated HeldWeapon shows the weapon
   // (it counts as held from then on) or the timeout passes (issue #154).
   private void PrunePendingGrants (List <Player> players) => _pendingGrants.RemoveAll (grant => Time.GetTicksMsec() > grant.ExpiresAtMs || players.Any (player => player.NetworkId == grant.CollectorId && player.Holds (grant.Type)));
@@ -216,7 +216,9 @@ public partial class WeaponSpawner : Node3D
     }
 
     SpawnSpecialsIfMissing (pickups, players, freePoints);
-    SpawnDartsIfMissing (pickups, players); // Issue #236.
+    // FRESH snapshot for the dart census (CodeRabbit on #430): specials may have just
+    // spawned a loaded blowgun, & counting the stale list overshoots by its payload.
+    SpawnDartsIfMissing (Pickups().ToList(), players); // Issue #236.
     EnsurePlaytestPickups (pickups, players);
   }
 
@@ -225,7 +227,7 @@ public partial class WeaponSpawner : Node3D
   private int CountDarts (List <WeaponPickup> pickups, List <Player> players)
   {
     _dartFlightsUntilMs.RemoveAll (until => Time.GetTicksMsec() > until);
-    return pickups.Count (pickup => pickup.Weapon == HeldWeapon.PoisonDart) + pickups.Where (pickup => pickup.Weapon == HeldWeapon.Blowgun).Sum (pickup => pickup.DartPayload) + players.Sum (player => player.BlowgunDarts + player.PoisonDarts) + _ammoEscrow.Count (ammo => ammo.Type == HeldWeapon.PoisonDart) + _dartFlightsUntilMs.Count;
+    return pickups.Count (pickup => pickup.Weapon == HeldWeapon.PoisonDart) + pickups.Where (pickup => pickup.Weapon == HeldWeapon.Blowgun).Sum (pickup => pickup.DartPayload) + players.Sum (player => player.BlowgunDarts + player.PoisonDarts) + _ammoEscrow.Count (ammo => ammo.Type == HeldWeapon.PoisonDart) + _ammoEscrow.Sum (ammo => ammo.DartPayload) + _escrow.Sum (cargo => cargo.DartPayload) + _pendingGrants.Sum (grant => grant.DartPayload) + _dartFlightsUntilMs.Count;
   }
 
   // Floating (spawned) darts scatter over the arena floor, not the weapon points: only
@@ -375,7 +377,7 @@ public partial class WeaponSpawner : Node3D
       return;
     }
 
-    TrackPendingGrant (collectorId, type); // Bridge until the collector's HeldWeapon replicates back (issue #154).
+    TrackPendingGrant (collectorId, type, dartPayload); // Bridge until the collector's HeldWeapon replicates back (issue #154).
     RpcId (collectorId, MethodName.ConfirmPickup, (int)type, previousOwner, dartPayload);
   }
 
@@ -477,7 +479,7 @@ public partial class WeaponSpawner : Node3D
       return;
     }
 
-    _ammoEscrow.Add (new LoadedAmmo (loaderId, pickup.Weapon, pickup.PreviousOwner));
+    _ammoEscrow.Add (new LoadedAmmo (loaderId, pickup.Weapon, pickup.PreviousOwner, pickup.DartPayload)); // A loaded gun's darts stay counted (CodeRabbit on #430).
     ServerLog.Event (loaderId, $"ammo load: {pickup.Weapon} from pickup [{pickupName}]");
     pickup.QueueFree(); // Despawns on every peer via the MultiplayerSpawner.
     if (loaderId == Multiplayer.GetUniqueId()) { LoadIntoSelf ((int)pickup.Weapon); return; }
@@ -543,7 +545,7 @@ public partial class WeaponSpawner : Node3D
     // A slung airplane that missed comes down ARMED (issue #191): it re-arms as the
     // landmine right where it fell & never expires, since it's the only one there is.
     var isAirplane = ammo.Type == HeldWeapon.PaperAirplane;
-    Spawn (ammo.Type, spot, expires: !isAirplane, ammo.PreviousOwner, armed: isAirplane);
+    Spawn (ammo.Type, spot, expires: !isAirplane, ammo.PreviousOwner, armed: isAirplane, dartPayload: ammo.DartPayload);
   }
 
   // ------------------------------------------------ poison darts (issue #194)
@@ -891,7 +893,7 @@ public partial class WeaponSpawner : Node3D
       return;
     }
 
-    _escrow.Add (new BoomerangCargo (throwerId, pickup.Weapon, pickup.PreviousOwner));
+    _escrow.Add (new BoomerangCargo (throwerId, pickup.Weapon, pickup.PreviousOwner, pickup.DartPayload)); // A scooped gun's darts stay counted (CodeRabbit on #430).
     ServerLog.Event (throwerId, $"boomerang scoop: {pickup.Weapon} from pickup [{pickupName}]");
     pickup.QueueFree(); // Despawns on every peer via the MultiplayerSpawner.
   }
@@ -1071,18 +1073,18 @@ public partial class WeaponSpawner : Node3D
 
     if (thrower.Holds (cargo.Type))
     {
-      Spawn (cargo.Type, thrower.GlobalPosition + Vector3.Up * PickupHoverHeight, expires: true, cargo.PreviousOwner);
+      Spawn (cargo.Type, thrower.GlobalPosition + Vector3.Up * PickupHoverHeight, expires: true, cargo.PreviousOwner, dartPayload: cargo.DartPayload);
       return;
     }
 
     if (throwerId == Multiplayer.GetUniqueId())
     {
-      GrantToSelf ((int)cargo.Type, cargo.PreviousOwner); // Synchronous: the server's own HeldWeapon shows it immediately.
+      GrantToSelf ((int)cargo.Type, cargo.PreviousOwner, cargo.DartPayload); // Synchronous: the server's own HeldWeapon shows it immediately.
       return;
     }
 
-    TrackPendingGrant (throwerId, cargo.Type); // Bridge until the thrower's HeldWeapon replicates back (issue #154).
-    RpcId (throwerId, MethodName.ConfirmPickup, (int)cargo.Type, cargo.PreviousOwner, 0);
+    TrackPendingGrant (throwerId, cargo.Type, cargo.DartPayload); // Bridge until the thrower's HeldWeapon replicates back (issue #154).
+    RpcId (throwerId, MethodName.ConfirmPickup, (int)cargo.Type, cargo.PreviousOwner, cargo.DartPayload);
   }
 
   // ------------------------------------------------ paper airplane catch (issue #102)
@@ -1217,7 +1219,7 @@ public partial class WeaponSpawner : Node3D
     ServerLog.Event (throwerId, $"boomerang release: dropped at {spot}");
     Spawn (HeldWeapon.Boomerang, spot, expires: true);
     var offset = 0;
-    foreach (var cargo in TakeEscrowFor (throwerId)) Spawn (cargo.Type, spot + Vector3.Right * (0.8f * ++offset), expires: true, cargo.PreviousOwner);
+    foreach (var cargo in TakeEscrowFor (throwerId)) Spawn (cargo.Type, spot + Vector3.Right * (0.8f * ++offset), expires: true, cargo.PreviousOwner, dartPayload: cargo.DartPayload);
   }
 
   // Level geometry only (collision layer 1): another player below isn't a shelf.
