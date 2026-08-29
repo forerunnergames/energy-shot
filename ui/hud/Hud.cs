@@ -20,6 +20,7 @@ public partial class Hud : Control
   private World _world = null!;
   private ProgressBar _healthBar = null!;
   private Label _roundClock = null!; // Issue #153.
+  private Label _modeLabel = null!; // "King of the Hill", above the clock (issue #419).
   private ScopeView _scopeView = null!; // Issue #236.
   private Label _dartAmmo = null!;
   private ColorRect _roundOverlay = null!;
@@ -257,6 +258,13 @@ public partial class Hud : Control
     var leaderboardColumn = GetNode <BoxContainer> ("Leaderboard/MarginContainer/VBoxContainer");
     leaderboardColumn.AddChild (_roundClock);
     leaderboardColumn.MoveChild (_roundClock, 0);
+    // The box says WHICH game it is scoring (Aaron, 2026-08-28, issue #419): "first
+    // to 100" never named King of the Hill. Its own line, so the clock line can't
+    // outgrow the box.
+    _modeLabel = new Label { HorizontalAlignment = HorizontalAlignment.Center, MouseFilter = MouseFilterEnum.Ignore, Visible = false };
+    _modeLabel.AddThemeFontSizeOverride ("font_size", 44);
+    leaderboardColumn.AddChild (_modeLabel);
+    leaderboardColumn.MoveChild (_modeLabel, 0);
     _roundOverlay = new ColorRect { Color = new Color (0.0f, 0.0f, 0.0f, 0.7f), MouseFilter = MouseFilterEnum.Ignore, Visible = false };
     _roundOverlay.SetAnchorsPreset (LayoutPreset.FullRect);
     AddChild (_roundOverlay);
@@ -279,6 +287,8 @@ public partial class Hud : Control
     var hill = (GameMode)mode != GameMode.KingOfTheHill ? string.Empty : hillHolder.Length == 0 ? "hill: empty" : hillHolder == "contested" ? "hill: CONTESTED" : $"hill: {hillHolder}";
     _roundClock.Text = string.Join ("   ·   ", new[] { clock, target, hill }.Where (part => part.Length > 0));
     _roundClock.Visible = _roundClock.Text.Length > 0 && !_roundOverlay.Visible;
+    _modeLabel.Text = (GameMode)mode == GameMode.KingOfTheHill ? "King of the Hill" : "Zaps"; // Issue #419.
+    _modeLabel.Visible = _roundClock.Visible;
     if ((GameMode)mode == GameMode.KingOfTheHill) UpdateKingBanner (hillHolder);
   }
 
@@ -332,6 +342,7 @@ public partial class Hud : Control
     _roundBoard.Text = scoreboardBbcode;
     _roundOverlay.Visible = true;
     _roundClock.Visible = false;
+    _modeLabel.Visible = false; // The mode line rides the clock's visibility everywhere (CodeRabbit on #432).
   }
 
   private void OnRoundStarted() => _roundOverlay.Visible = false;
@@ -678,6 +689,10 @@ public partial class Hud : Control
     _selfPlayerName = selfPlayerName;
     _messageScroller.Reset();
     _deathOverlay.Visible = false; // No stale countdown from a previous session (issue #152).
+    // A rejoin must not inherit the LAST session's round furniture (CodeRabbit on
+    // #432): the label & clock stay hidden until this game's own clock broadcast.
+    _roundClock.Visible = false;
+    _modeLabel.Visible = false;
     _healthBar.MaxValue = selfMaxHealth;
     _healthBar.Value = selfMaxHealth;
     UpdateVignette (selfMaxHealth);

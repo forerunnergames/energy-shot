@@ -2340,6 +2340,8 @@ public partial class PlaytestDriver : Node
       // Punch just outside the catch radius: input processing eats a frame or two
       // while the glider closes ~0.4m/frame, & the catch RPC still needs a few
       // more frames to reach the thrower before the hit lands.
+      if (airplane != null) AimAt (airplane.GlobalPosition); // The catch needs your eyes now (#427).
+
       if (airplane != null && airplane.GlobalPosition.DistanceTo (Self.GlobalPosition + Vector3.Up) <= 4.4f)
       {
         PressAction ("punch");
