@@ -689,6 +689,10 @@ public partial class Hud : Control
     _selfPlayerName = selfPlayerName;
     _messageScroller.Reset();
     _deathOverlay.Visible = false; // No stale countdown from a previous session (issue #152).
+    // A rejoin must not inherit the LAST session's round furniture (CodeRabbit on
+    // #432): the label & clock stay hidden until this game's own clock broadcast.
+    _roundClock.Visible = false;
+    _modeLabel.Visible = false;
     _healthBar.MaxValue = selfMaxHealth;
     _healthBar.Value = selfMaxHealth;
     UpdateVignette (selfMaxHealth);
