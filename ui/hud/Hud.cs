@@ -342,6 +342,7 @@ public partial class Hud : Control
     _roundBoard.Text = scoreboardBbcode;
     _roundOverlay.Visible = true;
     _roundClock.Visible = false;
+    _modeLabel.Visible = false; // The mode line rides the clock's visibility everywhere (CodeRabbit on #432).
   }
 
   private void OnRoundStarted() => _roundOverlay.Visible = false;
