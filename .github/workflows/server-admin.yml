@@ -65,6 +65,28 @@ jobs:
           OPS_KEY: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPY/AXYCLCLVZ2fIcn1fOgOq+kQpdhUpfZC+QOSEtAtR aaron@energyshot-ops"
         run: |
           if [ -z "$DROPLET_HOST" ]; then echo "Deploy secrets absent"; exit 1; fi
+          # Shape checks belong HERE, on the runner, BEFORE ::add-mask:: & before the
+          # values are encoded (CodeRabbit on #410). Two reasons, both of which the
+          # droplet-side copies of these checks are too late to cover:
+          #   - the mask registers ONE string, so a newline inside a password would
+          #     print the remainder as a separate, UNMASKED log line - leaked by the
+          #     very step meant to hide it;
+          #   - `$(... | base64 -d)` strips trailing newlines, so a droplet-side check
+          #     cannot see a value that ENDED in one. Here the values are untouched.
+          fail() { echo "$1" >&2; exit 1; }
+          case "$PASSWORD$VERIFY_PASSWORD" in *[$'\n\r']*) fail "password cannot contain a line break" ;; esac
+          # systemd's EnvironmentFile parser gives quotes & backslashes meaning, so a
+          # password holding them LOADS as a different string than the one typed - the
+          # server would then refuse the very password its owner handed out, & the
+          # verify comparison (which reads the file's raw text) would disagree with it.
+          # Refused rather than quoted: quoting the value would break that comparison,
+          # & this box cannot test the parser's exact rules against the droplet.
+          case "$PASSWORD" in *[\'\"\\[:space:]]*) fail "password cannot contain quotes, backslashes or spaces" ;; esac
+          # Dispatch declares these type: boolean, but they are interpolated into the
+          # remote command line - so hold the guarantee here rather than trusting the
+          # caller's side of the API to have enforced it (CodeRabbit on #410).
+          case "$AUTHORIZE_KEY" in true | false) ;; *) fail "authorize_ops_key must be true or false" ;; esac
+          case "$RESTART" in true | false) ;; *) fail "restart must be true or false" ;; esac
           # A dispatch input is NOT a registered secret, so nothing redacts it for
           # us (CodeRabbit): register it with the runner before it can reach any log
           # or error trace. Nothing below ever echoes the value itself.
@@ -74,12 +96,56 @@ jobs:
           echo "${{ secrets.DROPLET_SSH_KEY }}" > droplet_key
           chmod 600 droplet_key
           echo "${{ secrets.DROPLET_HOST_KEY }}" > known_hosts
-          # Inputs pass as env values, never interpolated into the remote script,
-          # so nothing a field could contain can inject a shell command.
-          ssh -i droplet_key -o UserKnownHostsFile=known_hosts -o StrictHostKeyChecking=yes \
-            root@"$DROPLET_HOST" \
-            "MODE='$MODE' ROUND_MINUTES='$ROUND_MINUTES' POINT_LIMIT='$POINT_LIMIT' HILL_ROTATE='$HILL_ROTATE' PASSWORD='$PASSWORD' VERIFY_PASSWORD='$VERIFY_PASSWORD' AUTHORIZE_KEY='$AUTHORIZE_KEY' RESTART='$RESTART' OPS_KEY='$OPS_KEY' bash -s" <<'ADMIN'
+          # base64-encode every value: the output is [A-Za-z0-9+/=] only, so passing
+          # it through the remote command line & decoding on the far side means NO
+          # value - a password with a quote, a crafted mode string - is ever parsed
+          # as shell syntax. Mask the encoded secrets too, so a trace can't leak them.
+          MODE_B64=$(printf %s "$MODE" | base64 -w0)
+          ROUND_MINUTES_B64=$(printf %s "$ROUND_MINUTES" | base64 -w0)
+          POINT_LIMIT_B64=$(printf %s "$POINT_LIMIT" | base64 -w0)
+          HILL_ROTATE_B64=$(printf %s "$HILL_ROTATE" | base64 -w0)
+          PASSWORD_B64=$(printf %s "$PASSWORD" | base64 -w0)
+          VERIFY_PASSWORD_B64=$(printf %s "$VERIFY_PASSWORD" | base64 -w0)
+          [ -n "$PASSWORD" ] && echo "::add-mask::$PASSWORD_B64"
+          [ -n "$VERIFY_PASSWORD" ] && echo "::add-mask::$VERIFY_PASSWORD_B64"
+          # AUTHORIZE_KEY & RESTART are booleans, OPS_KEY our own constant - no metachars.
+          # The passwords never touch the remote COMMAND LINE (CodeRabbit on #410):
+          # anything in ssh's argv is world-readable in `ps` on the droplet for the
+          # life of the command, & base64 hides nothing from that. They ride stdin
+          # instead: one line ahead of the script (printf is a shell builtin, so no
+          # runner-side argv either), consumed by a `read` before `bash -s` takes
+          # the rest of stdin as the script. Non-secret settings stay in argv.
+          # Two RECORDS, not two fields (CodeRabbit on #410): with password empty &
+          # verify set, a space-joined line made whitespace-delimited read assign the
+          # VERIFY value to PASSWORD - which the script then WROTE as the live join
+          # password. One value per line, one IFS= read -r per line, order fixed.
+          { printf '%s\n' "$PASSWORD_B64"; printf '%s\n' "$VERIFY_PASSWORD_B64"; cat <<'ADMIN'
           set -e
+          MODE=$(printf %s "$MODE_B64" | base64 -d)
+          ROUND_MINUTES=$(printf %s "$ROUND_MINUTES_B64" | base64 -d)
+          POINT_LIMIT=$(printf %s "$POINT_LIMIT_B64" | base64 -d)
+          HILL_ROTATE=$(printf %s "$HILL_ROTATE_B64" | base64 -d)
+          PASSWORD=$(printf %s "$PASSWORD_B64" | base64 -d)
+          VERIFY_PASSWORD=$(printf %s "$VERIFY_PASSWORD_B64" | base64 -d)
+
+          # base64 stops these being read as SHELL syntax; it does nothing about the
+          # CONFIG files they end up in (CodeRabbit on #410). The settings are joined
+          # into ExecStart in a systemd drop-in & the password becomes a line in an
+          # EnvironmentFile - so a value carrying a newline writes a directive of the
+          # caller's choosing (User=root, ExecStartPre=...) or extra environment
+          # variables, both of which the server then runs as root. Validate shape
+          # BEFORE anything is written: settings are whole numbers, mode is one of
+          # three words, & no value may contain a line break.
+          die() { echo "$1" >&2; exit 1; }
+          is_uint() { case "$1" in "" | *[!0-9]*) return 1 ;; *) [ "${#1}" -le 6 ] ;; esac; }
+          has_break() { case "$1" in *[$'\n\r']*) return 0 ;; *) return 1 ;; esac; }
+          case "$MODE" in unchanged | koth | zaps) ;; *) die "mode must be unchanged, koth or zaps" ;; esac
+          [ -z "$ROUND_MINUTES" ] || is_uint "$ROUND_MINUTES" || die "round-minutes must be a whole number"
+          [ -z "$POINT_LIMIT" ] || is_uint "$POINT_LIMIT" || die "point-limit must be a whole number"
+          [ -z "$HILL_ROTATE" ] || is_uint "$HILL_ROTATE" || die "hill-rotate-seconds must be a whole number"
+          has_break "$PASSWORD" && die "password cannot contain a line break"
+          has_break "$VERIFY_PASSWORD" && die "verify-password cannot contain a line break"
+
           ENV_FILE=/etc/energy-shot/server.env
 
           # Game settings live in the server's ARGS, never in code (Aaron,
@@ -91,8 +157,20 @@ jobs:
           touch "$ARGS_FILE"
           extra=$(cat "$ARGS_FILE")
 
-          set_arg() { # flag value
-            extra=$(printf '%s' "$extra" | sed -E "s| $1 [^ ]+||g")
+          set_arg() { # flag value - rebuild without sed (no metachars, no prefix collisions)
+            local out="" skip=0 tok
+            # Word-splitting is wanted here, GLOBBING is not: unquoted $extra also
+            # expands *, ? & [...] against the cwd, so a point-limit of "*" rewrote
+            # the args file as the directory listing. Dropping sed removed the
+            # metacharacter risk; it must not hand it back to the shell.
+            set -f
+            for tok in $extra; do
+              [ "$skip" = 1 ] && { skip=0; continue; }
+              [ "$tok" = "$1" ] && { skip=1; continue; }
+              out="$out $tok"
+            done
+            set +f
+            extra="${out# }"
             [ -n "$2" ] && extra="$extra $1 $2"
           }
 
@@ -116,11 +194,20 @@ jobs:
           if [ -n "$PASSWORD" ]; then
             mkdir -p "$(dirname "$ENV_FILE")"
             touch "$ENV_FILE"
-            if grep -q '^SERVER_PASSWORD=' "$ENV_FILE"; then
-              sed -i "s|^SERVER_PASSWORD=.*|SERVER_PASSWORD=$PASSWORD|" "$ENV_FILE"
-            else
-              echo "SERVER_PASSWORD=$PASSWORD" >> "$ENV_FILE"
-            fi
+            # Same directory, not /tmp: the replace is then a real atomic rename, &
+            # the password never exists outside the 0600 directory it belongs in.
+            tmp=$(mktemp -p "$(dirname "$ENV_FILE")")
+            chmod 600 "$tmp"
+            # grep exits 1 for "matched nothing" & 2 for a READ ERROR; `|| true` took
+            # both, so an unreadable env file became an empty temp file & the mv then
+            # replaced every other setting with just the password (CodeRabbit on #410).
+            set +e
+            grep -v '^SERVER_PASSWORD=' "$ENV_FILE" > "$tmp"
+            grep_status=$?
+            set -e
+            [ "$grep_status" -le 1 ] || { rm -f "$tmp"; die "could not read $ENV_FILE (grep exit $grep_status)"; }
+            printf 'SERVER_PASSWORD=%s\n' "$PASSWORD" >> "$tmp"     # value is an arg, not sed/format text
+            mv "$tmp" "$ENV_FILE"
             chmod 600 "$ENV_FILE"
             echo "password updated (${#PASSWORD} chars)"
           fi
@@ -156,3 +243,6 @@ jobs:
             systemctl show -p ExecStart --value energy-shot | grep -o -- '--mode [a-z]*' || echo "(no --mode = zaps default)"
           fi
           ADMIN
+          } | ssh -i droplet_key -o UserKnownHostsFile=known_hosts -o StrictHostKeyChecking=yes \
+            root@"$DROPLET_HOST" \
+            "MODE_B64='$MODE_B64' ROUND_MINUTES_B64='$ROUND_MINUTES_B64' POINT_LIMIT_B64='$POINT_LIMIT_B64' HILL_ROTATE_B64='$HILL_ROTATE_B64' AUTHORIZE_KEY='$AUTHORIZE_KEY' RESTART='$RESTART' OPS_KEY='$OPS_KEY' bash -c 'IFS= read -r PASSWORD_B64 && IFS= read -r VERIFY_PASSWORD_B64 && export PASSWORD_B64 VERIFY_PASSWORD_B64 && exec bash -s'"
