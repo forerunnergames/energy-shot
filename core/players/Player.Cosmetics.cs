@@ -137,8 +137,14 @@ public partial class Player
   {
     _crown ??= GetNodeOrNull <Node3D> ("Crown");
     if (_crown == null) return;
-    _crown.Visible = _isCrowned && !(_crouching && !IsMultiplayerAuthority());
-    UpdateCrownSpin();
+    var shouldBeVisible = _isCrowned && !(_crouching && !IsMultiplayerAuthority());
+    // Idempotent per state (CodeRabbit on #433): the ALWAYS-mode crouch sync re-fires
+    // this constantly, & unconditionally restarting the spin tween snapped a remote
+    // king's crown back to rotation zero every sync tick. Same rule as the dart
+    // visuals (#131's pattern): rebuild only on an actual change.
+    var visibilityChanged = _crown.Visible != shouldBeVisible;
+    _crown.Visible = shouldBeVisible;
+    if (visibilityChanged || (shouldBeVisible && _crownSpin == null)) UpdateCrownSpin();
   }
 
   private void UpdateCrownSpin()
