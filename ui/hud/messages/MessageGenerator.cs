@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using com.forerunnergames.energyshot.players;
+using com.forerunnergames.energyshot.ui.hud.messages;
 using com.forerunnergames.energyshot.weapons;
 using Godot;
 
