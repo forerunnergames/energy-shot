@@ -34,12 +34,11 @@ grow_vertical = 2
 script = ExtResource("1_rggns")
 
 [node name="Background" type="TextureRect" parent="."]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
+layout_mode = 0
+offset_left = -143.36
+offset_top = -81.94
+offset_right = 4560.64
+offset_bottom = 2440.06
 mouse_filter = 2
 texture = ExtResource("2_bgart")
 expand_mode = 1
@@ -58,20 +57,20 @@ mouse_filter = 2
 [node name="Breadcrumb" type="RichTextLabel" parent="."]
 layout_mode = 0
 offset_left = 126.0
-offset_top = 62.0
+offset_top = 122.0
 offset_right = 1188.0
-offset_bottom = 234.0
+offset_bottom = 294.0
 mouse_filter = 2
 theme_override_colors/default_color = Color(1, 1, 1, 1)
 theme_override_fonts/normal_font = SubResource("FontVariation_orb500")
-theme_override_font_sizes/normal_font_size = 34
+theme_override_font_sizes/normal_font_size = 44
 bbcode_enabled = true
 text = "[u]MAIN MENU[/u]"
 scroll_active = false
 
 [node name="HostButton" type="Button" parent="."]
 layout_mode = 0
-offset_left = 132.0
+offset_left = 134.0
 offset_top = 926.0
 offset_right = 464.0
 offset_bottom = 1098.0
@@ -86,11 +85,11 @@ theme_override_styles/hover = SubResource("StyleBoxEmpty_flat")
 theme_override_styles/pressed = SubResource("StyleBoxEmpty_flat")
 theme_override_styles/focus = SubResource("StyleBoxEmpty_flat")
 text = "HOST"
-alignment = 2
+alignment = 0
 
 [node name="JoinButton" type="Button" parent="."]
 layout_mode = 0
-offset_left = 132.0
+offset_left = 134.0
 offset_top = 1060.0
 offset_right = 464.0
 offset_bottom = 1232.0
@@ -105,14 +104,14 @@ theme_override_styles/hover = SubResource("StyleBoxEmpty_flat")
 theme_override_styles/pressed = SubResource("StyleBoxEmpty_flat")
 theme_override_styles/focus = SubResource("StyleBoxEmpty_flat")
 text = "JOIN"
-alignment = 2
+alignment = 0
 
 [node name="Quit" type="Button" parent="."]
 layout_mode = 0
-offset_left = 41.0
-offset_top = 1955.0
-offset_right = 379.0
-offset_bottom = 2103.0
+offset_left = 132.0
+offset_top = 1888.0
+offset_right = 470.0
+offset_bottom = 2036.0
 focus_mode = 0
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_colors/font_hover_color = Color(0.58, 0.988, 0.996, 1)

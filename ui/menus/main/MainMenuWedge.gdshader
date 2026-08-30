@@ -8,21 +8,18 @@ shader_type canvas_item;
 // art-direct from a live build without a shader edit.
 
 uniform sampler2D art;
+// The art's PLACEMENT rect in design px - the design renders the backdrop at 122.5%
+// of the viewport, center (2208, 1180), not a plain cover fit (mac-ops's pixel diff
+// on #436): the wedge must blur the SAME pixels the backdrop shows beneath it.
+uniform vec2 art_rect_position = vec2(-143.36, -81.94);
+uniform vec2 art_rect_size = vec2(4704.0, 2522.0);
 uniform float blur_px = 26.0; // 13px in the 1080 design, x2 for the 4K viewport.
 uniform float hue_degrees = 70.0;
 uniform float boundary_top_x : hint_range(0.0, 1.0) = 0.565; // Measured off the reference render.
 uniform float boundary_bottom_x : hint_range(0.0, 1.0) = 0.327;
 uniform vec4 edge_color : source_color = vec4(0.58, 0.988, 0.996, 1.0); // display-p3 (0.580, 0.987, 0.994) ~ #94FCFE sRGB.
 uniform float edge_width_px = 4.0;
-uniform float wedge_dim : hint_range(0.0, 1.0) = 0.88;
-
-// Cover-fit like CSS background-size: cover, centered.
-vec2 cover_uv(vec2 uv, vec2 screen, vec2 tex) {
-	float screen_aspect = screen.x / screen.y;
-	float tex_aspect = tex.x / tex.y;
-	vec2 scale = screen_aspect > tex_aspect ? vec2(1.0, tex_aspect / screen_aspect) : vec2(screen_aspect / tex_aspect, 1.0);
-	return (uv - 0.5) * scale + 0.5;
-}
+uniform float wedge_dim : hint_range(0.0, 1.0) = 0.8; // A touch darker than v1 - the design's left reads soft teal, not hot (mac-ops diff).
 
 // CSS feColorMatrix hueRotate, per channel (matches the browser render Jonathan approved).
 vec3 hue_rotate(vec3 color, float degrees) {
@@ -36,7 +33,6 @@ vec3 hue_rotate(vec3 color, float degrees) {
 
 void fragment() {
 	vec2 screen = 1.0 / SCREEN_PIXEL_SIZE;
-	vec2 tex = vec2(textureSize(art, 0));
 	vec2 p = UV * screen;
 	vec2 a = vec2(boundary_top_x * screen.x, 0.0);
 	vec2 b = vec2(boundary_bottom_x * screen.x, screen.y);
@@ -48,15 +44,15 @@ void fragment() {
 	} else if (abs(d) <= edge_width_px) {
 		COLOR = edge_color;
 	} else {
-		// 5x5 dilated gaussian: enough softness for art that sits behind dimming &
-		// a hue shift; a menu redraws rarely, so the taps are cheap.
-		vec2 uv = cover_uv(UV, screen, tex);
+		// 9x9 gaussian, tight spacing: v1's 5x5 dilated taps showed visible grain in
+		// the streaks (mac-ops diff). A menu redraws rarely, so 81 taps are cheap.
+		vec2 uv = (p - art_rect_position) / art_rect_size;
 		vec3 sum = vec3(0.0);
 		float weight_sum = 0.0;
-		for (int i = -2; i <= 2; i++) {
-			for (int j = -2; j <= 2; j++) {
-				vec2 offset = vec2(float(i), float(j)) * (blur_px / 2.5) / screen;
-				float w = exp(-float(i * i + j * j) * 0.35);
+		for (int i = -4; i <= 4; i++) {
+			for (int j = -4; j <= 4; j++) {
+				vec2 offset = vec2(float(i), float(j)) * (blur_px / 4.0) / art_rect_size;
+				float w = exp(-float(i * i + j * j) * 0.09);
 				sum += texture(art, uv + offset).rgb * w;
 				weight_sum += w;
 			}
