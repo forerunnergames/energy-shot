@@ -24,10 +24,12 @@ public partial class MainMenu : Control
     DisplayServer.WindowSetMode (DisplayServer.WindowMode.ExclusiveFullscreen);
 #endif
     _world = GetNode <World> ("/root/World");
-    _hostButton = GetNode <Button> ("PanelContainer/MarginContainer/VBoxContainer/Buttons/VBoxContainer/HostButton");
-    _joinButton = GetNode <Button> ("PanelContainer/MarginContainer/VBoxContainer/Buttons/VBoxContainer/JoinButton");
-    _quitButton = GetNode <Button> ("PanelContainer/MarginContainer/VBoxContainer/Buttons/VBoxContainer/Quit");
-    _bottomMainMenuText = GetNode <Label> ("PanelContainer/MarginContainer/VBoxContainer/BottomText");
+    // Jonathan's redesign (issue #436) flattened the tree: art + wedge shader behind,
+    // absolutely-placed controls in the 4K design space in front.
+    _hostButton = GetNode <Button> ("HostButton");
+    _joinButton = GetNode <Button> ("JoinButton");
+    _quitButton = GetNode <Button> ("Quit");
+    _bottomMainMenuText = GetNode <Label> ("BottomText");
     _hostButton.Pressed += () => EmitSignal (SignalName.HostGameRequest);
     _joinButton.Pressed += () => EmitSignal (SignalName.JoinGameRequest);
     _quitButton.Pressed += QuitGame;
