@@ -396,11 +396,20 @@ public partial class WeaponSpawner : Node3D
       return;
     }
 
+    // No resolved player, no claim (CodeRabbit on #430): a null collector skipped
+    // the reach & duplicate checks below & still despawned the pickup. A peer that
+    // exists but has no Player node yet can simply re-claim after spawning.
+    if (collector == null)
+    {
+      ServerLog.Event (collectorId, $"weapon deny: pickup [{pickupName}] claimed by a peer with no player");
+      return;
+    }
+
     // The server has both positions, so it enforces REACH (CodeRabbit on #430): a
     // peer naming a pickup across the map gets nothing - with the preload riding
     // pickups, a remote claim would be a free loaded gun. Generous slack over the
     // real walk-over radius covers replication lag on a sprinting collector.
-    if (collector != null && collector.GlobalPosition.DistanceTo (pickup.GlobalPosition) > PickupClaimRangeMeters)
+    if (collector.GlobalPosition.DistanceTo (pickup.GlobalPosition) > PickupClaimRangeMeters)
     {
       ServerLog.Event (collectorId, $"weapon deny: pickup [{pickupName}] claimed from {collector.GlobalPosition.DistanceTo (pickup.GlobalPosition):0.0}m away");
       return;
@@ -409,7 +418,7 @@ public partial class WeaponSpawner : Node3D
     // Holding it already means a normal collect cannot happen (#190's rule; the
     // slingshot pouch-load is a different request): a duplicate claim would only
     // despawn the pickup - denying others - & double a blowgun's payload (#430).
-    if (collector != null && pickup.Weapon != HeldWeapon.PoisonDart && collector.Holds (pickup.Weapon))
+    if (pickup.Weapon != HeldWeapon.PoisonDart && collector.Holds (pickup.Weapon))
     {
       ServerLog.Event (collectorId, $"weapon deny: pickup [{pickupName}] while already holding {pickup.Weapon}");
       return;
