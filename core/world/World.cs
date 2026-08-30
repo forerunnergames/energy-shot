@@ -707,6 +707,7 @@ public partial class World : Node3D
 
   private void RemovePlayer (long peerId)
   {
+    _recentZapOuts.Remove (peerId); // Their ledger entry leaves with them (CodeRabbit on #431).
     var player = GetNodeOrNull <Player> ($"{peerId}");
     if (player == null) return;
     _networkManager.NotifyPlayerLeftGame (player.DisplayName);
@@ -803,22 +804,27 @@ public partial class World : Node3D
   // The notifications themselves are the authoritative death feed (issue #111), so
   // the server keeps its own short ledger of who just went down - entries outlive
   // the replication gap by design & expire well inside the 5s lie-down.
-  private readonly System.Collections.Generic.Dictionary <string, ulong> _recentZapOuts = new();
+  // Keyed by NetworkId, not name (CodeRabbit on #431): a leave-&-rejoin can reuse a
+  // display name within the window, & a name key would exclude the LIVE newcomer
+  // from occupancy. Expired entries purge on insert; a departing peer's entry goes
+  // with them in RemovePlayer.
+  private readonly System.Collections.Generic.Dictionary <long, ulong> _recentZapOuts = new();
   private const float RecentZapOutSeconds = 4.0f;
 
-  private bool RecentlyZappedOut (string playerName) => _recentZapOuts.TryGetValue (playerName, out var until) && Time.GetTicksMsec() < until;
+  private bool RecentlyZappedOut (long networkId) => _recentZapOuts.TryGetValue (networkId, out var until) && Time.GetTicksMsec() < until;
 
   private void MaybeAwardHillClearBonus (string victimName, string zapperName)
   {
     if (!IsActiveServer() || _mode != GameMode.KingOfTheHill || _intermission) return;
-    _recentZapOuts[victimName] = Time.GetTicksMsec() + (ulong)(RecentZapOutSeconds * 1000.0f);
     var players = GetPlayers().ToList();
     var victim = players.FirstOrDefault (player => player.DisplayName == victimName);
     var zapper = players.FirstOrDefault (player => player.DisplayName == zapperName);
     if (victim == null || zapper == null || victim == zapper) return;
+    foreach (var stale in _recentZapOuts.Where (entry => Time.GetTicksMsec() >= entry.Value).Select (entry => entry.Key).ToList()) _recentZapOuts.Remove (stale);
+    _recentZapOuts[victim.NetworkId] = Time.GetTicksMsec() + (ulong)(RecentZapOutSeconds * 1000.0f);
     var victimInHill = Hill.Contains (_hillIndex, victim.GlobalPosition);
     var zapperInHill = Hill.Contains (_hillIndex, zapper.GlobalPosition);
-    var othersStillInHill = players.Count (player => player != victim && !player.Fallen && !RecentlyZappedOut (player.DisplayName) && Hill.Contains (_hillIndex, player.GlobalPosition));
+    var othersStillInHill = players.Count (player => player != victim && !player.Fallen && !RecentlyZappedOut (player.NetworkId) && Hill.Contains (_hillIndex, player.GlobalPosition));
     if (!Match.IsHillClearBonus (victimInHill, zapperInHill, othersStillInHill)) return;
     if (zapper.NetworkId == Multiplayer.GetUniqueId()) zapper.NotifyHillClearBonus();
     else zapper.RpcId (zapper.NetworkId, Player.MethodName.NotifyHillClearBonus);

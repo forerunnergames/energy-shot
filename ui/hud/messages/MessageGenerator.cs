@@ -29,7 +29,9 @@ public static class MessageGenerator
   public static string OnZapped (string victimName, string zapperName, DeathContext context) => Fill (Pick (SelectZappedPool (context)), victimName, zapperName);
   // Names are player input & the scroller's history label renders BBCode (CodeRabbit
   // on #420): a bracketed name must land as text, never as markup.
-  private static string Fill (string template, string victimName, string zapperName) => Capitalize (template.Replace ("{v}", ChatBox.EscapeBbcode (victimName)).Replace ("{z}", ChatBox.EscapeBbcode (zapperName)));
+  // Capitalize the TEMPLATE, then substitute (CodeRabbit on #431): capitalizing the
+  // filled string turned a leading lowercase display name into someone else's name.
+  private static string Fill (string template, string victimName, string zapperName) => Capitalize (template).Replace ("{v}", ChatBox.EscapeBbcode (victimName)).Replace ("{z}", ChatBox.EscapeBbcode (zapperName));
   private static string Capitalize (string message) => char.ToUpper (message[0]) + message[1..];
   private static string Pick (List <string> pool) => pool[Rng.RandiRange (0, pool.Count - 1)];
   private static string GetFallMessage (string youOrThey, int index) => MessagePools.Fall[index].Replace ("{youOrThey}", youOrThey);

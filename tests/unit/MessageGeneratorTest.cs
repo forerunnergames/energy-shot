@@ -35,6 +35,16 @@ public class MessageGeneratorTest
   }
 
   [TestCase]
+  public void LowercaseNamesKeepTheirCasing()
+  {
+    // Capitalization applies to the TEMPLATE, never the substituted name (CodeRabbit
+    // on #420): "escendrix" must not become "Escendrix" in an announcement.
+    var message = MessageGenerator.OnHillClear ("escendrix");
+    AssertBool (message.Contains ("escendrix")).IsTrue();
+    AssertBool (message.Contains ("Escendrix")).IsFalse();
+  }
+
+  [TestCase]
   public void BracketedNamesLandAsTextNotMarkup()
   {
     // The scroller's history renders BBCode (CodeRabbit on #420): a name like
