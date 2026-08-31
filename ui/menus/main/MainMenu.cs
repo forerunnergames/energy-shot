@@ -24,10 +24,12 @@ public partial class MainMenu : Control
     DisplayServer.WindowSetMode (DisplayServer.WindowMode.ExclusiveFullscreen);
 #endif
     _world = GetNode <World> ("/root/World");
-    _hostButton = GetNode <Button> ("PanelContainer/MarginContainer/VBoxContainer/Buttons/VBoxContainer/HostButton");
-    _joinButton = GetNode <Button> ("PanelContainer/MarginContainer/VBoxContainer/Buttons/VBoxContainer/JoinButton");
-    _quitButton = GetNode <Button> ("PanelContainer/MarginContainer/VBoxContainer/Buttons/VBoxContainer/Quit");
-    _bottomMainMenuText = GetNode <Label> ("PanelContainer/MarginContainer/VBoxContainer/BottomText");
+    // Jonathan's redesign (issue #436) flattened the tree: art + wedge shader behind,
+    // absolutely-placed controls in the 4K design space in front.
+    _hostButton = GetNode <Button> ("HostButton");
+    _joinButton = GetNode <Button> ("JoinButton");
+    _quitButton = GetNode <Button> ("Quit");
+    _bottomMainMenuText = GetNode <Label> ("BottomText");
     _hostButton.Pressed += () => EmitSignal (SignalName.HostGameRequest);
     _joinButton.Pressed += () => EmitSignal (SignalName.JoinGameRequest);
     _quitButton.Pressed += QuitGame;
@@ -36,6 +38,7 @@ public partial class MainMenu : Control
     _world.ServerShutDown += OnServerShutDown;
     _world.LeftGame += OnLeftGame;
     _bottomMainMenuText.Text = string.Empty;
+    _hostButton.GrabFocus(); // Keyboard & controller nav from boot (CodeRabbit on #437).
   }
 
   private void OnNewGameStarted (string selfPlayerName, int selfMaxHealth)
@@ -50,6 +53,7 @@ public partial class MainMenu : Control
     _bottomMainMenuText.Text = string.Empty;
     Input.MouseMode = Input.MouseModeEnum.Visible;
     Show();
+    _hostButton.GrabFocus(); // Reopened menus stay navigable (CodeRabbit on #437).
   }
 
   private void OnServerShutDown()
@@ -58,6 +62,7 @@ public partial class MainMenu : Control
     _bottomMainMenuText.Text = "The server was shut down.";
     Input.MouseMode = Input.MouseModeEnum.Visible;
     Show();
+    _hostButton.GrabFocus(); // Reopened menus stay navigable (CodeRabbit on #437).
   }
 
   private void OnKickedFromServer (string reason)
@@ -66,5 +71,6 @@ public partial class MainMenu : Control
     _bottomMainMenuText.Text = $"You were kicked from the server, reason: {reason}";
     Input.MouseMode = Input.MouseModeEnum.Visible;
     Show();
+    _hostButton.GrabFocus(); // Reopened menus stay navigable (CodeRabbit on #437).
   }
 }

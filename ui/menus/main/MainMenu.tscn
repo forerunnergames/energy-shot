@@ -1,6 +1,36 @@
-[gd_scene load_steps=2 format=3 uid="uid://bwu2mo4euj40u"]
+[gd_scene load_steps=12 format=3 uid="uid://bwu2mo4euj40u"]
 
 [ext_resource type="Script" path="res://ui/menus/main/MainMenu.cs" id="1_rggns"]
+[ext_resource type="Texture2D" path="res://assets/ui/main-menu-bg.jpg" id="2_bgart"]
+[ext_resource type="Shader" path="res://ui/menus/main/MainMenuWedge.gdshader" id="3_wedge"]
+[ext_resource type="FontFile" path="res://assets/fonts/orbitron/Orbitron-wght.ttf" id="4_orbtr"]
+[ext_resource type="Script" path="res://ui/menus/main/TrapezoidButton.cs" id="5_trpzd"]
+[ext_resource type="Texture2D" path="res://assets/ui/main-menu-bg-blurred.jpg" id="6_bgblr"]
+
+[sub_resource type="FontVariation" id="FontVariation_orb700"]
+base_font = ExtResource("4_orbtr")
+variation_opentype = {
+2003265652: 700.0
+}
+
+[sub_resource type="FontVariation" id="FontVariation_orb500"]
+base_font = ExtResource("4_orbtr")
+variation_opentype = {
+2003265652: 500.0
+}
+
+[sub_resource type="FontVariation" id="FontVariation_orb500crumb"]
+base_font = ExtResource("4_orbtr")
+variation_opentype = {
+2003265652: 500.0
+}
+spacing_glyph = -7
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_wedge"]
+shader = ExtResource("3_wedge")
+shader_parameter/art_blurred = ExtResource("6_bgblr")
+
+[sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_flat"]
 
 [node name="MainMenu" type="Control"]
 layout_mode = 3
@@ -11,58 +41,109 @@ grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_rggns")
 
-[node name="PanelContainer" type="PanelContainer" parent="."]
+[node name="Background" type="TextureRect" parent="."]
+layout_mode = 0
+offset_left = -143.36
+offset_top = -81.94
+offset_right = 4560.64
+offset_bottom = 2440.06
+mouse_filter = 2
+texture = ExtResource("2_bgart")
+expand_mode = 1
+stretch_mode = 6
+
+[node name="Wedge" type="ColorRect" parent="."]
+material = SubResource("ShaderMaterial_wedge")
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+mouse_filter = 2
 
-[node name="MarginContainer" type="MarginContainer" parent="PanelContainer"]
-layout_mode = 2
-theme_override_constants/margin_left = 10
-theme_override_constants/margin_top = 50
-theme_override_constants/margin_right = 10
-theme_override_constants/margin_bottom = 10
+[node name="Breadcrumb" type="RichTextLabel" parent="."]
+layout_mode = 0
+offset_left = 126.0
+offset_top = 122.0
+offset_right = 1188.0
+offset_bottom = 294.0
+mouse_filter = 2
+theme_override_colors/default_color = Color(1, 1, 1, 1)
+theme_override_fonts/normal_font = SubResource("FontVariation_orb500crumb")
+theme_override_font_sizes/normal_font_size = 44
+bbcode_enabled = true
+text = "[u]MAIN MENU[/u]"
+scroll_active = false
 
-[node name="VBoxContainer" type="VBoxContainer" parent="PanelContainer/MarginContainer"]
-layout_mode = 2
-theme_override_constants/separation = 200
+[node name="HostButton" type="Button" parent="."]
+layout_mode = 0
+offset_left = 134.0
+offset_top = 926.0
+offset_right = 464.0
+offset_bottom = 1098.0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_hover_color = Color(0.58, 0.988, 0.996, 1)
+theme_override_colors/font_focus_color = Color(0.58, 0.988, 0.996, 1)
+theme_override_colors/font_pressed_color = Color(0.58, 0.988, 0.996, 1)
+theme_override_fonts/font = SubResource("FontVariation_orb700")
+theme_override_font_sizes/font_size = 42
+theme_override_styles/normal = SubResource("StyleBoxEmpty_flat")
+theme_override_styles/hover = SubResource("StyleBoxEmpty_flat")
+theme_override_styles/pressed = SubResource("StyleBoxEmpty_flat")
+theme_override_styles/focus = SubResource("StyleBoxEmpty_flat")
+text = "HOST"
+alignment = 0
 
-[node name="Title" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 200
-text = "Energy Shot"
-horizontal_alignment = 1
+[node name="JoinButton" type="Button" parent="."]
+layout_mode = 0
+offset_left = 134.0
+offset_top = 1060.0
+offset_right = 464.0
+offset_bottom = 1232.0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_hover_color = Color(0.58, 0.988, 0.996, 1)
+theme_override_colors/font_focus_color = Color(0.58, 0.988, 0.996, 1)
+theme_override_colors/font_pressed_color = Color(0.58, 0.988, 0.996, 1)
+theme_override_fonts/font = SubResource("FontVariation_orb700")
+theme_override_font_sizes/font_size = 42
+theme_override_styles/normal = SubResource("StyleBoxEmpty_flat")
+theme_override_styles/hover = SubResource("StyleBoxEmpty_flat")
+theme_override_styles/pressed = SubResource("StyleBoxEmpty_flat")
+theme_override_styles/focus = SubResource("StyleBoxEmpty_flat")
+text = "JOIN"
+alignment = 0
 
-[node name="Buttons" type="MarginContainer" parent="PanelContainer/MarginContainer/VBoxContainer"]
-layout_mode = 2
-theme_override_constants/margin_left = 1500
-theme_override_constants/margin_right = 1500
+[node name="Quit" type="Button" parent="."]
+layout_mode = 0
+offset_left = 132.0
+offset_top = 1888.0
+offset_right = 470.0
+offset_bottom = 2036.0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_hover_color = Color(0.58, 0.988, 0.996, 1)
+theme_override_colors/font_focus_color = Color(0.58, 0.988, 0.996, 1)
+theme_override_colors/font_pressed_color = Color(0.58, 0.988, 0.996, 1)
+theme_override_fonts/font = SubResource("FontVariation_orb700")
+theme_override_font_sizes/font_size = 42
+theme_override_styles/normal = SubResource("StyleBoxEmpty_flat")
+theme_override_styles/hover = SubResource("StyleBoxEmpty_flat")
+theme_override_styles/pressed = SubResource("StyleBoxEmpty_flat")
+theme_override_styles/focus = SubResource("StyleBoxEmpty_flat")
+text = "QUIT"
+script = ExtResource("5_trpzd")
 
-[node name="VBoxContainer" type="VBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer/Buttons"]
-layout_mode = 2
-theme_override_constants/separation = 100
-
-[node name="HostButton" type="Button" parent="PanelContainer/MarginContainer/VBoxContainer/Buttons/VBoxContainer"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 100
-text = "Host"
-
-[node name="JoinButton" type="Button" parent="PanelContainer/MarginContainer/VBoxContainer/Buttons/VBoxContainer"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 100
-text = "Join"
-
-[node name="Quit" type="Button" parent="PanelContainer/MarginContainer/VBoxContainer/Buttons/VBoxContainer"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 100
-text = "Quit"
-
-[node name="BottomText" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 50
-text = "You were disconnected from the server."
+[node name="BottomText" type="Label" parent="."]
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -120.0
+grow_horizontal = 2
+grow_vertical = 0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_fonts/font = SubResource("FontVariation_orb500")
+theme_override_font_sizes/font_size = 34
 horizontal_alignment = 1
 vertical_alignment = 1
