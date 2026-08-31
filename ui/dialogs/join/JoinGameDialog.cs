@@ -11,14 +11,13 @@ public partial class JoinGameDialog : Control
   // Hands the join attempt off to the animated joining screen (issue #91).
   [Signal] public delegate void ConnectStartedEventHandler (string address);
   [Signal] public delegate void ConnectFailedEventHandler();
-  private Button _closeButton = null!;
+  private Button _backButton = null!;
   private Button _joinGameButton = null!;
   private LineEdit _playerName = null!;
   private OptionButton _difficulty = null!;
   private OptionButton _playerColor = null!;
   private LineEdit _password = null!;
   private LineEdit _serverAddress = null!;
-  private Label _middleText = null!;
   private Label _bottomText = null!;
   private Timer _connectionTimer = null!;
   private Callable _onConnectedToServerCallable;
@@ -39,23 +38,21 @@ public partial class JoinGameDialog : Control
     _onConnectedToServerCallable = Callable.From (OnConnectedToServer);
     _onConnectionFailedCallable = Callable.From (OnConnectionFailed);
     _onServerDisconnectedCallable = Callable.From (OnServerDisconnected);
-    _closeButton = GetNode <Button> ("PanelContainer/MarginContainer/VBoxContainer/HBoxContainer/MarginContainer/CloseButton");
-    _joinGameButton = GetNode <Button> ("PanelContainer/MarginContainer/VBoxContainer/JoinGameButton");
-    _playerName = GetNode <LineEdit> ("PanelContainer/MarginContainer/VBoxContainer/PlayerName");
-    _difficulty = GetNode <OptionButton> ("PanelContainer/MarginContainer/VBoxContainer/Difficulty");
-    // The dropdown's popup items don't inherit the button's font size override.
-    _difficulty.GetPopup().AddThemeFontSizeOverride ("font_size", 90);
-    _playerColor = GetNode <OptionButton> ("PanelContainer/MarginContainer/VBoxContainer/PlayerColor");
-    _playerColor.GetPopup().AddThemeFontSizeOverride ("font_size", 90);
+    _backButton = GetNode <Button> ("BackButton");
+    _joinGameButton = GetNode <Button> ("JoinGameButton");
+    _playerName = GetNode <LineEdit> ("PlayerName");
+    _difficulty = GetNode <OptionButton> ("Difficulty");
+    StyleDropdown (_difficulty);
+    _playerColor = GetNode <OptionButton> ("PlayerColor");
+    StyleDropdown (_playerColor);
     PlayerColors.Populate (_playerColor); // Selectable body color (issue #43).
-    _password = GetNode <LineEdit> ("PanelContainer/MarginContainer/VBoxContainer/Password");
-    _serverAddress = GetNode <LineEdit> ("PanelContainer/MarginContainer/VBoxContainer/ServerAddress");
-    _middleText = GetNode <Label> ("PanelContainer/MarginContainer/VBoxContainer/MiddleText");
-    _bottomText = GetNode <Label> ("PanelContainer/MarginContainer/VBoxContainer/BottomText");
+    _password = GetNode <LineEdit> ("Password");
+    _serverAddress = GetNode <LineEdit> ("ServerAddress");
+    _bottomText = GetNode <Label> ("BottomText");
     _connectionTimer = GetNode <Timer> ("ConnectionTimer");
     _joinGameButton.Disabled = true;
     _bottomText.Text = string.Empty;
-    _closeButton.Pressed += OnCloseButtonPressed;
+    _backButton.Pressed += OnBackButtonPressed;
     _joinGameButton.Pressed += OnJoinGameButtonPressed;
     _playerName.TextChanged += OnPlayerNameTextChanged;
     _serverAddress.TextChanged += OnServerAddressTextChanged;
@@ -116,10 +113,22 @@ public partial class JoinGameDialog : Control
   // Cancel from the joining screen (issue #91): stop the attempt & drop the peer.
   public void Abort() => StopConnecting();
 
-  private void OnCloseButtonPressed()
+  private void OnBackButtonPressed()
   {
     StopConnecting();
     Hide();
+  }
+
+  // The dropdown's popup doesn't inherit the button's overrides: the canon sheet's
+  // opened state is dark rows in the field's mono font (issue #443), & the native
+  // arrow icon yields to the design's "V" chevron drawn by the scene.
+  private static void StyleDropdown (OptionButton dropdown)
+  {
+    var popup = dropdown.GetPopup();
+    popup.AddThemeFontOverride ("font", GD.Load <FontFile> ("res://assets/fonts/jetbrains-mono/JetBrainsMono-wght.ttf"));
+    popup.AddThemeFontSizeOverride ("font_size", 30);
+    popup.AddThemeStyleboxOverride ("panel", new StyleBoxFlat { BgColor = new Color ("151515") });
+    dropdown.AddThemeIconOverride ("arrow", ImageTexture.CreateFromImage (Image.CreateEmpty (1, 1, false, Image.Format.Rgba8)));
   }
 
   private void OnConnectedToServer()

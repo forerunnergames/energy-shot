@@ -46,10 +46,32 @@ public static class PlayerColors
     for (var i = 0; i < Palette.Length; ++i) button.AddIconItem (Swatch (i), Names[i], i);
   }
 
-  private static Texture2D Swatch (int index)
+  private static Texture2D Swatch (int index) => ImageTexture.CreateFromImage (SwatchImage (index));
+
+  // The canon UI-elements sheet's swatch (issue #443): a 31px circle (x2 for 4K) with
+  // dual inset shadows - dark along the top-left inner rim, cyan along the bottom-right.
+  // CPU-side Image so it stays unit-testable without a rendering server.
+  public static Image SwatchImage (int index)
   {
-    var image = Image.CreateEmpty (64, 64, false, Image.Format.Rgb8);
-    image.Fill (At (index));
-    return ImageTexture.CreateFromImage (image);
+    const int size = 62;
+    const float radius = size / 2.0f;
+    var inset = new Vector2 (6.0f, 6.0f); // The sheet's 3px shadow offsets, x2.
+    var rimCyan = new Color (0.0f, 0.85f, 0.97f); // canon display-p3 (0 0.832 0.961) ~ sRGB.
+    var center = new Vector2 (radius, radius);
+    var fill = At (index);
+    var image = Image.CreateEmpty (size, size, false, Image.Format.Rgba8);
+
+    for (var y = 0; y < size; ++y)
+    for (var x = 0; x < size; ++x)
+    {
+      var p = new Vector2 (x + 0.5f, y + 0.5f);
+      if (p.DistanceTo (center) > radius) continue;
+      var color = fill;
+      if ((p - inset).DistanceTo (center) > radius) color = fill.Lerp (Colors.Black, 0.6f);
+      else if ((p + inset).DistanceTo (center) > radius) color = fill.Lerp (rimCyan, 0.75f);
+      image.SetPixel (x, y, color);
+    }
+
+    return image;
   }
 }
