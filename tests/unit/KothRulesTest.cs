@@ -50,4 +50,22 @@ public class KothRulesTest
     AssertInt (next).IsLess (Hill.Spots.Length);
     AssertInt (next).IsNotEqual (0);
   }
+
+  // The hill-clear bounty (issue #420): pays only when a zap empties the zone from
+  // outside it. Every branch of the rule, pinned.
+  [TestCase]
+  public void ClearingTheHillFromOutsidePays()
+  {
+    AssertBool (Match.IsHillClearBonus (victimInHill: true, attackerInHill: false, othersStillInHill: 0)).IsTrue();
+    AssertInt (Match.HillClearBonusPoints).IsEqual (5);
+  }
+
+  [TestCase]
+  public void NoBountyInsideTheHill() => AssertBool (Match.IsHillClearBonus (victimInHill: true, attackerInHill: true, othersStillInHill: 0)).IsFalse(); // Sole occupancy is its own reward.
+
+  [TestCase]
+  public void NoBountyWhileOthersRemain() => AssertBool (Match.IsHillClearBonus (victimInHill: true, attackerInHill: false, othersStillInHill: 1)).IsFalse();
+
+  [TestCase]
+  public void NoBountyForZapsOutsideTheHill() => AssertBool (Match.IsHillClearBonus (victimInHill: false, attackerInHill: false, othersStillInHill: 0)).IsFalse();
 }

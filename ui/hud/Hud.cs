@@ -181,6 +181,7 @@ public partial class Hud : Control
     _world.RemoteMessageReceived += OnRemoteMessageReceived;
     _world.AdminMessageReceived += OnAdminMessageReceived;
     _world.RoundClockUpdated += OnRoundClockUpdated; // Issue #153.
+    _world.HillCleared += message => PrintMessage (message, MessageScroller.MessageImportance.High); // The bounty (issue #420).
     _world.RoundEnded += OnRoundEnded;
     _world.RoundStarted += OnRoundStarted;
     CreateRoundUi();

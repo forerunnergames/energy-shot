@@ -1,3 +1,4 @@
+using com.forerunnergames.energyshot.core.world;
 using Godot;
 
 namespace com.forerunnergames.energyshot.players;
@@ -50,6 +51,17 @@ public partial class Player
     var authorized = sender == 1 || (sender == 0 && Multiplayer.IsServer());
     if (!authorized || !IsMultiplayerAuthority()) return;
     ++Score;
+  }
+
+  // The hill-clear bounty (issue #420): the server decided our zap emptied the zone
+  // from outside it. Same authorization shape as the per-second hill point.
+  [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
+  public void NotifyHillClearBonus()
+  {
+    var sender = Multiplayer.GetRemoteSenderId();
+    var authorized = sender == 1 || (sender == 0 && Multiplayer.IsServer());
+    if (!authorized || !IsMultiplayerAuthority()) return;
+    Score += Match.HillClearBonusPoints;
   }
 
   // A new round (issue #153): the server tells every player to zero its counters &

@@ -105,10 +105,22 @@ public partial class NetworkManager : Node
     Broadcast (nameof (OnRemotePlayerLeftGame), playerName);
   }
 
+  // World supplies the name-to-peer check; every peer holds the replicated roster.
+  public System.Func <string, int, bool>? IsVictimOwnedBy;
+
   [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
   private void OnPlayerRespawnedShot (string playerName, string shotByPlayerName)
   {
     var senderId = Multiplayer.GetRemoteSenderId();
+    // Only the victim's own peer may report its zap-out (CodeRabbit on #431): the
+    // hill-clear bounty made this notification a SCORING input, so a forged victim
+    // name could bank points per message. Deaths are victim-authoritative (#111) -
+    // a report about somebody else's player is a forgery, dropped on every peer.
+    if (IsVictimOwnedBy != null && !IsVictimOwnedBy (playerName, senderId))
+    {
+      ServerLog.Event (senderId, $"death notification deny: [{playerName}] is not the sender's player");
+      return;
+    }
     if (LocalNetworkId != senderId) PlayerRespawnedShot?.Invoke (playerName, shotByPlayerName);
     if (!IsServer) return;
     Broadcast (excludingId: senderId, nameof (OnRemotePlayerRespawnedShot), playerName, shotByPlayerName);
