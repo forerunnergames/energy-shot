@@ -35,7 +35,8 @@ public partial class WeaponSpawner : Node3D
   [Export] public int MaxDarts = 60; // Room for preloaded guns AND real stashes (issue #421).
   [Export] public int DartsPerCluster = 10; // Stashes of 10, no more 2s & 3s (Aaron, 2026-08-28, issue #421).
   [Export] public int DartsPerGunPreload = 10; // A fresh spawner blowgun comes loaded (issue #421).
-  [Export] public float PickupClaimRangeMeters = 8.0f; // Server-enforced reach on claims (#430): walk-over is ~2m; the slack absorbs replication lag.
+  [Export] public float PickupClaimRangeMeters = 8.0f; // Server-enforced reach on claims (#430): walk-over is ~2m; the slack absorbs steady-state replication lag.
+  private const float ClaimRecheckSeconds = 0.4f; // A teleport's replication gap: re-read once before denying reach (#430).
   private const float DartFlightGraceSeconds = 7.0f; // A fired dart counts until it lands or hits (max lifetime + margin).
   private readonly List <ulong> _dartFlightsUntilMs = new();
   // Sanity bound on a death's dart scatter (issue #194): more embedded darts than
@@ -364,7 +365,7 @@ public partial class WeaponSpawner : Node3D
   // First request wins: a pickup that's already claimed or expired is simply gone.
   // Every claim/award/deny decision is logged server-side (issues #110 & #111).
   [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
-  private void RequestPickup (string pickupName, int collectorId)
+  private async void RequestPickup (string pickupName, int collectorId)
   {
     if (!Multiplayer.IsServer()) return;
 
@@ -407,12 +408,22 @@ public partial class WeaponSpawner : Node3D
 
     // The server has both positions, so it enforces REACH (CodeRabbit on #430): a
     // peer naming a pickup across the map gets nothing - with the preload riding
-    // pickups, a remote claim would be a free loaded gun. Generous slack over the
-    // real walk-over radius covers replication lag on a sprinting collector.
+    // pickups, a remote claim would be a free loaded gun.
     if (collector.GlobalPosition.DistanceTo (pickup.GlobalPosition) > PickupClaimRangeMeters)
     {
-      ServerLog.Event (collectorId, $"weapon deny: pickup [{pickupName}] claimed from {collector.GlobalPosition.DistanceTo (pickup.GlobalPosition):0.0}m away");
-      return;
+      // A position JUMP outraces its own replication (the #430 playtest red, denied
+      // "from 48.6m away" while standing ON the banana): a respawn or the playtest's
+      // teleports can arrive at a pickup before the server's view catches up. One
+      // deferred re-read closes the race without loosening the rule: give
+      // replication a beat & ask again; deny only a claim that is STILL remote.
+      await ToSignal (GetTree().CreateTimer (ClaimRecheckSeconds), SceneTreeTimer.SignalName.Timeout);
+      if (!IsInstanceValid (pickup) || pickup.IsQueuedForDeletion() || !IsInstanceValid (collector)) return; // First request won meanwhile, or someone left.
+
+      if (collector.GlobalPosition.DistanceTo (pickup.GlobalPosition) > PickupClaimRangeMeters)
+      {
+        ServerLog.Event (collectorId, $"weapon deny: pickup [{pickupName}] claimed from {collector.GlobalPosition.DistanceTo (pickup.GlobalPosition):0.0}m away");
+        return;
+      }
     }
 
     // Holding it already means a normal collect cannot happen (#190's rule; the
