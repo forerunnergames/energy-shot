@@ -10,6 +10,14 @@ namespace com.forerunnergames.energyshot;
 public class ScopeTest
 {
   [TestCase]
+  public void CrouchingSteadiesTheScope()
+  {
+    AssertFloat (Scope.StanceFactor (crouched: true)).IsEqual (Scope.CrouchSteadyFactor); // Way less sway (Aaron, 2026-08-28, issue #422).
+    AssertFloat (Scope.StanceFactor (crouched: false)).IsEqual (1.0f);
+    AssertFloat (Scope.CrouchSteadyFactor).IsLess (0.5f); // "Way less" means way less.
+  }
+
+  [TestCase]
   public void ZoomLadderClampsAtBothEnds()
   {
     AssertInt (Scope.StepOut (0)).IsEqual (0);

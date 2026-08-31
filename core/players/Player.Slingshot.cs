@@ -295,7 +295,7 @@ public partial class Player
     _hitmarkerSound.Play();
     Spawner.SendDartStrikeRequest();
     if (victim.NetworkId == Multiplayer.GetUniqueId()) return;
-    victim.RpcId (victim.NetworkId, MethodName.ReceiveDartHit, DisplayName);
+    victim.RpcId (victim.NetworkId, MethodName.ReceiveDartHit, DisplayName, stone.TravelDirection); // The slung dart's own flight (CodeRabbit on #430).
   }
 
   // Distinct release thwack (issue #99): the punch thud replayed fast & positional

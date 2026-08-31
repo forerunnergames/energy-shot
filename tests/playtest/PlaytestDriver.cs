@@ -1881,7 +1881,10 @@ public partial class PlaytestDriver : Node
     await Task.Delay (400);
     await WaitUntil (() => Self.Holds (HeldWeapon.Blowgun), 30, "collected the playtest blowgun (#236)");
     Assert (Self.SelectedWeapon == SelectedWeapon.Blowgun, "the blowgun auto-equipped into slot 8 (#128/#236)");
-    Assert (Self.BlowgunDarts == 0, "the blowgun starts EMPTY (#236)");
+    Assert (Self.BlowgunDarts == 10, "a fresh spawner blowgun comes preloaded with 10 darts (#421)");
+    // The empty-gun cells (#236/#249) still need an empty gun: spend the preload
+    // skyward first - the litter despawns in the void & the census respawns it.
+    await SpitAllDarts ("spat the preload so the empty-gun cells still get tested (#421)");
     var dartsFiredBefore = _dartsSpawned;
     PressAction ("shoot");
     await Task.Delay (60);
@@ -1898,10 +1901,11 @@ public partial class PlaytestDriver : Node
     ReleaseAction ("scope");
     await WaitUntil (() => Self.IsScoped, 10, "right click opened the scope view (#236)");
     Assert (Self.ZoomStep == 0, "the scope opens at its first zoom stop (#236)");
-    PressAction ("cycle_weapon_next");
+    // Wheel UP (bound to cycle_weapon_previous) zooms IN as of #422 - it shipped backwards.
+    PressAction ("cycle_weapon_previous");
     await Task.Delay (60);
-    ReleaseAction ("cycle_weapon_next");
-    await WaitUntil (() => Self.ZoomStep == 1, 10, "the wheel stepped the scope in instead of cycling weapons (#236)");
+    ReleaseAction ("cycle_weapon_previous");
+    await WaitUntil (() => Self.ZoomStep == 1, 10, "wheel UP stepped the scope in instead of cycling weapons (#236/#422)");
     Assert (Self.SelectedWeapon == SelectedWeapon.Blowgun, "weapon cycling stayed suspended while scoped (#236)");
     await WaitUntil (() => Self.ReticleDrift != Vector2.Zero, 5, "the reticle drifts while scoped - aiming is never free (#236)"); // Polled: the wander can cross zero on any one frame.
     PressAction ("scope");

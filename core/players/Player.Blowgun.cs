@@ -15,7 +15,7 @@ namespace com.forerunnergames.energyshot.players;
 // of darts it swings as a club (Player.Blunt, issue #249). No recoil. The shooter hears the shot locally; bystanders only within a few feet.
 public partial class Player
 {
-  [Export] public float BlowgunDartSpeed = 168.0f; // Doubled AGAIN (Aaron, 2026-08-23; the v0.8.84 doubling was still too slow): a dart is nearly hitscan now. // Doubled (Aaron, 2026-08-22: still WAY too slow at 42) - fast but visible, per the sniper spec (issues #236/#259).
+  [Export] public float BlowgunDartSpeed = 180.0f; // As fast as a laser bolt (Aaron, 2026-08-28, issue #421): long-range sniping kept losing the race at 168. Matches LaserBolt.Speed.
   [Export] public float BlowgunCooldownSeconds = 1.5f;
   [Export]
   public int BlowgunDarts
@@ -54,7 +54,7 @@ public partial class Player
   public bool IsScopeSettled => _isScoped && Scope.IsSettled (_sinceBeat);
   // The reticle's offset from screen center as a fraction of the scope radius (HUD
   // draws it there; the dart flies toward it).
-  public Vector2 ReticleDrift => _isScoped ? Scope.Wander (_scopeTime) * Scope.DriftFraction (_zoomStep) * Scope.BeatEnvelope (_sinceBeat) : Vector2.Zero;
+  public Vector2 ReticleDrift => _isScoped ? Scope.Wander (_scopeTime) * Scope.DriftFraction (_zoomStep) * Scope.BeatEnvelope (_sinceBeat) * Scope.StanceFactor (Crouching) : Vector2.Zero;
 
   private void CreateBlowgunHeld()
   {
@@ -100,8 +100,10 @@ public partial class Player
     _scopeTime += dt;
     _sinceBeat += dt;
     if (_sinceBeat >= Scope.BeatPeriodSeconds) { _sinceBeat = 0.0f; _heartbeatSound.Play(); }
-    if (Input.IsActionJustPressed ("cycle_weapon_next")) SetZoomStep (Scope.StepIn (_zoomStep));
-    if (Input.IsActionJustPressed ("cycle_weapon_previous")) SetZoomStep (Scope.StepOut (_zoomStep));
+    // Wheel UP zooms IN (issue #422, player report: it shipped backwards): "previous"
+    // is bound to wheel up, "next" to wheel down.
+    if (Input.IsActionJustPressed ("cycle_weapon_previous")) SetZoomStep (Scope.StepIn (_zoomStep));
+    if (Input.IsActionJustPressed ("cycle_weapon_next")) SetZoomStep (Scope.StepOut (_zoomStep));
   }
 
   private void SetScoped (bool scoped)
@@ -174,11 +176,11 @@ public partial class Player
   }
 
   // Victim-authoritative like every damage path: the shooter only reports the hit.
-  private void OnDartHitPlayer (Player victim)
+  private void OnDartHitPlayer (Player victim, Vector3 travelDirection)
   {
     PlayHitmarker (false);
     if (victim.NetworkId == Multiplayer.GetUniqueId()) return; // Can't dart yourself.
-    victim.RpcId (victim.NetworkId, MethodName.ReceiveDartHit, DisplayName);
+    victim.RpcId (victim.NetworkId, MethodName.ReceiveDartHit, DisplayName, travelDirection);
   }
 
   // Losing the blowgun (drop, theft, death) returns its darts to the level's census:
