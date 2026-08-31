@@ -1,4 +1,4 @@
-[gd_scene load_steps=12 format=3 uid="uid://bwu2mo4euj40u"]
+[gd_scene load_steps=11 format=3 uid="uid://bwu2mo4euj40u"]
 
 [ext_resource type="Script" path="res://ui/menus/main/MainMenu.cs" id="1_rggns"]
 [ext_resource type="Texture2D" path="res://assets/ui/main-menu-bg.jpg" id="2_bgart"]
@@ -18,13 +18,6 @@ base_font = ExtResource("4_orbtr")
 variation_opentype = {
 2003265652: 500.0
 }
-
-[sub_resource type="FontVariation" id="FontVariation_orb500crumb"]
-base_font = ExtResource("4_orbtr")
-variation_opentype = {
-2003265652: 500.0
-}
-spacing_glyph = -7
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_wedge"]
 shader = ExtResource("3_wedge")
@@ -68,9 +61,10 @@ offset_left = 126.0
 offset_top = 122.0
 offset_right = 1188.0
 offset_bottom = 294.0
+scale = Vector2(0.77, 1)
 mouse_filter = 2
 theme_override_colors/default_color = Color(1, 1, 1, 1)
-theme_override_fonts/normal_font = SubResource("FontVariation_orb500crumb")
+theme_override_fonts/normal_font = SubResource("FontVariation_orb500")
 theme_override_font_sizes/normal_font_size = 44
 bbcode_enabled = true
 text = "[u]MAIN MENU[/u]"
