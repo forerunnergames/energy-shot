@@ -386,13 +386,22 @@ public partial class WeaponSpawner : Node3D
 
     // A body mid-death-sequence is scenery (issue #152), so it can't claim anything
     // (CodeRabbit on #199): the collector's own peer already refuses, but the server
-    // is what actually awards, so it enforces the rule too.
+    // is what actually awards, so it enforces the rule too. Fallen is a REPLICATED
+    // self-healing flag, so right after a respawn the server's view can lag reality
+    // (the second post-#430 main red: a fresh respawn denied "while lying dead") -
+    // it gets the same one-beat grace as reach before the deny sticks.
     var collector = Players().FirstOrDefault (player => player.NetworkId == collectorId);
 
     if (collector is { Fallen: true })
     {
-      ServerLog.Event (collectorId, $"weapon deny: pickup [{pickupName}] claimed while lying dead");
-      return;
+      await ToSignal (GetTree().CreateTimer (ClaimRecheckSeconds), SceneTreeTimer.SignalName.Timeout);
+      if (!IsInstanceValid (collector)) return;
+
+      if (collector.Fallen)
+      {
+        ServerLog.Event (collectorId, $"weapon deny: pickup [{pickupName}] claimed while lying dead");
+        return;
+      }
     }
 
     var pickup = GetParent().GetNodeOrNull <WeaponPickup> (pickupName);
