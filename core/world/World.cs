@@ -215,6 +215,7 @@ public partial class World : Node3D
     // Deaths reach the server through these notifications on every path (issue #111).
     _networkManager.PlayerRespawnedShot += (playerName, shotByPlayerName) => { if (IsActiveServer()) ServerLog.Event (FindPlayerId (playerName), $"death: {playerName} zapped out by {shotByPlayerName}"); };
     _networkManager.PlayerRespawnedShot += MaybeAwardHillClearBonus; // The hill-clear bounty (issue #420), server-decided.
+    _networkManager.IsVictimOwnedBy = (name, peerId) => FindPlayer (name)?.NetworkId == peerId; // Death reports must come from the victim's own peer (CodeRabbit on #431).
     _networkManager.PlayerRespawnedFell += playerName => { if (IsActiveServer()) ServerLog.Event (FindPlayerId (playerName), $"death: {playerName} fell off the world"); };
     // Crown rules (issue #178): every peer sees these death broadcasts, so the
     // tied-incumbent handover stays consistent everywhere without new networking.
