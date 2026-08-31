@@ -114,6 +114,25 @@ theme_override_styles/focus = SubResource("StyleBoxEmpty_flat")
 text = "JOIN"
 alignment = 0
 
+[node name="SettingsButton" type="Button" parent="."]
+layout_mode = 0
+offset_left = 134.0
+offset_top = 1192.0
+offset_right = 464.0
+offset_bottom = 1364.0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_hover_color = Color(0.58, 0.988, 0.996, 1)
+theme_override_colors/font_focus_color = Color(0.58, 0.988, 0.996, 1)
+theme_override_colors/font_pressed_color = Color(0.58, 0.988, 0.996, 1)
+theme_override_fonts/font = SubResource("FontVariation_orb700")
+theme_override_font_sizes/font_size = 42
+theme_override_styles/normal = SubResource("StyleBoxEmpty_flat")
+theme_override_styles/hover = SubResource("StyleBoxEmpty_flat")
+theme_override_styles/pressed = SubResource("StyleBoxEmpty_flat")
+theme_override_styles/focus = SubResource("StyleBoxEmpty_flat")
+text = "SETTINGS"
+alignment = 0
+
 [node name="Quit" type="Button" parent="."]
 layout_mode = 0
 offset_left = 132.0
