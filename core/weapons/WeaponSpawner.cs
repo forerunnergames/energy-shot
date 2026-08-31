@@ -559,6 +559,7 @@ public partial class WeaponSpawner : Node3D
     {
       await ToSignal (GetTree().CreateTimer (ClaimRecheckSeconds), SceneTreeTimer.SignalName.Timeout);
       if (!IsInstanceValid (pickup) || pickup.IsQueuedForDeletion() || !IsInstanceValid (loader) || _ammoEscrow.Any (ammo => ammo.LoaderId == loaderId)) return;
+      if ((loader.HeldOrRecentlyHeld & HeldWeapon.Slingshot) == 0 || loader.SelectedWeapon != SelectedWeapon.Slingshot) return; // The slingshot went away during the grace (CodeRabbit on #430).
 
       if (loader.GlobalPosition.DistanceTo (pickup.GlobalPosition) > PickupClaimRangeMeters)
       {
