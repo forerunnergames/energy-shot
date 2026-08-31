@@ -1,10 +1,11 @@
-[gd_scene load_steps=10 format=3 uid="uid://bwu2mo4euj40u"]
+[gd_scene load_steps=12 format=3 uid="uid://bwu2mo4euj40u"]
 
 [ext_resource type="Script" path="res://ui/menus/main/MainMenu.cs" id="1_rggns"]
 [ext_resource type="Texture2D" path="res://assets/ui/main-menu-bg.jpg" id="2_bgart"]
 [ext_resource type="Shader" path="res://ui/menus/main/MainMenuWedge.gdshader" id="3_wedge"]
 [ext_resource type="FontFile" path="res://assets/fonts/orbitron/Orbitron-wght.ttf" id="4_orbtr"]
 [ext_resource type="Script" path="res://ui/menus/main/TrapezoidButton.cs" id="5_trpzd"]
+[ext_resource type="Texture2D" path="res://assets/ui/main-menu-bg-blurred.jpg" id="6_bgblr"]
 
 [sub_resource type="FontVariation" id="FontVariation_orb700"]
 base_font = ExtResource("4_orbtr")
@@ -18,9 +19,16 @@ variation_opentype = {
 2003265652: 500.0
 }
 
+[sub_resource type="FontVariation" id="FontVariation_orb500crumb"]
+base_font = ExtResource("4_orbtr")
+variation_opentype = {
+2003265652: 500.0
+}
+spacing_glyph = -7
+
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_wedge"]
 shader = ExtResource("3_wedge")
-shader_parameter/art = ExtResource("2_bgart")
+shader_parameter/art_blurred = ExtResource("6_bgblr")
 
 [sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_flat"]
 
@@ -62,7 +70,7 @@ offset_right = 1188.0
 offset_bottom = 294.0
 mouse_filter = 2
 theme_override_colors/default_color = Color(1, 1, 1, 1)
-theme_override_fonts/normal_font = SubResource("FontVariation_orb500")
+theme_override_fonts/normal_font = SubResource("FontVariation_orb500crumb")
 theme_override_font_sizes/normal_font_size = 44
 bbcode_enabled = true
 text = "[u]MAIN MENU[/u]"
@@ -74,9 +82,9 @@ offset_left = 134.0
 offset_top = 926.0
 offset_right = 464.0
 offset_bottom = 1098.0
-focus_mode = 0
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_colors/font_hover_color = Color(0.58, 0.988, 0.996, 1)
+theme_override_colors/font_focus_color = Color(0.58, 0.988, 0.996, 1)
 theme_override_colors/font_pressed_color = Color(0.58, 0.988, 0.996, 1)
 theme_override_fonts/font = SubResource("FontVariation_orb700")
 theme_override_font_sizes/font_size = 42
@@ -93,9 +101,9 @@ offset_left = 134.0
 offset_top = 1060.0
 offset_right = 464.0
 offset_bottom = 1232.0
-focus_mode = 0
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_colors/font_hover_color = Color(0.58, 0.988, 0.996, 1)
+theme_override_colors/font_focus_color = Color(0.58, 0.988, 0.996, 1)
 theme_override_colors/font_pressed_color = Color(0.58, 0.988, 0.996, 1)
 theme_override_fonts/font = SubResource("FontVariation_orb700")
 theme_override_font_sizes/font_size = 42
@@ -112,9 +120,9 @@ offset_left = 132.0
 offset_top = 1888.0
 offset_right = 470.0
 offset_bottom = 2036.0
-focus_mode = 0
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_colors/font_hover_color = Color(0.58, 0.988, 0.996, 1)
+theme_override_colors/font_focus_color = Color(0.58, 0.988, 0.996, 1)
 theme_override_colors/font_pressed_color = Color(0.58, 0.988, 0.996, 1)
 theme_override_fonts/font = SubResource("FontVariation_orb700")
 theme_override_font_sizes/font_size = 42

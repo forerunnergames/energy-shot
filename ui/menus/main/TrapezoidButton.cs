@@ -20,7 +20,12 @@ public partial class TrapezoidButton : Button
   {
     MouseEntered += () => { _hovered = true; QueueRedraw(); };
     MouseExited += () => { _hovered = false; QueueRedraw(); };
+    FocusEntered += QueueRedraw; // Keyboard & controller nav highlight (CodeRabbit on #437).
+    FocusExited += QueueRedraw;
   }
 
-  public override void _Draw() => DrawPolyline (OutlinePoints, _hovered ? StrokeColor.Lightened (0.25f) : StrokeColor, StrokeWidth, antialiased: true);
+  // Antialiased OFF (mac-ops's round-2 diff): the feathered polyline's hard core
+  // measured 1px where the design wants 4 - the viewport downsample supplies all the
+  // smoothing a hard 8px line needs.
+  public override void _Draw() => DrawPolyline (OutlinePoints, _hovered || HasFocus() ? StrokeColor.Lightened (0.25f) : StrokeColor, StrokeWidth, antialiased: false);
 }

@@ -38,6 +38,7 @@ public partial class MainMenu : Control
     _world.ServerShutDown += OnServerShutDown;
     _world.LeftGame += OnLeftGame;
     _bottomMainMenuText.Text = string.Empty;
+    _hostButton.GrabFocus(); // Keyboard & controller nav from boot (CodeRabbit on #437).
   }
 
   private void OnNewGameStarted (string selfPlayerName, int selfMaxHealth)
@@ -52,6 +53,7 @@ public partial class MainMenu : Control
     _bottomMainMenuText.Text = string.Empty;
     Input.MouseMode = Input.MouseModeEnum.Visible;
     Show();
+    _hostButton.GrabFocus(); // Reopened menus stay navigable (CodeRabbit on #437).
   }
 
   private void OnServerShutDown()
@@ -60,6 +62,7 @@ public partial class MainMenu : Control
     _bottomMainMenuText.Text = "The server was shut down.";
     Input.MouseMode = Input.MouseModeEnum.Visible;
     Show();
+    _hostButton.GrabFocus(); // Reopened menus stay navigable (CodeRabbit on #437).
   }
 
   private void OnKickedFromServer (string reason)
@@ -68,5 +71,6 @@ public partial class MainMenu : Control
     _bottomMainMenuText.Text = $"You were kicked from the server, reason: {reason}";
     Input.MouseMode = Input.MouseModeEnum.Visible;
     Show();
+    _hostButton.GrabFocus(); // Reopened menus stay navigable (CodeRabbit on #437).
   }
 }

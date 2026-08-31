@@ -1,25 +1,28 @@
 shader_type canvas_item;
 
 // Jonathan's diagonal wedge (issue #436): the LEFT of a leaning boundary shows the
-// hero art blurred, hue-rotated 70deg & dimmed; the RIGHT is transparent so the
-// sharp background underneath shows; the boundary itself is the cyan edge line.
-// One shader instead of Paper's nested rotated frames - the extraction notes call
-// this out as the cheaper, truer build. All knobs are uniforms so the designer can
-// art-direct from a live build without a shader edit.
+// hero art blurred, hue-rotated 70deg, dimmed & tone-matched; the RIGHT is
+// transparent so the sharp background underneath shows; the boundary itself is the
+// cyan edge line. The blur is BAKED into a small pre-blurred copy of the art
+// (CodeRabbit on #437: 81 in-shader taps were ~300M samples/frame at 4K) - one
+// sample per fragment now, & smoother than taps ever were. Hue, dim & tint stay
+// live uniforms so the designer can art-direct a running build.
 
-uniform sampler2D art;
+uniform sampler2D art_blurred;
 // The art's PLACEMENT rect in design px - the design renders the backdrop at 122.5%
-// of the viewport, center (2208, 1180), not a plain cover fit (mac-ops's pixel diff
-// on #436): the wedge must blur the SAME pixels the backdrop shows beneath it.
+// of the viewport, center (2208, 1180), not a plain cover fit (mac-ops's pixel diff):
+// the wedge must show the SAME pixels the backdrop shows beneath it.
 uniform vec2 art_rect_position = vec2(-143.36, -81.94);
 uniform vec2 art_rect_size = vec2(4704.0, 2522.0);
-uniform float blur_px = 26.0; // 13px in the 1080 design, x2 for the 4K viewport.
 uniform float hue_degrees = 70.0;
 uniform float boundary_top_x : hint_range(0.0, 1.0) = 0.565; // Measured off the reference render.
 uniform float boundary_bottom_x : hint_range(0.0, 1.0) = 0.327;
 uniform vec4 edge_color : source_color = vec4(0.58, 0.988, 0.996, 1.0); // display-p3 (0.580, 0.987, 0.994) ~ #94FCFE sRGB.
 uniform float edge_width_px = 4.0;
-uniform float wedge_dim : hint_range(0.0, 1.0) = 0.8; // A touch darker than v1 - the design's left reads soft teal, not hot (mac-ops diff).
+uniform float wedge_dim : hint_range(0.0, 1.0) = 0.8;
+// Channel gains from mac-ops's round-2 patch means (design vs actual): the design's
+// wedge reads greener & a touch brighter than the raw hue-rotate lands.
+uniform vec3 wedge_tint = vec3(0.88, 1.27, 1.22);
 
 // CSS feColorMatrix hueRotate, per channel (matches the browser render Jonathan approved).
 vec3 hue_rotate(vec3 color, float degrees) {
@@ -44,19 +47,8 @@ void fragment() {
 	} else if (abs(d) <= edge_width_px) {
 		COLOR = edge_color;
 	} else {
-		// 9x9 gaussian, tight spacing: v1's 5x5 dilated taps showed visible grain in
-		// the streaks (mac-ops diff). A menu redraws rarely, so 81 taps are cheap.
 		vec2 uv = (p - art_rect_position) / art_rect_size;
-		vec3 sum = vec3(0.0);
-		float weight_sum = 0.0;
-		for (int i = -4; i <= 4; i++) {
-			for (int j = -4; j <= 4; j++) {
-				vec2 offset = vec2(float(i), float(j)) * (blur_px / 4.0) / art_rect_size;
-				float w = exp(-float(i * i + j * j) * 0.09);
-				sum += texture(art, uv + offset).rgb * w;
-				weight_sum += w;
-			}
-		}
-		COLOR = vec4(hue_rotate(sum / weight_sum, hue_degrees) * wedge_dim, 1.0);
+		vec3 c = hue_rotate(texture(art_blurred, uv).rgb, hue_degrees);
+		COLOR = vec4(c * wedge_dim * wedge_tint, 1.0);
 	}
 }
