@@ -12,7 +12,7 @@ namespace com.forerunnergames.energyshot.weapons;
 // passes close to. A miss that hits geometry LANDS as an armed ground dart (#248).
 public partial class BlowgunDart : Node3D
 {
-  [Signal] public delegate void HitPlayerEventHandler (Player player);
+  [Signal] public delegate void HitPlayerEventHandler (Player player, Vector3 travelDirection);
   [Signal] public delegate void LandedEventHandler (Vector3 position);
   public const float ShaftLength = 0.7f;
   private const float MaxLifetimeSeconds = 6.0f;
@@ -87,7 +87,7 @@ public partial class BlowgunDart : Node3D
   {
     var collider = hit["collider"].AsGodotObject();
     var victim = collider is HeadHitbox head ? head.Player : collider as Player;
-    if (victim != null && _isLive) EmitSignal (SignalName.HitPlayer, victim);
+    if (victim != null && _isLive) EmitSignal (SignalName.HitPlayer, victim, _velocity.Normalized()); // The stick angle derives from the TRUE flight, not the shooter's position later (CodeRabbit on #430).
     if (victim == null && _isLive) EmitSignal (SignalName.Landed, (Vector3)hit["position"] + (Vector3)hit["normal"] * 0.2f);
     QueueFree();
   }

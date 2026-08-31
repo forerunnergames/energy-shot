@@ -10,18 +10,19 @@ namespace com.forerunnergames.energyshot;
 public class DartClusterTest
 {
   [TestCase]
-  public void DartsSpawnInThrees()
+  public void DartsSpawnInTens()
   {
     var spawner = AutoFree (new WeaponSpawner())!;
-    AssertInt (spawner.DartsPerCluster).IsEqual (3);
+    AssertInt (spawner.DartsPerCluster).IsEqual (10); // Stashes of 10 (Aaron, 2026-08-28, issue #421).
+    AssertInt (spawner.DartsPerGunPreload).IsEqual (10); // A fresh blowgun ships loaded (issue #421).
   }
 
   [TestCase]
   public void TheLevelHoldsWholeClusters()
   {
     var spawner = AutoFree (new WeaponSpawner())!;
-    AssertInt (spawner.MaxDarts).IsEqual (30); // The exact contract (CodeRabbit on #395): 30 darts...
-    AssertInt (spawner.MaxDarts / spawner.DartsPerCluster).IsEqual (10); // ...in exactly 10 stashes.
+    AssertInt (spawner.MaxDarts).IsEqual (60); // The exact contract (issue #421): room for a loaded gun...
+    AssertInt (spawner.MaxDarts / spawner.DartsPerCluster).IsEqual (6); // ...& whole stashes of 10.
     AssertInt (spawner.MaxDarts % spawner.DartsPerCluster).IsEqual (0);
   }
 }

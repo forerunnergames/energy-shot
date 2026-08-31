@@ -229,7 +229,7 @@ public partial class Player
 
   // Called back (via the WeaponSpawner's ConfirmPickup RPC) after the server despawns
   // the claimed pickup for everyone.
-  public void GrantWeapon (HeldWeapon type, string previousOwner = "")
+  public void GrantWeapon (HeldWeapon type, string previousOwner = "", int dartPayload = 0)
   {
     // Bread lives in slot 7 now (issue #209), but it's the one pickup that never
     // auto-equips (issue #128): swapping a gun for a snack mid-fight is the last
@@ -243,6 +243,10 @@ public partial class Player
     }
 
     HeldWeapon |= type;
+    // A fresh spawner blowgun arrives loaded (issue #421): the darts belonged to the
+    // PICKUP, counted by the census all along, so collecting conjures nothing - & a
+    // dropped gun carries none, so the drop/re-pick cycle can't farm ammo.
+    if (type == HeldWeapon.Blowgun && dartPayload > 0) BlowgunDarts += dartPayload;
     // Every pickup auto-equips (issue #128), boomerang (#98), slingshot (#99), & paper airplane (#102) included.
     SelectedWeapon = type switch { HeldWeapon.Banana => SelectedWeapon.Banana, HeldWeapon.Boomerang => SelectedWeapon.Boomerang, HeldWeapon.Slingshot => SelectedWeapon.Slingshot, HeldWeapon.PaperAirplane => SelectedWeapon.PaperAirplane, HeldWeapon.Blowgun => SelectedWeapon.Blowgun, _ => SelectedWeapon.Laser };
     RememberTheft (type, previousOwner);

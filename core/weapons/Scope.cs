@@ -19,6 +19,11 @@ public static class Scope
   public const float SettleSeconds = 0.9f;
   public const float SettledFraction = 0.2f;
 
+  // Crouching braces the gun (Aaron, 2026-08-28, issue #422): the wander shrinks to a
+  // third. There is no prone stance in the game; if one ever lands it joins here.
+  public const float CrouchSteadyFactor = 0.35f;
+  public static float StanceFactor (bool crouched) => crouched ? CrouchSteadyFactor : 1.0f;
+
   public static int StepIn (int step) => Mathf.Min (step + 1, ZoomFovs.Length - 1);
   public static int StepOut (int step) => Mathf.Max (step - 1, 0);
 
