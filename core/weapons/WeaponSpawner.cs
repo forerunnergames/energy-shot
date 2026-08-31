@@ -35,8 +35,14 @@ public partial class WeaponSpawner : Node3D
   [Export] public int MaxDarts = 60; // Room for preloaded guns AND real stashes (issue #421).
   [Export] public int DartsPerCluster = 10; // Stashes of 10, no more 2s & 3s (Aaron, 2026-08-28, issue #421).
   [Export] public int DartsPerGunPreload = 10; // A fresh spawner blowgun comes loaded (issue #421).
-  [Export] public float PickupClaimRangeMeters = 8.0f; // Server-enforced reach on claims (#430): walk-over is ~2m; the slack absorbs steady-state replication lag.
-  private const float ClaimRecheckSeconds = 0.4f; // A teleport's replication gap: re-read once before denying reach (#430).
+  // Server-enforced reach on claims (#430): walk-over is ~2m. 8m was denied at a
+  // MEASURED 8.2m on CI (main went red post-merge) - a loaded VM's replication
+  // offset eats the whole slack. 12m still kills the cross-map vacuum (the attack
+  // was 48m) while clearing honest walk-overs everywhere.
+  [Export] public float PickupClaimRangeMeters = 12.0f;
+  // A teleport's replication gap: re-read once before denying reach (#430). 0.4s
+  // left the CI view 8.2m behind a stopped collector; a slower beat converges.
+  private const float ClaimRecheckSeconds = 0.8f;
   private const float BoomerangScoopRangeMeters = 40.0f; // OutboundMeters (25) + curve drift + thrower movement during flight (#430).
   private const float DartFlightGraceSeconds = 7.0f; // A fired dart counts until it lands or hits (max lifetime + margin).
   private readonly List <ulong> _dartFlightsUntilMs = new();
