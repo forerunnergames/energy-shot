@@ -37,6 +37,7 @@ public partial class WeaponSpawner : Node3D
   [Export] public int DartsPerGunPreload = 10; // A fresh spawner blowgun comes loaded (issue #421).
   [Export] public float PickupClaimRangeMeters = 8.0f; // Server-enforced reach on claims (#430): walk-over is ~2m; the slack absorbs steady-state replication lag.
   private const float ClaimRecheckSeconds = 0.4f; // A teleport's replication gap: re-read once before denying reach (#430).
+  private const float BoomerangScoopRangeMeters = 40.0f; // OutboundMeters (25) + curve drift + thrower movement during flight (#430).
   private const float DartFlightGraceSeconds = 7.0f; // A fired dart counts until it lands or hits (max lifetime + margin).
   private readonly List <ulong> _dartFlightsUntilMs = new();
   // Sanity bound on a death's dart scatter (issue #194): more embedded darts than
@@ -417,7 +418,7 @@ public partial class WeaponSpawner : Node3D
       // deferred re-read closes the race without loosening the rule: give
       // replication a beat & ask again; deny only a claim that is STILL remote.
       await ToSignal (GetTree().CreateTimer (ClaimRecheckSeconds), SceneTreeTimer.SignalName.Timeout);
-      if (!IsInstanceValid (pickup) || pickup.IsQueuedForDeletion() || !IsInstanceValid (collector)) return; // First request won meanwhile, or someone left.
+      if (!IsInstanceValid (pickup) || pickup.IsQueuedForDeletion() || !IsInstanceValid (collector) || collector.Fallen) return; // First request won meanwhile, someone left, or the collector fell during the grace (CodeRabbit on #430).
 
       if (collector.GlobalPosition.DistanceTo (pickup.GlobalPosition) > PickupClaimRangeMeters)
       {
@@ -523,7 +524,7 @@ public partial class WeaponSpawner : Node3D
   // HeldWeapon must show a slingshot & their replicated SelectedWeapon must have it
   // out - a client can't claim to be equipped.
   [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
-  private void RequestAmmoLoad (string pickupName)
+  private async void RequestAmmoLoad (string pickupName)
   {
     if (!Multiplayer.IsServer()) return;
     var loaderId = SenderOrSelf();
@@ -547,6 +548,23 @@ public partial class WeaponSpawner : Node3D
     {
       ServerLog.Event (loaderId, $"ammo load deny: pickup [{pickupName}] is gone");
       return;
+    }
+
+    // A pouch-load is a walk-over like any claim, so it enforces the same REACH
+    // (CodeRabbit on #430): without it a peer could vacuum a fresh loaded blowgun
+    // from anywhere into escrow. Same one-beat grace as RequestPickup for the
+    // teleport-outraces-replication case, with the escrow re-checked after the wait
+    // so first-request-wins survives the await.
+    if (loader.GlobalPosition.DistanceTo (pickup.GlobalPosition) > PickupClaimRangeMeters)
+    {
+      await ToSignal (GetTree().CreateTimer (ClaimRecheckSeconds), SceneTreeTimer.SignalName.Timeout);
+      if (!IsInstanceValid (pickup) || pickup.IsQueuedForDeletion() || !IsInstanceValid (loader) || _ammoEscrow.Any (ammo => ammo.LoaderId == loaderId)) return;
+
+      if (loader.GlobalPosition.DistanceTo (pickup.GlobalPosition) > PickupClaimRangeMeters)
+      {
+        ServerLog.Event (loaderId, $"ammo load deny: pickup [{pickupName}] loaded from {loader.GlobalPosition.DistanceTo (pickup.GlobalPosition):0.0}m away");
+        return;
+      }
     }
 
     _ammoEscrow.Add (new LoadedAmmo (loaderId, pickup.Weapon, pickup.PreviousOwner, pickup.DartPayload)); // A loaded gun's darts stay counted (CodeRabbit on #430).
@@ -960,6 +978,16 @@ public partial class WeaponSpawner : Node3D
     if (pickup.Weapon == HeldWeapon.PaperAirplane && pickup.Armed)
     {
       ServerLog.Event (throwerId, "boomerang scoop deny: the armed paper airplane is not cargo");
+      return;
+    }
+
+    // The boomerang is client-simulated, but its physics bound the claim (CodeRabbit
+    // on #430): a real flight stays within OutboundMeters (25) of the thrower plus
+    // curve drift & the thrower's own movement, so a pickup beyond the bound cannot
+    // have met a boomerang - that claim is a cross-map vacuum, not a scoop.
+    if (thrower.GlobalPosition.DistanceTo (pickup.GlobalPosition) > BoomerangScoopRangeMeters)
+    {
+      ServerLog.Event (throwerId, $"boomerang scoop deny: pickup [{pickupName}] scooped from {thrower.GlobalPosition.DistanceTo (pickup.GlobalPosition):0.0}m away");
       return;
     }
 
