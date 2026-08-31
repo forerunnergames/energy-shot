@@ -131,6 +131,9 @@ public partial class World : Node3D
     _selfPlayer = null;
     _hill?.QueueFree();
     _hill = null;
+    // The bounty ledger is session state (CodeRabbit on #431): carried over, a new
+    // session reusing a peer ID within the window could be denied a fair bounty.
+    _recentZapOuts.Clear();
     // The peer close frees no local nodes (finding #7): drop the session's pickups
     // too, or the next hosted game miscounts caps & ghosts float on the next server.
     foreach (var pickup in GetChildren().OfType <WeaponPickup>()) pickup.QueueFree();
