@@ -12,17 +12,17 @@ public class MessageGeneratorTest
   private static DeathContext Laser (float energy = 0.5f) => new() { Kind = DamageKind.Laser, Energy = energy };
 
   [TestCase]
-  public void ExactlyOneHundredFiftyUniqueMessageTemplates()
+  public void ExactlyOneHundredFiftyFiveUniqueMessageTemplates()
   {
     // 100 from the content wave (issue #84) + 3 through-wall zaps (issue #94)
     // + 4 boomerang zap-outs (issue #98) + 4 slingshot zap-outs (issue #99)
     // + 6 paper airplane zap-outs & 3 airplane catches (issues #102 & #191)
     // + 4 slung-item zap-outs (issue #190) + 4 landmines (issue #191)
     // + 6 zapped-mid-bread-ritual (issue #192) + 4 poison zap-outs (issue #194)
-    // + 12 end-of-round superlatives (issue #153).
+    // + 12 end-of-round superlatives (issue #153) + 5 hill clears (issue #420).
     var templates = MessagePools.All.SelectMany (pool => pool).ToList();
-    AssertInt (templates.Count).IsEqual (150);
-    AssertInt (templates.Distinct().Count()).IsEqual (150);
+    AssertInt (templates.Count).IsEqual (155);
+    AssertInt (templates.Distinct().Count()).IsEqual (155);
   }
 
   [TestCase]
@@ -35,13 +35,33 @@ public class MessageGeneratorTest
   }
 
   [TestCase]
+  public void LowercaseNamesKeepTheirCasing()
+  {
+    // Capitalization applies to the TEMPLATE, never the substituted name (CodeRabbit
+    // on #420): "escendrix" must not become "Escendrix" in an announcement.
+    var message = MessageGenerator.OnHillClear ("escendrix");
+    AssertBool (message.Contains ("escendrix")).IsTrue();
+    AssertBool (message.Contains ("Escendrix")).IsFalse();
+  }
+
+  [TestCase]
+  public void BracketedNamesLandAsTextNotMarkup()
+  {
+    // The scroller's history renders BBCode (CodeRabbit on #420): a name like
+    // "[b]Zapper[/b]" must not style the announcement.
+    var message = MessageGenerator.OnHillClear ("[b]Sneaky[/b]");
+    AssertBool (message.Contains ("[b]")).IsFalse();
+    AssertBool (message.Contains ("Sneaky")).IsTrue();
+  }
+
+  [TestCase]
   public void PoisonPoolSelectedByDamageKind() => AssertObject (MessageGenerator.SelectZappedPool (new DeathContext { Kind = DamageKind.Poison })).IsSame (MessagePools.Poison);
 
   [TestCase]
   public void EveryPoolIsInTheRegistry()
   {
-    // 35 scenario pools registered, none empty.
-    AssertInt (MessagePools.All.Count).IsEqual (35);
+    // 36 scenario pools registered, none empty.
+    AssertInt (MessagePools.All.Count).IsEqual (36);
     foreach (var pool in MessagePools.All) AssertBool (pool.Count > 0).IsTrue();
   }
 

@@ -35,6 +35,7 @@ public partial class World : Node3D
   [Signal] public delegate void AdminMessageReceivedEventHandler (string message);
   [Signal] public delegate void SelfPlayerPoisonTickedEventHandler(); // Issue #261.
   [Signal] public delegate void RoundClockUpdatedEventHandler (int secondsLeft, int zapLimit, int mode, string hillHolder);
+  [Signal] public delegate void HillClearedEventHandler (string message); // The bounty announcement (issue #420).
   [Signal] public delegate void RoundEndedEventHandler (string scoreboardBbcode);
   [Signal] public delegate void RoundStartedEventHandler();
   [Signal] public delegate void ChatReceivedEventHandler (int senderId, string senderName, string text);
@@ -130,6 +131,9 @@ public partial class World : Node3D
     _selfPlayer = null;
     _hill?.QueueFree();
     _hill = null;
+    // The bounty ledger is session state (CodeRabbit on #431): carried over, a new
+    // session reusing a peer ID within the window could be denied a fair bounty.
+    _recentZapOuts.Clear();
     // The peer close frees no local nodes (finding #7): drop the session's pickups
     // too, or the next hosted game miscounts caps & ghosts float on the next server.
     foreach (var pickup in GetChildren().OfType <WeaponPickup>()) pickup.QueueFree();
@@ -213,6 +217,8 @@ public partial class World : Node3D
     _networkManager.PlayerRespawnedFell += playerName => OnPlayerRespawned (playerName, SignalName.PlayerRespawnedFell);
     // Deaths reach the server through these notifications on every path (issue #111).
     _networkManager.PlayerRespawnedShot += (playerName, shotByPlayerName) => { if (IsActiveServer()) ServerLog.Event (FindPlayerId (playerName), $"death: {playerName} zapped out by {shotByPlayerName}"); };
+    _networkManager.PlayerRespawnedShot += MaybeAwardHillClearBonus; // The hill-clear bounty (issue #420), server-decided.
+    _networkManager.IsVictimOwnedBy = (name, peerId) => FindPlayer (name)?.NetworkId == peerId; // Death reports must come from the victim's own peer (CodeRabbit on #431).
     _networkManager.PlayerRespawnedFell += playerName => { if (IsActiveServer()) ServerLog.Event (FindPlayerId (playerName), $"death: {playerName} fell off the world"); };
     // Crown rules (issue #178): every peer sees these death broadcasts, so the
     // tied-incumbent handover stays consistent everywhere without new networking.
@@ -705,6 +711,7 @@ public partial class World : Node3D
 
   private void RemovePlayer (long peerId)
   {
+    _recentZapOuts.Remove (peerId); // Their ledger entry leaves with them (CodeRabbit on #431).
     var player = GetNodeOrNull <Player> ($"{peerId}");
     if (player == null) return;
     _networkManager.NotifyPlayerLeftGame (player.DisplayName);
@@ -786,6 +793,56 @@ public partial class World : Node3D
     if (king.NetworkId == Multiplayer.GetUniqueId()) king.NotifyHillPoint();
     else king.RpcId (king.NetworkId, Player.MethodName.NotifyHillPoint);
     return king.DisplayName;
+  }
+
+  // The hill-clear bounty (issue #420): a zap that removes the LAST player standing
+  // in the hill, thrown from OUTSIDE it, pays Match.HillClearBonusPoints - every time
+  // it happens, so a sniper can win without ever zoning. Server-decided on the death
+  // notification (they reach the server on every path, issue #111): the victim's body
+  // still lies at the death spot, so its replicated position IS the where-it-happened.
+  // The victim is excluded from the remaining count by name, not by Fallen - the flag
+  // may not have replicated yet on the same frame as the notification.
+  // Rapid double-zaps outrun replication (CodeRabbit on #431): the second death
+  // notification can arrive before the FIRST victim's Fallen flag replicates, so the
+  // count below would see the earlier body still standing & refuse a valid clear.
+  // The notifications themselves are the authoritative death feed (issue #111), so
+  // the server keeps its own short ledger of who just went down - entries outlive
+  // the replication gap by design & expire well inside the 5s lie-down.
+  // Keyed by NetworkId, not name (CodeRabbit on #431): a leave-&-rejoin can reuse a
+  // display name within the window, & a name key would exclude the LIVE newcomer
+  // from occupancy. Expired entries purge on insert; a departing peer's entry goes
+  // with them in RemovePlayer.
+  private readonly System.Collections.Generic.Dictionary <long, ulong> _recentZapOuts = new();
+  private const float RecentZapOutSeconds = 4.0f;
+
+  private bool RecentlyZappedOut (long networkId) => _recentZapOuts.TryGetValue (networkId, out var until) && Time.GetTicksMsec() < until;
+
+  private void MaybeAwardHillClearBonus (string victimName, string zapperName)
+  {
+    if (!IsActiveServer() || _mode != GameMode.KingOfTheHill || _intermission) return;
+    var players = GetPlayers().ToList();
+    var victim = players.FirstOrDefault (player => player.DisplayName == victimName);
+    var zapper = players.FirstOrDefault (player => player.DisplayName == zapperName);
+    if (victim == null || zapper == null || victim == zapper) return;
+    foreach (var stale in _recentZapOuts.Where (entry => Time.GetTicksMsec() >= entry.Value).Select (entry => entry.Key).ToList()) _recentZapOuts.Remove (stale);
+    _recentZapOuts[victim.NetworkId] = Time.GetTicksMsec() + (ulong)(RecentZapOutSeconds * 1000.0f);
+    var victimInHill = Hill.Contains (_hillIndex, victim.GlobalPosition);
+    var zapperInHill = Hill.Contains (_hillIndex, zapper.GlobalPosition);
+    var othersStillInHill = players.Count (player => player != victim && !player.Fallen && !RecentlyZappedOut (player.NetworkId) && Hill.Contains (_hillIndex, player.GlobalPosition));
+    if (!Match.IsHillClearBonus (victimInHill, zapperInHill, othersStillInHill)) return;
+    if (zapper.NetworkId == Multiplayer.GetUniqueId()) zapper.NotifyHillClearBonus();
+    else zapper.RpcId (zapper.NetworkId, Player.MethodName.NotifyHillClearBonus);
+    ServerLog.Event (zapper.NetworkId, $"hill cleared from outside by {zapperName} (+{Match.HillClearBonusPoints})");
+    Rpc (MethodName.ReceiveHillCleared, MessageGenerator.OnHillClear (zapperName)); // One text, every scroller (#53).
+  }
+
+  // Server-picked text so every peer scrolls the SAME line (#53); CallLocal covers
+  // the host's own scroller.
+  [Rpc (MultiplayerApi.RpcMode.AnyPeer, CallLocal = true)]
+  private void ReceiveHillCleared (string message)
+  {
+    if (Multiplayer.GetRemoteSenderId() is not (0 or 1)) return; // Peer-1 announcements only.
+    EmitSignal (SignalName.HillCleared, message);
   }
 
   private bool RoundsEnabled => _roundSeconds > 0 || _zapLimit > 0;

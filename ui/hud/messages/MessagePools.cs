@@ -259,6 +259,17 @@ public static class MessagePools
 
   // Someone punched an incoming paper airplane out of the air (issue #102):
   // {z} = the catcher, {v} = the thrower it's being returned to.
+  // The hill-clear bounty (issue #420): {z} zapped the last occupant out of the hill
+  // from outside it - the long-distance landlord fantasy.
+  public static readonly List <string> HillClear = new()
+  {
+    "{z} emptied the hill from way over there",
+    "{z} cleared the whole hill without setting foot in it",
+    "the hill is suddenly vacant, courtesy of {z}",
+    "{z} is running long-distance hill pest control",
+    "{z} declined the throne & dismissed the court instead"
+  };
+
   public static readonly List <string> AirplaneCatch = new()
   {
     "{z} snagged {v}'s paper airplane right out of the air",
@@ -322,7 +333,7 @@ public static class MessagePools
     Fall, FallStreak, Zapped, ThroughWall, FullCharge, FullAuto, Punch, PunchedOutArmed, FistsVsFists,
     BananaBlast, BananaDirect, HoldingBananaGun, ComboSplatterPunch, JumpShot, SlideShotKiller,
     SlideShotVictim, ZapStreakTier3, ZapStreakTier5, ZapStreakTier7, StreakEnded, StreakLost,
-    ZappedStreak, Boomerang, Slingshot, SlungItem, PaperAirplane, Landmine, Poison, AirplaneCatch, TheftRevenge,
+    ZappedStreak, Boomerang, Slingshot, SlungItem, PaperAirplane, Landmine, Poison, AirplaneCatch, TheftRevenge, HillClear,
     ZappedEating, TitleMostZaps, TitleMostZapOuts, TitleMostAssists, TitleMostFalls
   };
 }
