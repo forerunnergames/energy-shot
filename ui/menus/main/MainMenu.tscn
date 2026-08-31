@@ -73,9 +73,9 @@ scroll_active = false
 [node name="HostButton" type="Button" parent="."]
 layout_mode = 0
 offset_left = 134.0
-offset_top = 926.0
+offset_top = 947.0
 offset_right = 464.0
-offset_bottom = 1098.0
+offset_bottom = 1077.0
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_colors/font_hover_color = Color(0.58, 0.988, 0.996, 1)
 theme_override_colors/font_focus_color = Color(0.58, 0.988, 0.996, 1)
@@ -92,9 +92,9 @@ alignment = 0
 [node name="JoinButton" type="Button" parent="."]
 layout_mode = 0
 offset_left = 134.0
-offset_top = 1060.0
+offset_top = 1081.0
 offset_right = 464.0
-offset_bottom = 1232.0
+offset_bottom = 1211.0
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_colors/font_hover_color = Color(0.58, 0.988, 0.996, 1)
 theme_override_colors/font_focus_color = Color(0.58, 0.988, 0.996, 1)
@@ -111,9 +111,9 @@ alignment = 0
 [node name="SettingsButton" type="Button" parent="."]
 layout_mode = 0
 offset_left = 134.0
-offset_top = 1192.0
+offset_top = 1213.0
 offset_right = 464.0
-offset_bottom = 1364.0
+offset_bottom = 1343.0
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_colors/font_hover_color = Color(0.58, 0.988, 0.996, 1)
 theme_override_colors/font_focus_color = Color(0.58, 0.988, 0.996, 1)
