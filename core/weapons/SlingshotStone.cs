@@ -217,7 +217,7 @@ public partial class SlingshotStone : Node3D
   private float _cadenceFactor = 1.0f;
   private bool SpinsInFlight => Ammo != HeldWeapon.PoisonDart && Ammo != HeldWeapon.PaperAirplane;
 
-  public void Launch (Vector3 origin, Vector3 sweepStart, Vector3 direction, float speed, float gravity, float energy, bool isLive, CharacterBody3D shooter)
+  public void Launch (Vector3 origin, Vector3 sweepStart, Vector3 direction, float speed, float gravity, float energy, bool isLive, CharacterBody3D shooter, bool hitsShooter = false)
   {
     _spinAxis = new Vector3 (GD.Randf() - 0.5f, GD.Randf() - 0.5f, GD.Randf() - 0.5f).Normalized(); // Issue #288: a fresh tumble every launch.
     _spinSpeed = 4.0f + GD.Randf() * 8.0f;
@@ -229,8 +229,9 @@ public partial class SlingshotStone : Node3D
     _energy = energy;
     _isLive = isLive;
     Shooter = shooter; // The playtest matches stones to the firer (CodeRabbit on #273); the spree paths reuse it.
-    _exclusions = new Godot.Collections.Array <Rid> { shooter.GetRid() };
-    if (shooter is Player own && own.HeadRid.IsValid) _exclusions.Add (own.HeadRid); // Your own dome is not a target (issue #179); no head while parked (#238).
+    // A spree child owes its slinger no safety (issue #287): a tumbling gun's stones hit ANYONE, the slinger included.
+    _exclusions = hitsShooter ? new Godot.Collections.Array <Rid>() : new Godot.Collections.Array <Rid> { shooter.GetRid() };
+    if (!hitsShooter && shooter is Player own && own.HeadRid.IsValid) _exclusions.Add (own.HeadRid); // Your own dome is not a target (issue #179); no head while parked (#238).
   }
 
   public override void _PhysicsProcess (double delta)
@@ -297,7 +298,7 @@ public partial class SlingshotStone : Node3D
     if (Shooter == null) return;
     var banana = BananaScene.Instantiate <BananaProjectile>();
     GetParent().AddChild (banana);
-    banana.Launch (GlobalPosition, direction, _isLive, Shooter);
+    banana.Launch (GlobalPosition, direction, _isLive, Shooter, hitsShooter: true);
     if (_isLive) EmitSignal (SignalName.SpreeBanana, banana);
   }
 
@@ -308,7 +309,7 @@ public partial class SlingshotStone : Node3D
     if (Shooter == null) return;
     var stone = new SlingshotStone { Ammo = HeldWeapon.None };
     GetParent().AddChild (stone);
-    stone.Launch (GlobalPosition, GlobalPosition, direction, StoneSpreeSpeed, GravityAcceleration, StoneSpreeEnergy, _isLive, Shooter);
+    stone.Launch (GlobalPosition, GlobalPosition, direction, StoneSpreeSpeed, GravityAcceleration, StoneSpreeEnergy, _isLive, Shooter, hitsShooter: true);
     if (_isLive) EmitSignal (SignalName.SpreeStone, stone);
   }
 

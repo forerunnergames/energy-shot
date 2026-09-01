@@ -36,6 +36,7 @@ public partial class BananaProjectile : Node3D
   [Signal] public delegate void CaughtBySlingshotEventHandler (Player catcher, float fuseSecondsLeft);
   private const float OwnCatchAfterSeconds = 0.4f; // Clear of the muzzle first; then your own slingshot can catch it.
   private CharacterBody3D? _shooter;
+  private bool _hitsShooter; // A slung launcher's spree banana (issue #287) sticks to its own slinger too.
   private static readonly Color BananaYellow = new(0.92f, 0.78f, 0.12f);
   private static readonly Color FlashColor = new(4.0f, 3.6f, 0.4f);
   private Vector3 _velocity;
@@ -53,12 +54,13 @@ public partial class BananaProjectile : Node3D
     _mesh.MaterialOverride = new StandardMaterial3D { AlbedoColor = BananaYellow, Roughness = 0.5f };
   }
 
-  public void Launch (Vector3 origin, Vector3 direction, bool isLive, CharacterBody3D shooter)
+  public void Launch (Vector3 origin, Vector3 direction, bool isLive, CharacterBody3D shooter, bool hitsShooter = false)
   {
     GlobalPosition = origin;
     _velocity = direction.Normalized() * Speed;
     _isLive = isLive;
     _shooter = shooter;
+    _hitsShooter = hitsShooter;
     _shooterRid = shooter.GetRid();
   }
 
@@ -103,7 +105,7 @@ public partial class BananaProjectile : Node3D
     if (hit["collider"].AsGodotObject() is CharacterBody3D body)
     {
       if (TryCatch (body)) return;
-      if (body == _shooter) { GlobalPosition = to; return; } // Your own banana passes through you unless you're catching it.
+      if (body == _shooter && !_hitsShooter) { GlobalPosition = to; return; } // Your own banana passes through you unless you're catching it - or it came off your slung launcher (issue #287).
       // A direct player hit doesn't explode - it sticks (issue #83): the live banana
       // reports the victim & every peer swaps to the replicated stuck banana.
       if (_isLive && body is Player victim) EmitSignal (SignalName.StuckToPlayer, victim, (Vector3)hit["position"]);
