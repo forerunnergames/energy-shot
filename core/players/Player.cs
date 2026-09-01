@@ -290,7 +290,7 @@ public partial class Player : CharacterBody3D
   // start): the #333 head spans y 2.05-2.95 & the tags sat INSIDE it - a fresh
   // round's armor turns every head white & the sphere filled the tag's
   // transparent background. Tags now float clear above the head.
-  [Export] public float NameTagBaseHeight = 3.4f;
+  [Export] public float NameTagBaseHeight = 3.0f; // Rides the shorter body (issue #435).
   public int NetworkId => Name.ToString().ToInt();
   // Whether the one-per-life loaf is still in hand: the HUD bread icon (issue #160) &
   // the slot-7 selection rules (issue #209). Reads the REPLICATED mask, not the local

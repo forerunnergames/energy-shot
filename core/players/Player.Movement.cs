@@ -150,7 +150,7 @@ public partial class Player
   private bool IsOverheadBlocked()
   {
     var from = GlobalPosition + Vector3.Up * 0.5f;
-    var to = GlobalPosition + Vector3.Up * 2.1f; // Standing capsule head height + margin.
+    var to = GlobalPosition + Vector3.Up * (BodyHeight + 0.1f); // Standing capsule height + margin.
     var query = PhysicsRayQueryParameters3D.Create (from, to, exclude: new Godot.Collections.Array <Rid> { GetRid() });
     return GetWorld3D().DirectSpaceState.IntersectRay (query).Count > 0;
   }
