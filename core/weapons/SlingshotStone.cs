@@ -18,6 +18,13 @@ public partial class SlingshotStone : Node3D
   // Doubled from 6 (issue #163): stones fly their full arc & only despawn on impact
   // or well past relevance.
   [Export] public float MaxLifetimeSeconds = 12.0f;
+  // Real touchdown physics (issue #285): a tumbling item no longer freezes at first
+  // contact - it bounces & slides like the banana's split bounce (#255): the plunge
+  // into the surface flips & squashes, the skid along it mostly survives. Rest is
+  // slow-on-a-floor; darts & airplanes still stick or land straight (#425).
+  [Export] public float Restitution = 0.18f;
+  [Export] public float SlideRetention = 0.85f;
+  [Export] public float RestSpeed = 1.0f;
   [Signal] public delegate void HitPlayerEventHandler (Player victim, float energy, bool isHeadshot);
   // Where the flight ended (issue #190): a slung world item becomes a normal pickup
   // again wherever it stops, so nothing loaded into a slingshot can vanish.
@@ -263,11 +270,26 @@ public partial class SlingshotStone : Node3D
     // slab onto the arena far below. Issue #196 has since lifted the server's ground
     // ray a metre too, so this is belt & braces - & it also keeps the resting item
     // from z-fighting with whatever it landed against.
-    GlobalPosition = (Vector3)hit["position"] + (Vector3)hit["normal"] * SurfaceClearance;
+    var normal = (Vector3)hit["normal"];
+    GlobalPosition = (Vector3)hit["position"] + normal * SurfaceClearance;
     var collider = hit["collider"].AsGodotObject();
     if (collider is HeadHitbox head) { End (head.Player, isHeadshot: true); return; } // Issue #179.
-    End (collider as Player, isHeadshot: false);
+    if (collider is Player victim) { End (victim, isHeadshot: false); return; }
+    if (!SpinsInFlight) { End (victim: null); return; } // Darts stick & airplanes land where they first touch (#425).
+    _velocity = Deflect (_velocity, normal, Restitution, SlideRetention); // Issue #285: bounce & skid on.
+    if (AtRest (_velocity, normal, RestSpeed)) End (victim: null);
   }
+
+  // The banana's split bounce (#255), pure & unit-tested: the component driving into
+  // the surface flips & squashes, the component along it keeps most of its skid.
+  public static Vector3 Deflect (Vector3 velocity, Vector3 normal, float restitution, float retention)
+  {
+    var into = normal * velocity.Dot (normal);
+    return (velocity - into) * retention - into * restitution;
+  }
+
+  // Rest = barely moving on something floor-like; a slow wall graze keeps falling.
+  public static bool AtRest (Vector3 velocity, Vector3 normal, float restSpeed) => normal.Y > 0.5f && velocity.Length() < restSpeed;
 
   private void UpdateSpree (float dt)
   {
