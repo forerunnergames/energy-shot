@@ -38,7 +38,9 @@ public static class MessagePools
     "{v} learned a valuable lesson about standing near {z}",
     "{z} turned {v} into a cautionary tale",
     "{z} restarted {v} from the last checkpoint",
-    "{v} has been recalled to the respawn factory, sincerely {z}"
+    "{v} has been recalled to the respawn factory, sincerely {z}",
+    "{z} gave {v} a very brief flying lesson",
+    "{v} was politely uninstalled by {z}"
   };
 
   // Full-charge zap-outs that pierced a wall or floor on the way (issue #94).
@@ -206,7 +208,9 @@ public static class MessagePools
     "{z}'s boomerang made a round trip through {v}",
     "{v} stood on the flight path & {z}'s boomerang kept the schedule",
     "{z} threw it away & it still came back with {v}'s dignity",
-    "{v} got clipped by {z}'s frisbee with commitment issues"
+    "{v} got clipped by {z}'s frisbee with commitment issues",
+    "{z}'s boomerang took the scenic route & ended on {v}",
+    "{v} learned that {z}'s boomerang always comes back - with interest"
   };
 
   // Slingshot zap-outs (issue #99).
@@ -215,7 +219,9 @@ public static class MessagePools
     "{z} slingshotted {v} straight back to the stone age",
     "{v} was zapped out by a pebble. {z} is very proud",
     "{z} drew, released, & {v}'s day unraveled",
-    "physics homework by {z}: the arc ended on {v}"
+    "physics homework by {z}: the arc ended on {v}",
+    "{z}'s pebble & {v}'s afternoon collided at speed",
+    "{v} caught a rock with their face, courtesy of {z}"
   };
 
   // Zapped out by a world item slung out of a slingshot (issue #190).
@@ -254,11 +260,11 @@ public static class MessagePools
     "{v} turned a lovely shade of swamp. {z}'s darts finally added up",
     "{v} wobbled, hiccuped, & folded like lawn furniture. {z}'s poison, probably",
     "{z}'s little pincushion project is complete: {v} is out",
-    "{v} got out-toxined by {z}. Hydrate next time"
+    "{v} got out-toxined by {z}. Hydrate next time",
+    "{v} discovered {z}'s darts come with a slow-release surprise",
+    "{z} seasoned {v} one dart at a time until {v} was done"
   };
 
-  // Someone punched an incoming paper airplane out of the air (issue #102):
-  // {z} = the catcher, {v} = the thrower it's being returned to.
   // The hill-clear bounty (issue #420): {z} zapped the last occupant out of the hill
   // from outside it - the long-distance landlord fantasy.
   public static readonly List <string> HillClear = new()
@@ -267,9 +273,13 @@ public static class MessagePools
     "{z} cleared the whole hill without setting foot in it",
     "the hill is suddenly vacant, courtesy of {z}",
     "{z} is running long-distance hill pest control",
-    "{z} declined the throne & dismissed the court instead"
+    "{z} declined the throne & dismissed the court instead",
+    "{z} evicted the last tenant from the hill by mail",
+    "{v} was the only one left on the hill - {z} fixed that from afar"
   };
 
+  // Someone punched an incoming paper airplane out of the air (issue #102):
+  // {z} = the catcher, {v} = the thrower it's being returned to.
   public static readonly List <string> AirplaneCatch = new()
   {
     "{z} snagged {v}'s paper airplane right out of the air",
