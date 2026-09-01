@@ -9,6 +9,9 @@ namespace com.forerunnergames.energyshot.players;
 public partial class Player
 {
   public const int HeadshotDamage = 300;
+  // The body capsule: 2m shrank ~20% (issue #435, Aaron: a smaller change - head, tags
+  // & camera come down WITH it, the neck gap & the head itself stay as they were).
+  public const float BodyHeight = 1.6f;
   private HeadHitbox _head = null!;
   private MeshInstance3D _headMesh = null!;
 
@@ -31,8 +34,8 @@ public partial class Player
   private void UpdateHeadPose()
   {
     if (_head == null) return;
-    const float bodyHalfHeight = 1.0f; // The 2m capsule about its center.
-    var seat = HeadHitbox.LocalOffset.Y - 2.0f; // 0.5: head center above the capsule top - radius 0.45 + a 0.05 hover gap (Aaron: close, never touching).
+    const float bodyHalfHeight = BodyHeight / 2.0f; // The capsule about its center.
+    var seat = HeadHitbox.LocalOffset.Y - BodyHeight; // 0.5: head center above the capsule top - radius 0.45 + a 0.05 hover gap (Aaron: close, never touching).
     var center = _mesh.Position + _mesh.Basis.Y.Normalized() * (bodyHalfHeight * _mesh.Scale.Y + seat);
     _head.Position = center;
     _headMesh.Position = center;

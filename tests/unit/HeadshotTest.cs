@@ -27,7 +27,7 @@ public class HeadshotTest
   [TestCase]
   public void HeadFloatsCloseAboveTheBody()
   {
-    AssertFloat (HeadHitbox.LocalOffset.Y - HeadHitbox.Radius).IsGreater (2.0f); // A real gap: never touching (Aaron)...
-    AssertFloat (HeadHitbox.LocalOffset.Y - HeadHitbox.Radius - 2.0f).IsLess (0.1f); // ...but CLOSE - a sliver, not the old hover (issue #238).
+    AssertFloat (HeadHitbox.LocalOffset.Y - HeadHitbox.Radius).IsGreater (Player.BodyHeight); // A real gap: never touching (Aaron)...
+    AssertFloat (HeadHitbox.LocalOffset.Y - HeadHitbox.Radius - Player.BodyHeight).IsLess (0.1f); // ...but CLOSE - a sliver, not the old hover (issue #238).
   }
 }
