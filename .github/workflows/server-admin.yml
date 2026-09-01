@@ -40,6 +40,11 @@ on:
         description: "Restart the server to apply (needed for mode/password to take effect)"
         type: boolean
         default: false
+      target:
+        description: "Which server: stable (players) or dev (test channel, port 55557)"
+        type: choice
+        options: [stable, dev]
+        default: stable
 
 # One admin run at a time (CodeRabbit): two concurrent dispatches could interleave
 # the drop-in & env-file writes & leave a server state neither run asked for.
@@ -62,6 +67,7 @@ jobs:
           VERIFY_PASSWORD: ${{ inputs.verify_password }}
           AUTHORIZE_KEY: ${{ inputs.authorize_ops_key }}
           RESTART: ${{ inputs.restart }}
+          TARGET: ${{ inputs.target }}
           OPS_KEY: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPY/AXYCLCLVZ2fIcn1fOgOq+kQpdhUpfZC+QOSEtAtR aaron@energyshot-ops"
         run: |
           if [ -z "$DROPLET_HOST" ]; then echo "Deploy secrets absent"; exit 1; fi
@@ -87,6 +93,7 @@ jobs:
           # caller's side of the API to have enforced it (CodeRabbit on #410).
           case "$AUTHORIZE_KEY" in true | false) ;; *) fail "authorize_ops_key must be true or false" ;; esac
           case "$RESTART" in true | false) ;; *) fail "restart must be true or false" ;; esac
+          case "$TARGET" in stable | dev) ;; *) fail "target must be stable or dev" ;; esac
           # A dispatch input is NOT a registered secret, so nothing redacts it for
           # us (CodeRabbit): register it with the runner before it can reach any log
           # or error trace. Nothing below ever echoes the value itself.
@@ -146,13 +153,19 @@ jobs:
           has_break "$PASSWORD" && die "password cannot contain a line break"
           has_break "$VERIFY_PASSWORD" && die "verify-password cannot contain a line break"
 
-          ENV_FILE=/etc/energy-shot/server.env
+          # Every path below is per-channel (#417): the dev server has its own unit,
+          # env file, args file & admin-message drop, all named by the deploy.
+          if [ "$TARGET" = dev ]; then
+            UNIT=energy-shot-dev; ENV_FILE=/etc/energy-shot/server-dev.env; ARGS_FILE=/etc/energy-shot/extra-args-dev; ADMIN_MESSAGE=/home/game/admin-message-dev
+          else
+            UNIT=energy-shot; ENV_FILE=/etc/energy-shot/server.env; ARGS_FILE=/etc/energy-shot/extra-args; ADMIN_MESSAGE=/home/game/admin-message
+          fi
+          echo "target: $TARGET ($UNIT)"
 
           # Game settings live in the server's ARGS, never in code (Aaron,
           # 2026-08-24): the extra args are kept in one state file, edited flag by
           # flag, & re-emitted as a systemd drop-in over the real unit's ExecStart.
           # A run that changes one setting therefore keeps every other setting.
-          ARGS_FILE=/etc/energy-shot/extra-args
           mkdir -p /etc/energy-shot
           touch "$ARGS_FILE"
           extra=$(cat "$ARGS_FILE")
@@ -181,11 +194,11 @@ jobs:
 
           if [ "$MODE" != "unchanged" ] || [ -n "$ROUND_MINUTES" ] || [ -n "$POINT_LIMIT" ] || [ -n "$HILL_ROTATE" ]; then
             printf '%s' "$extra" > "$ARGS_FILE"
-            unit=$(systemctl show -p FragmentPath --value energy-shot)
+            unit=$(systemctl show -p FragmentPath --value "$UNIT")
             base=$(grep -m1 '^ExecStart=' "$unit" | sed 's/^ExecStart=//')
-            mkdir -p /etc/systemd/system/energy-shot.service.d
+            mkdir -p "/etc/systemd/system/$UNIT.service.d"
             printf '[Service]\nExecStart=\nExecStart=%s%s\n' "$base" "$extra" \
-              > /etc/systemd/system/energy-shot.service.d/mode.conf
+              > "/etc/systemd/system/$UNIT.service.d/mode.conf"
             systemctl daemon-reload
             echo "settings now:$extra"
           fi
@@ -265,16 +278,16 @@ jobs:
           free -m
 
           if [ "$RESTART" = "true" ]; then
-            echo "Admin change applied - server restarting, back in a moment!" > /home/game/admin-message
-            chown game:game /home/game/admin-message
+            echo "Admin change applied - server restarting, back in a moment!" > "$ADMIN_MESSAGE"
+            chown game:game "$ADMIN_MESSAGE"
             sleep 5
-            systemctl restart energy-shot
+            systemctl restart "$UNIT"
             sleep 3
-            systemctl is-active energy-shot
+            systemctl is-active "$UNIT"
             echo "active mode line:"
-            systemctl show -p ExecStart --value energy-shot | grep -o -- '--mode [a-z]*' || echo "(no --mode = zaps default)"
+            systemctl show -p ExecStart --value "$UNIT" | grep -o -- '--mode [a-z]*' || echo "(no --mode = zaps default)"
           fi
           ADMIN
           } | ssh -i droplet_key -o UserKnownHostsFile=known_hosts -o StrictHostKeyChecking=yes \
             root@"$DROPLET_HOST" \
-            "MODE_B64='$MODE_B64' ROUND_MINUTES_B64='$ROUND_MINUTES_B64' POINT_LIMIT_B64='$POINT_LIMIT_B64' HILL_ROTATE_B64='$HILL_ROTATE_B64' AUTHORIZE_KEY='$AUTHORIZE_KEY' RESTART='$RESTART' OPS_KEY='$OPS_KEY' bash -c 'IFS= read -r PASSWORD_B64 && IFS= read -r VERIFY_PASSWORD_B64 && export PASSWORD_B64 VERIFY_PASSWORD_B64 && exec bash -s'"
+            "MODE_B64='$MODE_B64' ROUND_MINUTES_B64='$ROUND_MINUTES_B64' POINT_LIMIT_B64='$POINT_LIMIT_B64' HILL_ROTATE_B64='$HILL_ROTATE_B64' AUTHORIZE_KEY='$AUTHORIZE_KEY' RESTART='$RESTART' TARGET='$TARGET' OPS_KEY='$OPS_KEY' bash -c 'IFS= read -r PASSWORD_B64 && IFS= read -r VERIFY_PASSWORD_B64 && export PASSWORD_B64 VERIFY_PASSWORD_B64 && exec bash -s'"
