@@ -221,17 +221,21 @@ jobs:
             if [ "$LIVE" = "$VERIFY_PASSWORD" ]; then echo "verify: MATCH - value is the live join password"; else echo "verify: NO MATCH (live password is ${#LIVE} chars)"; fi
           fi
 
-          # Authorize the ops box's key on the game user (idempotent).
+          # Authorize the ops box's key on the game user (idempotent). sshd resolves
+          # AuthorizedKeysFile against the PASSWD home - not the paths the unit
+          # happens to use - so write where sshd actually reads (#450: the key sat
+          # in /home/game while every offer died preauth).
           if [ "$AUTHORIZE_KEY" = "true" ]; then
-            mkdir -p /home/game/.ssh
-            touch /home/game/.ssh/authorized_keys
-            grep -qF "$OPS_KEY" /home/game/.ssh/authorized_keys || echo "$OPS_KEY" >> /home/game/.ssh/authorized_keys
-            chown -R game:game /home/game/.ssh
-            chmod 700 /home/game/.ssh
-            chmod 600 /home/game/.ssh/authorized_keys
-            # sshd's StrictModes walks the whole path: a group/world-writable home
-            # rejects every key even when .ssh itself is right (#450).
-            chmod g-w,o-w /home/game
+            GAME_HOME=$(getent passwd game | cut -d: -f6)
+            echo "game passwd entry: $(getent passwd game)"
+            [ -n "$GAME_HOME" ] || GAME_HOME=/home/game
+            mkdir -p "$GAME_HOME/.ssh"
+            touch "$GAME_HOME/.ssh/authorized_keys"
+            grep -qF "$OPS_KEY" "$GAME_HOME/.ssh/authorized_keys" || echo "$OPS_KEY" >> "$GAME_HOME/.ssh/authorized_keys"
+            chown -R game:game "$GAME_HOME/.ssh"
+            chmod 700 "$GAME_HOME/.ssh"
+            chmod 600 "$GAME_HOME/.ssh/authorized_keys"
+            chmod g-w,o-w "$GAME_HOME" || true
             echo "ops key authorized"
             # Why would a correctly-authorized key still be refused? Print the
             # truth instead of guessing (#450): effective sshd policy, the actual
