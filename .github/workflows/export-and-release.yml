@@ -248,6 +248,14 @@ jobs:
             fi
             systemctl daemon-reload
             systemctl enable energy-shot-dev
+          fi
+          # Two servers share ~1GB (#449): if memory runs out, the kernel picks the
+          # process with the highest oom_score - this drop-in makes sure that is the
+          # DEV server, never the stable one players are on. Idempotent, every dev deploy.
+          if [ "$UNIT" = energy-shot-dev ]; then
+            mkdir -p /etc/systemd/system/energy-shot-dev.service.d
+            printf '[Service]\nOOMScoreAdjust=500\n' > /etc/systemd/system/energy-shot-dev.service.d/oom.conf
+            systemctl daemon-reload
             if command -v ufw >/dev/null && ufw status 2>/dev/null | grep -q '^Status: active'; then ufw allow 55557/udp; fi
           fi
           # Stage & validate the new build before touching the running server.
@@ -279,6 +287,16 @@ jobs:
           chown -R game:game "$DIR"
           free -m # Two servers share this droplet - keep the headroom visible in every deploy log.
           systemctl restart "$UNIT"
-          sleep 3
-          systemctl is-active "$UNIT"
+          # "activating" is not a verdict (#449): wait for active or failed - up to
+          # two minutes on this small droplet - & a unit that never gets there fails
+          # the deploy with its own journal in the log instead of a green run.
+          state=activating
+          for _ in $(seq 1 24); do
+            state=$(systemctl is-active "$UNIT" 2>&1 || true)
+            [ "$state" = active ] && break
+            [ "$state" = failed ] && break
+            sleep 5
+          done
+          echo "$UNIT: $state"
+          [ "$state" = active ] || { journalctl -u "$UNIT" -n 40 --no-pager; exit 1; }
           DEPLOY
