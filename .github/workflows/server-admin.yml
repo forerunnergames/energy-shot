@@ -255,7 +255,12 @@ jobs:
           # Every admin run ends with the droplet's vitals (#449): both units &
           # memory, so ops can see server health without a shell.
           echo "== units =="
-          systemctl is-active energy-shot energy-shot-dev || true
+          echo "stable: $(systemctl is-active energy-shot 2>&1)  dev: $(systemctl is-active energy-shot-dev 2>&1)"
+          # A unit that is not plain-active gets its recent journal shown, so a
+          # crashloop is readable from the run log without a shell (#449).
+          for u in energy-shot energy-shot-dev; do
+            [ "$(systemctl is-active "$u" 2>&1)" = "active" ] || journalctl -u "$u" -n 8 --no-pager 2>/dev/null | tail -8 || true
+          done
           echo "== memory =="
           free -m
 
