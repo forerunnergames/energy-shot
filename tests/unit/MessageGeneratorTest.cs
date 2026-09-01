@@ -21,8 +21,8 @@ public class MessageGeneratorTest
     // + 6 zapped-mid-bread-ritual (issue #192) + 4 poison zap-outs (issue #194)
     // + 12 end-of-round superlatives (issue #153) + 5 hill clears (issue #420).
     var templates = MessagePools.All.SelectMany (pool => pool).ToList();
-    AssertInt (templates.Count).IsEqual (155);
-    AssertInt (templates.Distinct().Count()).IsEqual (155);
+    AssertInt (templates.Count).IsEqual (165);
+    AssertInt (templates.Distinct().Count()).IsEqual (165);
   }
 
   [TestCase]
