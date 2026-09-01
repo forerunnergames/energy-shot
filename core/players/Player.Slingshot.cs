@@ -253,11 +253,11 @@ public partial class Player
     else stone.HitPlayer += (victim, hitEnergy, isHeadshot) => OnStoneHitPlayer (victim, hitEnergy, ammo, isHeadshot);
     // The berserk slung laser (issue #208) reports like full-auto fire from us; the
     // thrower stays immune to their own spray only because a self-zap would score.
-    if (ammo == HeldWeapon.Laser) stone.SpreeHit += (body, hitEnergy, throughBarrier) => OnLaserHitPlayer (body, hitEnergy, throughBarrier, isFullAuto: true, isHeadshot: false);
+    if (ammo == HeldWeapon.Laser) stone.SpreeHit += (body, hitEnergy, throughBarrier) => OnLaserHitPlayer (body, hitEnergy, throughBarrier, isFullAuto: true, isHeadshot: false, selfAllowed: true); // The spray spares nobody (issue #287).
     // The other slung guns (issue #244): a slung launcher's bananas blast & stick as
     // ours; a slung slingshot's stones thwack as ours.
     if (ammo == HeldWeapon.Banana) stone.SpreeBanana += banana => { banana.Exploded += OnBananaExploded; banana.StuckToPlayer += OnBananaStuck; };
-    if (ammo == HeldWeapon.Slingshot) stone.SpreeStone += child => child.HitPlayer += (victim, hitEnergy, isHeadshot) => OnStoneHitPlayer (victim, hitEnergy, HeldWeapon.None, isHeadshot);
+    if (ammo == HeldWeapon.Slingshot) stone.SpreeStone += child => child.HitPlayer += (victim, hitEnergy, isHeadshot) => OnStoneHitPlayer (victim, hitEnergy, HeldWeapon.None, isHeadshot, selfAllowed: true); // Issue #287.
     if (ammo == HeldWeapon.None || IsCosmeticAmmo (ammo)) return;
     // Only the newest flight owns this player's server-side ammo escrow, so an older
     // stone still arcing somewhere can never land somebody else's item (issue #190).
@@ -313,9 +313,9 @@ public partial class Player
   // (victim-authoritative, same as ReceiveHit & ReceiveBoomerangHit). Slung world
   // items sting exactly like the stone baseline (issue #190) - only the flavor & the
   // death message change.
-  private void OnStoneHitPlayer (Player victim, float energy, HeldWeapon ammo, bool isHeadshot)
+  private void OnStoneHitPlayer (Player victim, float energy, HeldWeapon ammo, bool isHeadshot, bool selfAllowed = false)
   {
-    if (victim.NetworkId == NetworkId) return;
+    if (victim.NetworkId == NetworkId && !selfAllowed) return;
     var what = ammo == HeldWeapon.None ? "stone" : ammo.ToString().ToLower();
     GD.Print ($"{DisplayName}: My {what} thwacked {victim.DisplayName}{(isHeadshot ? " on the dome" : "")}!");
     PlayHitmarker (isHeadshot); // Issue #179.

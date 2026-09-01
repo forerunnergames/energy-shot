@@ -263,9 +263,10 @@ public partial class Player
     if (isLive) bolt.HitPlayer += (body, hitEnergy, throughBarrier, isHeadshot) => OnLaserHitPlayer (body, hitEnergy, throughBarrier, isFullAuto, isHeadshot);
   }
 
-  private void OnLaserHitPlayer (CharacterBody3D body, float energy, bool throughBarrier, bool isFullAuto, bool isHeadshot)
+  // selfAllowed (issue #287): a slung gun's spree hits its own slinger like anyone else.
+  private void OnLaserHitPlayer (CharacterBody3D body, float energy, bool throughBarrier, bool isFullAuto, bool isHeadshot, bool selfAllowed = false)
   {
-    if (body is not Player victim || victim.NetworkId == NetworkId) return;
+    if (body is not Player victim || (victim.NetworkId == NetworkId && !selfAllowed)) return;
     HitPuppet (victim, energy, throughBarrier, isFullAuto, isHeadshot);
   }
 
@@ -368,7 +369,7 @@ public partial class Player
     if (Health <= 0)
     {
       _zapOutSound.Play();
-      attacker?.RpcId (attackerId, MethodName.NotifyScored, DisplayName);
+      if (ScoresZap (attackerId, NetworkId)) attacker?.RpcId (attackerId, MethodName.NotifyScored, DisplayName); // Your own spree zapping you (issue #287) is fair & funny - never a point.
       CreditAssist (attackerId); // Whoever softened us up within the window (issue #153).
       RespawnShot (attackerName);
     }
@@ -403,6 +404,9 @@ public partial class Player
 
   private float _knockbackCarrySecondsLeft;
   private void UpdateKnockbackCarry (double delta) => _knockbackCarrySecondsLeft = Mathf.Max (0.0f, _knockbackCarrySecondsLeft - (float)delta);
+
+  // Pure & unit-tested: only somebody ELSE's zap scores.
+  public static bool ScoresZap (int attackerId, int victimId) => attackerId != victimId;
 
   [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
   private void NotifyScored (string shotPlayerName)
