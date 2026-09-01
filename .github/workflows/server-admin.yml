@@ -229,8 +229,25 @@ jobs:
             chown -R game:game /home/game/.ssh
             chmod 700 /home/game/.ssh
             chmod 600 /home/game/.ssh/authorized_keys
+            # sshd's StrictModes walks the whole path: a group/world-writable home
+            # rejects every key even when .ssh itself is right (#450).
+            chmod g-w,o-w /home/game
             echo "ops key authorized"
+            # Why would a correctly-authorized key still be refused? Print the
+            # truth instead of guessing (#450): effective sshd policy, the actual
+            # modes on the path, & sshd's own recent verdicts.
+            echo "== key-auth diagnostics =="
+            ls -ld /home/game /home/game/.ssh /home/game/.ssh/authorized_keys || true
+            sshd -T 2>/dev/null | grep -iE "^(allowusers|denyusers|allowgroups|denygroups|pubkeyauthentication|authorizedkeysfile)" || true
+            journalctl -u ssh -n 20 --no-pager 2>/dev/null | grep -iE "game|refused|denied|Failed publickey" | tail -5 || true
           fi
+
+          # Every admin run ends with the droplet's vitals (#449): both units &
+          # memory, so ops can see server health without a shell.
+          echo "== units =="
+          systemctl is-active energy-shot energy-shot-dev || true
+          echo "== memory =="
+          free -m
 
           if [ "$RESTART" = "true" ]; then
             echo "Admin change applied - server restarting, back in a moment!" > /home/game/admin-message
