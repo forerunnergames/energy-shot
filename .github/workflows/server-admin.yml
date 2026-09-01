@@ -238,8 +238,14 @@ jobs:
             # modes on the path, & sshd's own recent verdicts.
             echo "== key-auth diagnostics =="
             ls -ld /home/game /home/game/.ssh /home/game/.ssh/authorized_keys || true
-            sshd -T 2>/dev/null | grep -iE "^(allowusers|denyusers|allowgroups|denygroups|pubkeyauthentication|authorizedkeysfile)" || true
-            journalctl -u ssh -n 20 --no-pager 2>/dev/null | grep -iE "game|refused|denied|Failed publickey" | tail -5 || true
+            # Match blocks hide from plain -T: evaluate the config AS the game user
+            # connecting from the ops box (#450) - a Match User game override is the
+            # last place a refusal can live that plain -T cannot show.
+            sshd -T -C user=game,addr=146.190.134.148,host=energyshot-ops,laddr=137.184.43.105,lport=22 2>&1 | grep -iE "^(allowusers|denyusers|allowgroups|denygroups|pubkeyauthentication|authorizedkeysfile|forcecommand|authenticationmethods)" || echo "(sshd -T -C failed)"
+            # sshd names its refusal reason in the log - read BOTH unit spellings &
+            # the classic file, wide enough to cover the failed attempts (#450).
+            journalctl -u ssh -u sshd --since "-30 min" --no-pager 2>/dev/null | grep -iE "game|refused|denied|publickey|ownership|modes" | tail -8 || true
+            grep -iE "game|refused|denied|publickey" /var/log/auth.log 2>/dev/null | tail -5 || true
           fi
 
           # Every admin run ends with the droplet's vitals (#449): both units &
