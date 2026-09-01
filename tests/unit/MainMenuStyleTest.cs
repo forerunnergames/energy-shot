@@ -22,4 +22,15 @@ public class MainMenuStyleTest
     var button = AutoFree (new TrapezoidButton())!;
     AssertBool (button.StrokeColor.ToHtml (false).ToUpper() == "94FCFE").IsTrue(); // display-p3 (0.580, 0.987, 0.994) mapped to sRGB.
   }
+
+  // The filled-primary variant (issue #443): a fresh button stays the outline family
+  // by default, & the canon disabled gray is pinned.
+  [TestCase]
+  public void DefaultButtonIsUnfilledWithQuitGeometry()
+  {
+    var button = AutoFree (new TrapezoidButton())!;
+    AssertBool (button.Filled).IsFalse();
+    AssertBool (button.Points == TrapezoidButton.OutlinePoints).IsTrue();
+    AssertBool (TrapezoidButton.DisabledGray.ToHtml (false).ToUpper() == "888888").IsTrue();
+  }
 }
