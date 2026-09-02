@@ -89,7 +89,7 @@ public partial class WeaponSpawner : Node3D
   private const float OccupiedRadius = 1.0f;
   // Cargo riding a boomerang home (issue #98): stolen & scooped weapons live here
   // between the grab & the thrower's catch, so the caps still count them.
-  private readonly record struct BoomerangCargo (int OwnerId, HeldWeapon Type, string PreviousOwner, int DartPayload = 0);
+  private readonly record struct BoomerangCargo (int OwnerId, HeldWeapon Type, string PreviousOwner, int DartPayload = 0, bool Armed = false); // Armed (issue #246): live trouble that hits its catcher.
   private readonly List <BoomerangCargo> _escrow = new();
   // Award->replication bridge (issue #154): between despawning a claimed pickup (or
   // delivering escrowed cargo) & the collector's replicated HeldWeapon showing the
@@ -989,13 +989,10 @@ public partial class WeaponSpawner : Node3D
       return;
     }
 
-    // An armed airplane is a hazard, not cargo (issue #191): a boomerang can't carry
-    // a live landmine home. An unarmed one is an ordinary pickup & scoops fine.
-    if (pickup.Weapon == HeldWeapon.PaperAirplane && pickup.Armed)
-    {
-      ServerLog.Event (throwerId, "boomerang scoop deny: the armed paper airplane is not cargo");
-      return;
-    }
+    // A boomerang scoops EVERYTHING (Aaron, issue #246) - a landmine airplane or a
+    // landed dart included. Live trouble rides home flagged Armed & lands on the
+    // catcher at delivery, exactly as if they had stepped on it.
+    var armed = IsLiveHazard (pickup.Weapon, pickup.Armed);
 
     // The boomerang is client-simulated, but its physics bound the claim (CodeRabbit
     // on #430): a real flight stays within OutboundMeters (25) of the thrower plus
@@ -1007,8 +1004,8 @@ public partial class WeaponSpawner : Node3D
       return;
     }
 
-    _escrow.Add (new BoomerangCargo (throwerId, pickup.Weapon, pickup.PreviousOwner, pickup.DartPayload)); // A scooped gun's darts stay counted (CodeRabbit on #430).
-    ServerLog.Event (throwerId, $"boomerang scoop: {pickup.Weapon} from pickup [{pickupName}]");
+    _escrow.Add (new BoomerangCargo (throwerId, pickup.Weapon, pickup.PreviousOwner, pickup.DartPayload, armed)); // A scooped gun's darts stay counted (CodeRabbit on #430).
+    ServerLog.Event (throwerId, $"boomerang scoop: {pickup.Weapon} from pickup [{pickupName}]{(armed ? " (LIVE - it bites the catcher)" : "")}");
     pickup.QueueFree(); // Despawns on every peer via the MultiplayerSpawner.
   }
 
@@ -1180,9 +1177,13 @@ public partial class WeaponSpawner : Node3D
     return cargo;
   }
 
+  // Pure & unit-tested (issue #246): only an ARMED airplane or dart is live trouble.
+  public static bool IsLiveHazard (HeldWeapon type, bool armed) => armed && type is HeldWeapon.PaperAirplane or HeldWeapon.PoisonDart;
+
   private void Deliver (int throwerId, Player? thrower, BoomerangCargo cargo)
   {
     if (thrower == null) return; // Mid-disconnect; the caps respawn the weapon.
+    if (cargo.Armed) { DeliverHazard (throwerId, thrower, cargo.Type); return; }
     ServerLog.Event (throwerId, $"boomerang deliver: {cargo.Type}{(cargo.PreviousOwner.Length > 0 ? $" (from [{cargo.PreviousOwner}])" : "")}");
 
     if (thrower.Holds (cargo.Type))
@@ -1199,6 +1200,31 @@ public partial class WeaponSpawner : Node3D
 
     TrackPendingGrant (throwerId, cargo.Type, cargo.DartPayload); // Bridge until the thrower's HeldWeapon replicates back (issue #154).
     RpcId (throwerId, MethodName.ConfirmPickup, (int)cargo.Type, cargo.PreviousOwner, cargo.DartPayload);
+  }
+
+  // Catching your own collected trouble (issue #246): the hazard lands on the catcher
+  // through the same paths a step would take - the landmine fuse (#191) or the dart
+  // step (#236). Armor, a body already alight, or one already down fizzles it.
+  private void DeliverHazard (int throwerId, Player thrower, HeldWeapon type)
+  {
+    if (thrower.SpawnArmor || thrower.Fallen || (type == HeldWeapon.PaperAirplane && thrower.Burning))
+    {
+      ServerLog.Event (throwerId, $"boomerang hazard fizzle: the live {type} met armor or a body already down");
+      return;
+    }
+
+    ServerLog.Event (throwerId, $"boomerang hazard: the live {type} bit its own catcher");
+
+    if (type == HeldWeapon.PaperAirplane)
+    {
+      TrackAirplaneHazard (throwerId);
+      if (throwerId == Multiplayer.GetUniqueId()) { TriggerMineOnSelf (thrower.GlobalPosition); return; }
+      RpcId (throwerId, MethodName.ConfirmMineTrigger, thrower.GlobalPosition);
+      return;
+    }
+
+    if (throwerId == Multiplayer.GetUniqueId()) { thrower.ConfirmDartStepSelf(); return; }
+    thrower.RpcId (throwerId, Player.MethodName.ConfirmDartStep);
   }
 
   // ------------------------------------------------ paper airplane catch (issue #102)
