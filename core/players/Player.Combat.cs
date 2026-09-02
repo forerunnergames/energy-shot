@@ -219,6 +219,45 @@ public partial class Player
     var origin = sweepStart + direction * MuzzleOffsetMeters;
     SpawnBolt (origin, sweepStart, direction, energy, isLive: true, isFullAuto);
     Rpc (MethodName.SpawnVisualLaser, origin, sweepStart, direction, energy);
+    if (energy < EnergyWeapon.FullChargeEnergyThreshold) return;
+    // Full charge fires the proton beam (issue #292): the bolt above already did the
+    // instant hitting; the beam is the look on every peer, & the shooter eats recoil.
+    SpawnBeam (origin, direction);
+    Rpc (MethodName.SpawnVisualBeam, origin, direction);
+    ShoveShooter (direction);
+  }
+
+  [Export] public float BeamRecoilStrength = 8.0f; // Fired hard, shoved hard (issue #292) - stacks with the camera kick (#268).
+  public const float BeamKnockbackScale = 2.5f; // The punch's "real shove" scale (issue #334), on the beam's victim.
+  // Pure & unit-tested: only a full-charge hit carries the beam's heavy shove.
+  public static float KnockbackScaleFor (float energy) => energy >= EnergyWeapon.FullChargeEnergyThreshold ? BeamKnockbackScale : 1.0f;
+
+  [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
+  private void SpawnVisualBeam (Vector3 origin, Vector3 direction) => SpawnBeam (origin, direction);
+
+  // The beam reaches the first thing in the way (or its max length), then writhes.
+  private void SpawnBeam (Vector3 origin, Vector3 direction)
+  {
+    var exclusions = new Godot.Collections.Array <Rid> { GetRid() };
+    if (HeadRid.IsValid) exclusions.Add (HeadRid);
+    var query = PhysicsRayQueryParameters3D.Create (origin, origin + direction * ProtonBeam.MaxLengthMeters, exclude: exclusions);
+    var hit = GetWorld3D().DirectSpaceState.IntersectRay (query);
+    var length = hit.Count == 0 ? ProtonBeam.MaxLengthMeters : origin.DistanceTo ((Vector3)hit["position"]);
+    var beam = new ProtonBeam();
+    GetParent().AddChild (beam);
+    beam.Launch (this, origin, direction, length);
+  }
+
+  // The shooter's own recoil shove (issue #292): straight back along the ground plane,
+  // the same up-pop cap & input-carry as any knockback, so it survives Move().
+  private void ShoveShooter (Vector3 direction)
+  {
+    var back = -new Vector3 (direction.X, 0.0f, direction.Z);
+    if (back.LengthSquared() < 0.001f) return;
+    var push = back.Normalized() * BeamRecoilStrength;
+    var poppedUp = Mathf.Min (Velocity.Y + BeamRecoilStrength * 0.3f, KnockbackUpPopCap);
+    Velocity = new Vector3 (Velocity.X + push.X, Mathf.Max (Velocity.Y, poppedUp), Velocity.Z + push.Z);
+    _knockbackCarrySecondsLeft = KnockbackCarrySeconds;
   }
 
   // Firing at the ground close beneath you rocket-boosts you upward, scaling with
@@ -300,7 +339,7 @@ public partial class Player
     LastDamageKind = isFullAuto ? DamageKind.FullAuto : DamageKind.Laser; // Message context (issue #84).
     // Distinct victim feedback for a through-barrier zap (issue #94).
     if (throughBarrier) _throughWallZapSound.Play();
-    ApplyDamage (energy, shotByPlayerName, knockbackScale: 1.0f, throughBarrier: throughBarrier, isHeadshot: isHeadshot);
+    ApplyDamage (energy, shotByPlayerName, knockbackScale: KnockbackScaleFor (energy), throughBarrier: throughBarrier, isHeadshot: isHeadshot); // The beam shoves hard both ways (issue #292).
   }
 
   [Rpc (MultiplayerApi.RpcMode.AnyPeer)]
