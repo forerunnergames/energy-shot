@@ -107,16 +107,24 @@ public partial class Player
   // releases the weapon itself & files it into the server's boomerang escrow, bound
   // for the thrower. An unarmed victim (or one whose only weapon is a boomerang
   // that's out flying) loses nothing.
+  // Pure & unit-tested (issue #246): the boomerang takes what the victim has in HAND -
+  // a selected loaf counts as equipped - & falls back to the loaf when nothing else is left.
+  public static HeldWeapon BoomerangLoot (HeldWeapon droppable, bool breadSelected, bool hasBread)
+  {
+    if (breadSelected && hasBread) return HeldWeapon.Bread;
+    return droppable != HeldWeapon.None ? droppable : hasBread ? HeldWeapon.Bread : HeldWeapon.None;
+  }
+
   private void SurrenderWeaponToBoomerang (int throwerId)
   {
-    var type = PickDroppableWeapon();
+    var type = BoomerangLoot (PickDroppableWeapon(), IsBreadSelected, HasBread);
     if (type == HeldWeapon.None) return;
     // Request BEFORE clearing, like DropHeldWeapon (issue #154): clearing first let
     // the replicated HeldWeapon delta beat the escrow RPC to the server, & a
     // reconcile pass in that window counted the weapon as gone & spawned a
     // duplicate - the suspected banana-launcher double.
     Spawner.SendStolenEscrowRequest (throwerId, type);
-    HeldWeapon &= ~type;
+    if (type == HeldWeapon.Bread) SetBreadHeld (isHeld: false); else HeldWeapon &= ~type; // The loaf keeps its own bookkeeping (issue #62).
     ForgetTheft (type);
     DeselectUnheldWeapon();
     GD.Print ($"{DisplayName}: That boomerang made off with my {type}!");
