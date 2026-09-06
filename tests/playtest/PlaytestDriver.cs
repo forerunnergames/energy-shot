@@ -653,8 +653,9 @@ public partial class PlaytestDriver : Node
     // sweep is what stops the stone - it must never travel past the wall at z=6.
     AimAt (new Vector3 (Self.GlobalPosition.X, 31.3f, 6.0f)); // Mid-height of the wall ahead.
     var wallStone = await SlingAStone (drawMs: 1500, "wall-test stone (#163)");
+    // Stones bounce & skid since #285 (they used to end on first contact), so the wall
+    // stone may outlive this wait - the max-z tracker below is the verdict, not the despawn.
     await TryWaitUntil (() => !IsInstanceValid (wallStone) || !wallStone.IsInsideTree(), 5);
-    Assert (!IsInstanceValid (wallStone) || !wallStone.IsInsideTree(), "the wall stopped the stone (#163)");
     Assert (_lastStoneMaxZ < 6.5f, $"stone never passed the wall at z=6 (#163), max z {_lastStoneMaxZ:0.00}");
 
     // Long flight (#163): a full-draw stone lobbed high over the walls must still be
@@ -1606,6 +1607,10 @@ public partial class PlaytestDriver : Node
     {
       var loaf = DroppedNear (HeldWeapon.Bread, loafSpot, 8.0f);
       if (loaf != null) Self.Position = loaf.GlobalPosition + Vector3.Up * 0.4f;
+      // The full-charge recoil (#292) carries 0.8s of shove THROUGH a teleport: with the
+      // fresh loaf still inside its claim delay, the slide reached the boomerang restock
+      // 3.6m away & the pouch nocked that instead (main red after #466).
+      Self.Velocity = Vector3.Zero;
       await Task.Delay (300);
     }
 
