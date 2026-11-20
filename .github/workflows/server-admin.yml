@@ -33,7 +33,7 @@ on:
         type: string
         default: ""
       authorize_ops_key:
-        description: "Add the es-ops box's SSH key to game@"
+        description: "Add the es-ops box's SSH key to game@ & give game a bash shell"
         type: boolean
         default: false
       restart:
@@ -249,6 +249,11 @@ jobs:
             chmod 700 "$GAME_HOME/.ssh"
             chmod 600 "$GAME_HOME/.ssh/authorized_keys"
             chmod g-w,o-w "$GAME_HOME" || true
+            # The key alone opens nothing while game's shell is nologin: every
+            # command is refused, so the ops box cannot run its read-only checks
+            # (#450). Aaron's ruling: game gets bash. Idempotent.
+            usermod -s /bin/bash game
+            echo "game shell: $(getent passwd game | cut -d: -f7)"
             echo "ops key authorized"
             # Why would a correctly-authorized key still be refused? Print the
             # truth instead of guessing (#450): effective sshd policy, the actual
