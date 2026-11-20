@@ -46,6 +46,11 @@ on:
         options: [stable, dev]
         default: stable
 
+# The job only talks to the droplet over ssh; it needs nothing from the GitHub
+# token (zizmor excessive-permissions, CodeRabbit on #471).
+permissions:
+  contents: read
+
 # One admin run at a time (CodeRabbit): two concurrent dispatches could interleave
 # the drop-in & env-file writes & leave a server state neither run asked for.
 concurrency:
@@ -244,7 +249,11 @@ jobs:
             [ -n "$GAME_HOME" ] || GAME_HOME=/home/game
             mkdir -p "$GAME_HOME/.ssh"
             touch "$GAME_HOME/.ssh/authorized_keys"
-            grep -qF "$OPS_KEY" "$GAME_HOME/.ssh/authorized_keys" || echo "$OPS_KEY" >> "$GAME_HOME/.ssh/authorized_keys"
+            # bash below gives EVERY key in this file a shell (CodeRabbit on #471), &
+            # both workflows deploy as root, so game@ holds the ops key only. Any other
+            # key is listed by fingerprint & dropped, never silently kept or lost.
+            grep -vxF "$OPS_KEY" "$GAME_HOME/.ssh/authorized_keys" | ssh-keygen -lf - 2>/dev/null | sed 's/^/dropped key: /' || true
+            printf '%s\n' "$OPS_KEY" > "$GAME_HOME/.ssh/authorized_keys"
             chown -R game:game "$GAME_HOME/.ssh"
             chmod 700 "$GAME_HOME/.ssh"
             chmod 600 "$GAME_HOME/.ssh/authorized_keys"
