@@ -247,16 +247,20 @@ jobs:
             GAME_HOME=$(getent passwd game | cut -d: -f6)
             echo "game passwd entry: $(getent passwd game)"
             [ -n "$GAME_HOME" ] || GAME_HOME=/home/game
-            mkdir -p "$GAME_HOME/.ssh"
-            touch "$GAME_HOME/.ssh/authorized_keys"
-            # bash below gives EVERY key in this file a shell (CodeRabbit on #471), &
-            # both workflows deploy as root, so game@ holds the ops key only. Any other
-            # key is listed by fingerprint & dropped, never silently kept or lost.
-            grep -vxF "$OPS_KEY" "$GAME_HOME/.ssh/authorized_keys" | ssh-keygen -lf - 2>/dev/null | sed 's/^/dropped key: /' || true
-            printf '%s\n' "$OPS_KEY" > "$GAME_HOME/.ssh/authorized_keys"
-            chown -R game:game "$GAME_HOME/.ssh"
-            chmod 700 "$GAME_HOME/.ssh"
-            chmod 600 "$GAME_HOME/.ssh/authorized_keys"
+            # Every write below runs AS game, never as root: game owns .ssh, so a
+            # symlink planted there would aim a root write at /etc/passwd (CodeRabbit
+            # on #471). As game, a link reaches only files game could write anyway.
+            # bash gives EVERY key in the file a shell, & both workflows deploy as
+            # root, so game@ holds the ops key only. Any other key is listed by
+            # fingerprint & dropped, never silently kept or lost.
+            runuser -u game -- env OPS_KEY="$OPS_KEY" K="$GAME_HOME/.ssh/authorized_keys" sh -ec '
+              umask 077
+              mkdir -p "${K%/*}"
+              touch "$K"
+              grep -vxF "$OPS_KEY" "$K" | ssh-keygen -lf - 2>/dev/null | sed "s/^/dropped key: /" || true
+              printf "%s\n" "$OPS_KEY" > "$K"
+              chmod 700 "${K%/*}"
+              chmod 600 "$K"'
             chmod g-w,o-w "$GAME_HOME" || true
             # The key alone opens nothing while game's shell is nologin: every
             # command is refused, so the ops box cannot run its read-only checks
