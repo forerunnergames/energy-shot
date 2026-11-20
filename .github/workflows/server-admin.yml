@@ -33,7 +33,7 @@ on:
         type: string
         default: ""
       authorize_ops_key:
-        description: "Add the es-ops box's SSH key to game@"
+        description: "Add the es-ops box's SSH key to game@ & give game a bash shell"
         type: boolean
         default: false
       restart:
@@ -45,6 +45,11 @@ on:
         type: choice
         options: [stable, dev]
         default: stable
+
+# The job only talks to the droplet over ssh; it needs nothing from the GitHub
+# token (zizmor excessive-permissions, CodeRabbit on #471).
+permissions:
+  contents: read
 
 # One admin run at a time (CodeRabbit): two concurrent dispatches could interleave
 # the drop-in & env-file writes & leave a server state neither run asked for.
@@ -242,13 +247,26 @@ jobs:
             GAME_HOME=$(getent passwd game | cut -d: -f6)
             echo "game passwd entry: $(getent passwd game)"
             [ -n "$GAME_HOME" ] || GAME_HOME=/home/game
-            mkdir -p "$GAME_HOME/.ssh"
-            touch "$GAME_HOME/.ssh/authorized_keys"
-            grep -qF "$OPS_KEY" "$GAME_HOME/.ssh/authorized_keys" || echo "$OPS_KEY" >> "$GAME_HOME/.ssh/authorized_keys"
-            chown -R game:game "$GAME_HOME/.ssh"
-            chmod 700 "$GAME_HOME/.ssh"
-            chmod 600 "$GAME_HOME/.ssh/authorized_keys"
+            # Every write below runs AS game, never as root: game owns .ssh, so a
+            # symlink planted there would aim a root write at /etc/passwd (CodeRabbit
+            # on #471). As game, a link reaches only files game could write anyway.
+            # bash gives EVERY key in the file a shell, & both workflows deploy as
+            # root, so game@ holds the ops key only. Any other key is listed by
+            # fingerprint & dropped, never silently kept or lost.
+            runuser -u game -- env OPS_KEY="$OPS_KEY" K="$GAME_HOME/.ssh/authorized_keys" sh -ec '
+              umask 077
+              mkdir -p "${K%/*}"
+              touch "$K"
+              grep -vxF "$OPS_KEY" "$K" | ssh-keygen -lf - 2>/dev/null | sed "s/^/dropped key: /" || true
+              printf "%s\n" "$OPS_KEY" > "$K"
+              chmod 700 "${K%/*}"
+              chmod 600 "$K"'
             chmod g-w,o-w "$GAME_HOME" || true
+            # The key alone opens nothing while game's shell is nologin: every
+            # command is refused, so the ops box cannot run its read-only checks
+            # (#450). Aaron's ruling: game gets bash. Idempotent.
+            usermod -s /bin/bash game
+            echo "game shell: $(getent passwd game | cut -d: -f7)"
             echo "ops key authorized"
             # Why would a correctly-authorized key still be refused? Print the
             # truth instead of guessing (#450): effective sshd policy, the actual
